@@ -1,0 +1,13 @@
+{
+  "installCommand": "npm install --legacy-peer-deps",
+  "crons": [
+    {
+      "path": "/api/notifications/process",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/keep-alive",
+      "schedule": "0 0 * * 0"
+    }
+  ]
+}

@@ -1,0 +1,1026 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MFU AI Teaching Assistant Coding Standards</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm 16mm 18mm 16mm;
+    }
+
+    :root {
+      --text: #222;
+      --muted: #5f6670;
+      --line: #d9d9d9;
+      --soft: #fbfbfb;
+      --accent: #0f6f2e;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: "Times New Roman", Times, serif;
+      font-size: 11pt;
+      line-height: 1.45;
+      background: white;
+    }
+
+    h1, h2, h3 {
+      margin: 0 0 8px;
+      line-height: 1.18;
+      font-weight: 700;
+    }
+
+    h1 {
+      font-size: 22pt;
+      text-align: left;
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      text-align: left;
+      font-size: 16pt;
+      margin-bottom: 0;
+    }
+
+    .cover-meta {
+      width: 100%;
+      font-size: 11pt;
+      line-height: 1.5;
+    }
+
+    .cover-meta p {
+      margin: 0 0 4px;
+      text-align: left;
+    }
+
+    .cover-meta ul {
+      margin: 4px 0 0 22px;
+    }
+
+    h2 {
+      font-size: 15pt;
+      margin-top: 22px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h3 {
+      font-size: 12.5pt;
+      margin-top: 16px;
+    }
+
+    p {
+      margin: 0 0 9px;
+      text-align: justify;
+    }
+
+    ul, ol {
+      margin: 7px 0 10px 20px;
+    }
+
+    li {
+      margin: 3px 0;
+    }
+
+    code, pre {
+      font-family: "Courier New", Courier, monospace;
+      color: var(--accent);
+    }
+
+    code {
+      font-size: 0.96em;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      margin: 10px 0 12px;
+      padding: 10px 12px;
+      font-size: 9.2pt;
+      background: var(--soft);
+      border: 1px solid #d7eadb;
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0 14px;
+      font-size: 10pt;
+    }
+
+    th, td {
+      border: 1px solid var(--line);
+      padding: 8px 9px;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f3f3f3;
+      text-align: left;
+    }
+
+    .intro {
+      padding: 14px 16px;
+      background: white;
+      border: 1px solid var(--line);
+      margin-bottom: 18px;
+    }
+
+    .section {
+      break-inside: avoid-page;
+    }
+
+    .cover-page {
+      min-height: 255mm;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 18mm 10mm 10mm;
+      page-break-after: always;
+    }
+
+    .cover-top {
+      margin-top: 8mm;
+    }
+
+    .cover-title {
+      max-width: 135mm;
+      font-size: 17pt;
+      line-height: 1.3;
+      font-weight: 700;
+      margin-bottom: 18mm;
+    }
+
+    .cover-version {
+      font-size: 12pt;
+      text-decoration: underline;
+      font-weight: 700;
+    }
+
+    .cover-bottom {
+      max-width: 125mm;
+      font-size: 11pt;
+    }
+
+    .cover-bottom ol {
+      margin: 4px 0 0 22px;
+    }
+
+    .content-page {
+      page-break-before: always;
+    }
+
+    .page-break-before {
+      page-break-before: always;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="cover-page">
+      <div class="cover-top">
+        <div class="cover-title">MFU AI Teaching Assistant General Styles and Coding Standards</div>
+        <div class="cover-version">Preliminary Version</div>
+      </div>
+
+      <div class="cover-bottom">
+        <div class="cover-meta">
+          <p><strong>Group Name:</strong> XVerse</p>
+          <p><strong>Project:</strong> Web application for AI-assisted teaching and learning support</p>
+          <p><strong>Group Members:</strong></p>
+          <ol>
+            <li>6631503094 - Thura Aung</li>
+            <li>6631503078 - Nang Yu Yu Khay</li>
+            <li>6631503101 - Zaw Win Htut</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <div class="intro content-page">
+      <p>
+        This document defines the coding standards for the MFU AI Teaching Assistant project, with the aim of ensuring
+        consistency and quality across the main application layers. By following a unified coding style, the project
+        promotes clear and readable code, making it easier for developers to understand, review, and maintain the system.
+        These standards help reduce regressions during feature development and ongoing maintenance by encouraging
+        structured and predictable implementation practices.
+      </p>
+    </div>
+
+    <section class="section">
+      <h2>1. Purpose</h2>
+      <p>
+        The project includes role-based user access, study support features, AI-assisted workflows, reminders,
+        document handling, and administrative controls. Because the system contains both user-facing and service-side
+        logic, consistency is required in naming, request handling, validation, permission checks, error handling,
+        data updates, and security behavior.
+      </p>
+      <p>
+        In practical use, the system supports student learning tasks such as question answering, study planning,
+        flashcard and quiz generation, reminder scheduling, and access to course materials. It also supports teacher
+        and administrative workflows such as course management, content organization, analytics, audit logging, and
+        protected data operations. Since these features depend on shared helpers, route handlers, database queries,
+        and AI request flows, inconsistent code style can quickly make maintenance harder and increase the risk of
+        logic errors.
+      </p>
+      <p>
+        These standards are intended to keep future work aligned with the existing implementation style and to make
+        onboarding easier for new contributors. The focus of this document is practical consistency rather than theory.
+      </p>
+    </section>
+
+    <section class="section">
+      <h2>2. Naming Standards (Project-Enforced)</h2>
+
+      <h3>2.1 Naming Variables</h3>
+      <p>
+        Variable names should be clear, complete, and meaningful. Application variables use camelCase. Names should
+        describe the role of the value rather than only its type.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Variable Name</th>
+            <th>Meaning</th>
+            <th>Style</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>selectedModel</code></td>
+            <td>Currently selected assistant model</td>
+            <td>noun with modifier</td>
+          </tr>
+          <tr>
+            <td><code>currentConversationId</code></td>
+            <td>Current conversation identity</td>
+            <td>noun with modifier</td>
+          </tr>
+          <tr>
+            <td><code>reminderText</code></td>
+            <td>Reminder message content</td>
+            <td>noun with modifier</td>
+          </tr>
+          <tr>
+            <td><code>requestedCourseId</code></td>
+            <td>Course identity requested by client</td>
+            <td>noun with modifier</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>2.2 Naming Convention for Functions</h3>
+      <p>
+        Function names should begin with a verb and describe the action they perform. Helper functions should remain short
+        and direct. Retrieval helpers typically use prefixes such as <code>get</code>, <code>read</code>, <code>load</code>, or
+        <code>create</code>.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Function Name</th>
+            <th>Verb</th>
+            <th>Object</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>createClient</code></td>
+            <td>create</td>
+            <td>client</td>
+          </tr>
+          <tr>
+            <td><code>requireAdminUser</code></td>
+            <td>require</td>
+            <td>admin user</td>
+          </tr>
+          <tr>
+            <td><code>trackApiError</code></td>
+            <td>track</td>
+            <td>API error</td>
+          </tr>
+          <tr>
+            <td><code>queueReminderNotificationJobs</code></td>
+            <td>queue</td>
+            <td>reminder notification jobs</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>2.3 Naming Constants</h3>
+      <p>
+        Constants with system-wide meaning should use uppercase letters with underscores.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Constant Name</th>
+            <th>Purpose</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>UUID_REGEX</code></td>
+            <td>Validates UUID-like values</td>
+          </tr>
+          <tr>
+            <td><code>AUTH_PATHS</code></td>
+            <td>Defines authentication routes</td>
+          </tr>
+          <tr>
+            <td><code>PUBLIC_PATHS</code></td>
+            <td>Defines public routes</td>
+          </tr>
+          <tr>
+            <td><code>NEXT_PUBLIC_SUPABASE_URL</code></td>
+            <td>Defines the backend connection setting</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>2.4 Naming Boolean Variables</h3>
+      <p>
+        Boolean values should read like conditions. Preferred prefixes are <code>is</code>, <code>has</code>, and <code>can</code>.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Variable Name</th>
+            <th>Meaning</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>hasUserDocumentAccess</code></td>
+            <td>Checks whether persistence is allowed for the user</td>
+          </tr>
+          <tr>
+            <td><code>canPersist</code></td>
+            <td>Checks whether the conversation should be stored</td>
+          </tr>
+          <tr>
+            <td><code>isAuthenticated</code></td>
+            <td>Checks whether a valid session exists</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>2.5 Naming Types and Components</h3>
+      <p>
+        Shared types and components use PascalCase. This keeps interfaces, unions, and component symbols visually distinct
+        from local variables.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Category</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>Profile</code></td>
+            <td>Type</td>
+          </tr>
+          <tr>
+            <td><code>CourseMaterial</code></td>
+            <td>Type</td>
+          </tr>
+          <tr>
+            <td><code>ModelConfig</code></td>
+            <td>Type</td>
+          </tr>
+          <tr>
+            <td><code>ChatInterface</code></td>
+            <td>Component</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section">
+      <h2>3. API Layer Standards</h2>
+
+      <h3>3.1 Route Handler Design</h3>
+      <ul>
+        <li>Keep route handlers focused on request parsing, validation, permission checks, orchestration, and response output.</li>
+        <li>Move reusable logic into shared helpers when the same behavior can appear in multiple endpoints.</li>
+        <li>Return JSON responses with clear success or error shapes.</li>
+      </ul>
+      <pre><code>export async function GET() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  return NextResponse.json({ ok: true })
+}</code></pre>
+
+      <h3>3.2 Auth and Permissions</h3>
+      <ul>
+        <li>Protected endpoints must verify the current user before reading or mutating data.</li>
+        <li>Role checks must be applied for student-only, teacher-only, and admin-only actions.</li>
+        <li>Ownership or enrollment must be validated before accessing user-scoped or course-scoped records.</li>
+      </ul>
+      <pre><code>if (!profile || profile.role !== "student") {
+  return NextResponse.json({ error: "Only students can create reminders" }, { status: 403 })
+}</code></pre>
+      <pre><code>const { data: enrollment } = await supabase
+  .from("course_enrollments")
+  .select("course_id")
+  .eq("course_id", courseId)
+  .eq("student_id", user.id)
+  .maybeSingle()
+
+if (!enrollment) {
+  return NextResponse.json({ error: "You are not enrolled in this course" }, { status: 403 })
+}</code></pre>
+
+      <h3 class="page-break-before">3.3 Path and Query Parameters</h3>
+      <ul>
+        <li>Path parameters should identify the main resource.</li>
+        <li>Query parameters should be used for filters, selection, or simple options.</li>
+        <li>Request body values should be normalized with trimming and explicit conversion where needed.</li>
+      </ul>
+      <pre><code>const body = await req.json().catch(() => ({}))
+const reminderText = String(body?.reminderText || "").trim()
+const courseId = String(body?.courseId || "").trim()
+const reminderTimeRaw = String(body?.reminderTime || "")
+
+if (!reminderText) {
+  return NextResponse.json({ error: "Reminder text is required" }, { status: 400 })
+}
+
+if (!courseId) {
+  return NextResponse.json({ error: "Course is required" }, { status: 400 })
+}</code></pre>
+    </section>
+
+    <section class="section">
+      <h2>4. Data Access Standards</h2>
+
+      <h3>4.1 Scope</h3>
+      <ul>
+        <li>Data queries should remain explicit and readable.</li>
+        <li>Use single-row selection helpers only when exactly one row is expected.</li>
+        <li>Order result sets when the output is shown to users.</li>
+      </ul>
+      <pre><code>const { data: reminders, error } = await supabase
+  .from("study_reminders")
+  .select("id, student_id, course_id, reminder_text, reminder_time, is_completed, created_at")
+  .eq("student_id", user.id)
+  .order("reminder_time", { ascending: true })</code></pre>
+
+      <h3>4.2 Write Pattern</h3>
+      <p>
+        Writes should validate input first, then perform the insert or update, then return the saved data needed by the client.
+      </p>
+      <pre><code>const { data: reminder, error } = await supabase
+  .from("study_reminders")
+  .insert({
+    student_id: user.id,
+    course_id: courseId,
+    reminder_text: reminderText,
+    reminder_time: reminderTime,
+  })
+  .select()
+  .single()</code></pre>
+      <pre><code>if (reminderError || !reminder) {
+  return NextResponse.json(
+    { error: reminderError?.message || "Failed to create reminder" },
+    { status: 500 },
+  )
+}</code></pre>
+
+      <h3>4.3 Partial Updates</h3>
+      <p>
+        Partial updates should only include fields that were actually provided. Empty strings should be normalized where needed,
+        and update payloads should remain small and explicit.
+      </p>
+      <pre><code>const updateData: Record&lt;string, any&gt; = {}
+if (typeof completed === "boolean") updateData.completed = completed
+if (title) updateData.title = title.trim()
+if (description !== undefined) updateData.description = description?.trim() || null
+
+const { data: plan, error } = await supabase
+  .from("study_plans")
+  .update(updateData)
+  .eq("id", planId)
+  .eq("user_id", user.id)
+  .select()
+  .single()</code></pre>
+    </section>
+
+    <section class="section">
+      <h2>5. Model and Schema Standards</h2>
+
+      <h3>5.1 Shared Types</h3>
+      <ul>
+        <li>Use shared typed structures for profiles, courses, reminders, documents, and configuration.</li>
+        <li>Role values should be restricted to the allowed set of system roles.</li>
+        <li>Nullable values should be marked clearly.</li>
+      </ul>
+
+      <h3>5.2 Persisted Field Naming</h3>
+      <p>
+        Persisted fields use snake_case. This applies to stored database fields and stored metadata values.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Field Name</th>
+            <th>Meaning</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>created_at</code></td>
+            <td>Creation timestamp</td>
+          </tr>
+          <tr>
+            <td><code>course_id</code></td>
+            <td>Course identity link</td>
+          </tr>
+          <tr>
+            <td><code>reminder_time</code></td>
+            <td>Scheduled reminder time</td>
+          </tr>
+          <tr>
+            <td><code>resource_type</code></td>
+            <td>Audit log resource category</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section">
+      <h2>6. Error Handling Standards</h2>
+
+      <h3>6.1 HTTP Errors</h3>
+      <ul>
+        <li>Use <code>400</code> for invalid input.</li>
+        <li>Use <code>401</code> when the user is not authenticated.</li>
+        <li>Use <code>403</code> when the user is authenticated but not allowed to perform the action.</li>
+        <li>Use <code>500</code> for unexpected internal failures.</li>
+      </ul>
+
+      <h3>6.2 External Operations</h3>
+      <p>
+        External operations such as notification scheduling, document indexing, or AI generation should be wrapped so the system
+        can return a controlled error instead of failing silently.
+      </p>
+      <pre><code>try {
+  const queuedJobs = await queueReminderNotificationJobs(...)
+  return NextResponse.json({ reminder, queuedJobs: queuedJobs.length })
+} catch (error) {
+  return NextResponse.json({ error: "Failed to queue reminder notification" }, { status: 500 })
+}</code></pre>
+    </section>
+
+    <section class="section">
+      <h2>7. Shared Helper Standards</h2>
+
+      <h3>7.1 Session and Database Helpers</h3>
+      <ul>
+        <li>Use a shared client creation helper for authenticated server access.</li>
+        <li>Use a shared admin guard helper for admin-only operations.</li>
+        <li>Keep route files from re-implementing the same session logic repeatedly.</li>
+      </ul>
+      <pre><code>export async function createClient() {
+  const cookieStore = await cookies()
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll() { return cookieStore.getAll() } } },
+  )
+}</code></pre>
+
+      <h3>7.2 Logging Helpers</h3>
+      <ul>
+        <li>Use a shared error tracker for unexpected API failures.</li>
+        <li>Use a shared audit logger for important write actions.</li>
+        <li>Logging should be structured and purposeful.</li>
+      </ul>
+      <pre><code>export async function trackApiError(input: TrackApiErrorInput) {
+  const normalized = stringifyError(input.error)
+  console.error("[api_error]", JSON.stringify({
+    route: input.route,
+    actorId: input.actorId || null,
+    ...normalized,
+    metadata: input.metadata || {},
+  }))
+}</code></pre>
+    </section>
+
+    <section class="section">
+      <h2>8. Security Standards</h2>
+
+      <h3>8.1 Authentication</h3>
+      <ul>
+        <li>Authentication must be checked server-side before returning private data.</li>
+        <li>Role-based redirects should be controlled centrally.</li>
+        <li>Admin access must use a stricter verification step.</li>
+      </ul>
+      <pre><code>const {
+  data: { user },
+} = await supabase.auth.getUser()
+
+if (!user) {
+  return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+}</code></pre>
+      <pre><code>if (isAuthenticated && role) {
+  if (isAdminRoute(pathname) && role !== "admin") {
+    const url = request.nextUrl.clone()
+    url.pathname = getDefaultRouteForRole(role)
+    return NextResponse.redirect(url)
+  }
+}</code></pre>
+
+      <h3>8.2 Secrets and Configuration</h3>
+      <p>
+        Sensitive values must come from environment configuration and must not be hardcoded in application logic.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Configuration Name</th>
+            <th>Purpose</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>NEXT_PUBLIC_SUPABASE_URL</code></td>
+            <td>Application backend connection</td>
+          </tr>
+          <tr>
+            <td><code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code></td>
+            <td>Authenticated client access</td>
+          </tr>
+          <tr>
+            <td><code>DO_SPACES_BUCKET</code></td>
+            <td>Document storage bucket</td>
+          </tr>
+          <tr>
+            <td><code>DO_SPACES_SECRET</code></td>
+            <td>Private storage credential</td>
+          </tr>
+        </tbody>
+      </table>
+      <pre><code>function requireEnv(name: string): string {
+  const value = process.env[name]
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`)
+  }
+  return value
+}</code></pre>
+
+      <h3>8.3 Protected Data Access</h3>
+      <ul>
+        <li>Private document access should use controlled read URLs.</li>
+        <li>Audit records should be written for significant actions.</li>
+        <li>Permission checks should be applied before exposing course or user data.</li>
+      </ul>
+      <pre><code>export async function getDocumentReadUrl(objectKey: string, expiresInSeconds = 300) {
+  const config = getSpacesConfig()
+
+  if (config.publicBucket) {
+    return buildPublicUrl(config, objectKey)
+  }
+
+  const client = getSpacesClient()
+  return getSignedUrl(
+    client,
+    new GetObjectCommand({
+      Bucket: config.bucket,
+      Key: objectKey,
+    }),
+    { expiresIn: expiresInSeconds },
+  )
+}</code></pre>
+      <pre><code>await logAuditEvent({
+  supabase: supabase as any,
+  actorId: user.id,
+  action: "reminder.created",
+  resourceType: "study_reminder",
+  resourceId: reminder.id,
+  metadata: { courseId, reminderTime },
+})</code></pre>
+    </section>
+
+    <section class="section">
+      <h2>9. Database Migration Standards</h2>
+      <ul>
+        <li>Schema changes must be applied through migration files.</li>
+        <li>New tables should define keys, constraints, and clear relationships.</li>
+        <li>Security rules should be added together with schema changes.</li>
+        <li>Indexes should be added for common lookup or ordering patterns.</li>
+      </ul>
+      <pre><code>create table if not exists public.notification_jobs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null,
+  channel text not null,
+  template text not null,
+  payload jsonb not null default '{}'::jsonb,
+  status text not null default 'queued'
+);</code></pre>
+    </section>
+
+    <section class="section">
+      <h2>10. Testing Standards</h2>
+
+      <h3>10.1 Scope</h3>
+      <ul>
+        <li>Core flows should be covered by type checks, build checks, and smoke checks.</li>
+        <li>Critical route and schema behavior should be verified before release.</li>
+        <li>Regression checks should focus on access control, reminders, chat, and document features.</li>
+      </ul>
+
+      <h3>10.2 Current Validation Commands</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Command</th>
+            <th>Purpose</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>npm run type-check</code></td>
+            <td>Type safety validation</td>
+          </tr>
+          <tr>
+            <td><code>npm run lint</code></td>
+            <td>Static code quality validation</td>
+          </tr>
+          <tr>
+            <td><code>npm run build</code></td>
+            <td>Production build validation</td>
+          </tr>
+          <tr>
+            <td><code>npm run test:roadmap</code></td>
+            <td>Critical smoke checks</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section">
+      <h2>11. Service and AI Standards</h2>
+
+      <h3>11.1 Service Responsibilities</h3>
+      <ul>
+        <li>Service helpers should keep one clear responsibility.</li>
+        <li>Model configuration should remain centralized.</li>
+        <li>Document, reminder, and logging services should stay separate from UI state logic.</li>
+      </ul>
+      <p>
+        Service helpers should also remain reusable and predictable. When a route depends on notification queuing,
+        document upload handling, signed URL creation, or audit logging, that logic should be placed in a focused helper
+        so that the same behavior can be reused from multiple routes without duplication.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Service Area</th>
+            <th>Main Responsibility</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>model configuration</code></td>
+            <td>Centralize available assistant models, prompts, and runtime defaults</td>
+          </tr>
+          <tr>
+            <td><code>document storage</code></td>
+            <td>Control upload paths, object naming, and read URL access rules</td>
+          </tr>
+          <tr>
+            <td><code>notification jobs</code></td>
+            <td>Queue reminder delivery work in a consistent structure</td>
+          </tr>
+          <tr>
+            <td><code>audit logging</code></td>
+            <td>Record important actions and operational failures for later review</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>11.2 AI Request Rules</h3>
+      <ul>
+        <li>AI prompts should be shaped by the user role and the request purpose.</li>
+        <li>Context should be prepared before the model call.</li>
+        <li>Generated output should be validated before it is stored or returned as structured data.</li>
+      </ul>
+      <p>
+        AI flows should not mix unrelated responsibilities in one step. Authentication, context gathering, prompt
+        selection, model execution, and persistence should remain logically separate so that failures can be understood
+        and corrected more easily.
+      </p>
+      <pre><code>const result = await ai.models.generateContent({
+  model: "...",
+  contents: "Generate a study plan as a JSON array"
+})</code></pre>
+
+      <h3>11.3 Notification and Scheduling Services</h3>
+      <p>
+        Notification helpers should build job payloads in a uniform shape. The service layer should prepare the channel,
+        template, scheduled time, and payload details before inserting queue records. This keeps route handlers focused on
+        validation while the service owns queue construction rules.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Field</th>
+            <th>Purpose in Notification Jobs</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>user_id</code></td>
+            <td>Identifies the recipient of the reminder</td>
+          </tr>
+          <tr>
+            <td><code>course_id</code></td>
+            <td>Links the notification to the related course context</td>
+          </tr>
+          <tr>
+            <td><code>channel</code></td>
+            <td>Defines the delivery mechanism such as email or line</td>
+          </tr>
+          <tr>
+            <td><code>scheduled_for</code></td>
+            <td>Stores the intended send time in normalized form</td>
+          </tr>
+          <tr>
+            <td><code>payload</code></td>
+            <td>Keeps the reminder-specific metadata needed for delivery</td>
+          </tr>
+        </tbody>
+      </table>
+      <pre><code>const jobs = [
+  {
+    user_id: params.userId,
+    course_id: params.courseId,
+    channel: "email",
+    template: "study_reminder",
+    payload: basePayload,
+    status: "queued",
+    scheduled_for: params.reminderTime,
+  },
+]</code></pre>
+
+      <h3>11.4 Validation of Structured AI Output</h3>
+      <p>
+        When AI output is expected to be structured, such as a generated study plan, the returned text should be checked
+        before saving it. The application should extract the expected structure, parse it safely, and reject malformed
+        responses rather than inserting unreliable records.
+      </p>
+      <ul>
+        <li>Validate that the expected array or object structure is present.</li>
+        <li>Normalize optional fields before insert.</li>
+        <li>Fall back to a controlled error response when parsing fails.</li>
+        <li>Do not store partial or ambiguous AI output as if it were trusted data.</li>
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2>12. Timestamp and Data Consistency Standards</h2>
+
+      <h3>12.1 Timestamp Storage</h3>
+      <p>
+        Timestamp fields should remain consistent across all persisted entities. Records that represent reminders,
+        uploaded documents, conversations, messages, audits, and administrative actions should use a comparable time
+        format so that sorting, filtering, and debugging remain straightforward.
+      </p>
+      <ul>
+        <li>Creation and update times should be stored consistently across records.</li>
+        <li>Time values should follow one clear storage format so that frontend and backend behavior remain aligned.</li>
+        <li>Inserted records should preserve reliable creation timestamps for later review and reporting.</li>
+      </ul>
+      <table>
+        <thead>
+          <tr>
+            <th>Timestamp Field</th>
+            <th>Usage</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>created_at</code></td>
+            <td>Marks when a record first entered the system</td>
+          </tr>
+          <tr>
+            <td><code>updated_at</code></td>
+            <td>Tracks the most recent state change of a mutable record</td>
+          </tr>
+          <tr>
+            <td><code>reminder_time</code></td>
+            <td>Stores the user-intended schedule time for reminder delivery</td>
+          </tr>
+          <tr>
+            <td><code>scheduled_for</code></td>
+            <td>Represents the queue execution time for notification jobs</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>12.2 Ordered Output and Query Consistency</h3>
+      <p>
+        Ordered data should be returned intentionally, not by accident. Whenever users expect a chronological or reverse
+        chronological view, the query should specify that order directly. This is especially important in reminders,
+        documents, messages, audit logs, and course activity views.
+      </p>
+      <ul>
+        <li>Ordered output should use explicit time-based sorting when users expect chronological results.</li>
+        <li>Lists such as reminders, documents, messages, and logs should not rely on implicit database ordering.</li>
+        <li>When multiple records are shown together, the selected ordering rule should remain stable and predictable.</li>
+      </ul>
+      <pre><code>const { data: reminders } = await supabase
+  .from("study_reminders")
+  .select("*")
+  .eq("student_id", user.id)
+  .order("reminder_time", { ascending: true })</code></pre>
+
+      <h3>12.3 Schedule and Reminder Normalization</h3>
+      <p>
+        Scheduling values must be validated before they enter operational flows. Since reminder handling affects queue
+        behavior, notification timing, and user trust, the application should convert and verify date values before any
+        insert or update occurs.
+      </p>
+      <ul>
+        <li>Stored schedule times should be normalized before persistence.</li>
+        <li>User-provided date and time values should be validated before they are inserted into reminder or planning data.</li>
+        <li>Invalid or past schedule values should be rejected before they affect notification workflows.</li>
+      </ul>
+      <pre><code>const reminderDate = new Date(reminderTimeRaw)
+
+if (Number.isNaN(reminderDate.getTime())) {
+  return NextResponse.json({ error: "Invalid reminder time" }, { status: 400 })
+}
+
+if (reminderDate.getTime() &lt;= Date.now()) {
+  return NextResponse.json({ error: "Reminder time must be in the future" }, { status: 400 })
+}</code></pre>
+
+      <h3>12.4 Audit and Traceability Rules</h3>
+      <p>
+        Traceability data should be detailed enough to support debugging and accountability, but it should still remain
+        structured and consistent. Audit records are most useful when action names, related resources, and time references
+        follow the same patterns across the system.
+      </p>
+      <ul>
+        <li>Audit and reminder records should preserve enough data for tracing system behavior later.</li>
+        <li>Important actions should keep actor, action type, related resource, and time reference in a consistent form.</li>
+        <li>Data written for observability should be useful for debugging, review, and accountability without becoming ambiguous.</li>
+      </ul>
+      <table>
+        <thead>
+          <tr>
+            <th>Audit Field</th>
+            <th>Reason for Inclusion</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>actor_id</code></td>
+            <td>Shows who performed the action when a user identity is available</td>
+          </tr>
+          <tr>
+            <td><code>action</code></td>
+            <td>Describes what operation occurred</td>
+          </tr>
+          <tr>
+            <td><code>resource_type</code></td>
+            <td>Keeps the category of the affected object consistent</td>
+          </tr>
+          <tr>
+            <td><code>resource_id</code></td>
+            <td>Connects the event to the exact affected record or route</td>
+          </tr>
+          <tr>
+            <td><code>metadata</code></td>
+            <td>Stores supporting context that helps explain the event later</td>
+          </tr>
+        </tbody>
+      </table>
+      <pre><code>await logAuditEvent({
+  supabase,
+  actorId: user.id,
+  action: "reminder.created",
+  resourceType: "study_reminder",
+  resourceId: reminder.id,
+  metadata: { courseId, reminderTime },
+})</code></pre>
+    </section>
+  </main>
+</body>
+</html>

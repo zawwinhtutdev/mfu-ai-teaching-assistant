@@ -1,0 +1,29 @@
+{
+  "endpoint": "https://aiassistant-mfu.vercel.app/api/chat",
+  "runs": 3,
+  "successfulRuns": 3,
+  "failedRuns": 0,
+  "timestamp": "2026-02-17T09:50:25.802Z",
+  "baseline": {
+    "minMs": 1479,
+    "maxMs": 2503,
+    "avgMs": 1841,
+    "p50Ms": 1541,
+    "p90Ms": 2503,
+    "p95Ms": 2503
+  },
+  "results": [
+    {
+      "ok": true,
+      "ms": 2503
+    },
+    {
+      "ok": true,
+      "ms": 1541
+    },
+    {
+      "ok": true,
+      "ms": 1479
+    }
+  ]
+}
