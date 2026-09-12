@@ -1,0 +1,19 @@
+# Copy this file to .envrc.private and replace values.
+# .envrc.private is gitignored.
+
+# Supabase CLI
+export SUPABASE_ACCESS_TOKEN="your_supabase_personal_access_token"
+export SUPABASE_DB_PASSWORD="your_remote_database_password"
+
+# One-time admin creation script
+export NEXT_PUBLIC_SUPABASE_URL="your_supabase_project_url"
+export NEXT_PUBLIC_SUPABASE_ANON_KEY="your_supabase_anon_key"
+export ADMIN_EMAIL="your_admin_email"
+export ADMIN_PASSWORD="your_admin_password"
+
+# Google OAuth web application (used to configure Supabase Google sign-in)
+export GOOGLE_OAUTH_CLIENT_ID="your_google_oauth_client_id"
+export GOOGLE_OAUTH_CLIENT_SECRET="your_google_oauth_client_secret"
+
+# Vercel CLI
+export VERCEL_TOKEN="your_vercel_token"

@@ -1,0 +1,8 @@
+.next*
+node_modules
+.git
+.env*
+!.envrc.private.example
+reports
+*.log
+.DS_Store

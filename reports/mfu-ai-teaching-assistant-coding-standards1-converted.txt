@@ -1,0 +1,455 @@
+MFU AI Teaching Assistant
+General Styles and Coding Standards
+Repository basis: /Users/z/Documents/ai-teaching-assistant (1)
+Prepared from the live codebase on April 19, 2026
+This document adapts the structure of the sample coding-standard assignment, but all rules and
+examples are grounded in the current MFU AI Teaching Assistant project. It covers the application
+structure, naming conventions, Next.js API route patterns, React component rules, Supabase
+access, AI integration, storage, migrations, testing, and security practices currently used in this
+repository.
+1. Purpose
+The MFU AI Teaching Assistant is a full-stack teaching support platform built with Next.js App Router,
+React, TypeScript, Supabase, DigitalOcean Spaces, and Gemini-based AI features. The project includes
+student, teacher, and admin experiences; authenticated APIs; study reminders; document ingestion;
+retrieval-augmented chat; analytics; and compliance-oriented audit logging.
+The purpose of this standard is to keep implementation consistent across route handlers, feature
+components, server utilities, Supabase queries, migrations, and AI workflows. The codebase already
+contains several strong patterns: request-scoped Supabase clients, role-aware middleware, snake_case
+persistence fields, camelCase application logic, centralized model configuration, and idempotent SQL
+migrations. These patterns should be treated as project defaults for future work.
+Repository source files used to derive these standards include: app/api/chat/route.ts,
+app/api/reminders/route.ts, app/api/documents/route.ts,
+components/chat/chat-interface.tsx, lib/supabase/middleware.ts,
+lib/storage/spaces.ts, lib/ai/models.ts, and the canonical migration files under
+supabase/migrations/.
+
+-- 1 of 14 --
+
+2. Naming Standards (Project-Enforced)
+2.1 Variables, Local State, and Function Parameters
+Application-level TypeScript code uses camelCase for local variables, function parameters, and React
+state. Names should be descriptive enough to make control flow obvious without requiring extra
+comments. In this project, variables usually encode intent rather than raw type, and booleans should
+read like conditions.
+Name Pattern 	Rule 	Examples From Project
+selectedModel,
+loadError
+Use descriptive nouns for
+values and state
+selectedModel, activeConversationId,
+reminderText
+is*, has*, can* 	Prefix booleans with readable
+condition verbs
+isDemoSession, hasUserDocumentAccess,
+canPersist
+*Ref 	Suffix DOM and mutable refs
+with Ref
+scrollRef, latestMessagesRef
+current*,
+requested*
+Use contextual modifiers when
+multiple values of same
+category exist
+currentConversationId,
+requestedCourseId,
+currentGeminiStoreName
+2.2 Persisted Database Fields and API Payload Keys
+Supabase table columns and persisted JSON fields use snake_case. This includes database columns,
+migration DDL, row-level policy expressions, and many response payload fields returned directly from
+Supabase. The project currently mixes camelCase application variables with snake_case storage fields;
+that split should remain explicit rather than blurred.
+Layer 	Preferred Style 	Examples
+Supabase tables and
+columns
+snake_case 	full_name, created_at, course_id,
+gemini_index_status
+Insert/update payloads
+to DB
+Match column names
+exactly
+user_id, reminder_time, resource_type,
+scheduled_for
+Client-only local
+variables
+camelCase 	courseId, lineEnabled, updateData
+2.3 Types, Components, and Files
+Shared TypeScript types and React component names use PascalCase. Hook files use the use*
+pattern. Route handlers follow Next.js App Router file conventions and must be named by framework
+contract.
+
+-- 2 of 14 --
+
+Asset 	Convention 	Examples
+Interfaces and
+unions
+PascalCase 	Profile, Course, UserDocument,
+UserRole
+React
+components
+PascalCase component symbol, kebab-case
+file when already established
+ChatInterface, ThemeProvider,
+RootLayout
+Hooks 	use* 	useChat, use-mobile.ts, use-
+toast.ts
+Route files 	Framework-enforced names 	page.tsx, layout.tsx, route.ts,
+loading.tsx
+2.4 Constants, Regexes, and Environment Variables
+Constants with application-wide meaning use UPPER_SNAKE_CASE. Environment variable names
+must remain uppercase and explicit. Helper functions such as requireEnv are preferred over ad-hoc
+access when a value is mandatory.
+Name 	Category 	Current Example
+UUID_REGEX 	Validation
+constant
+Message persistence guard in
+app/api/chat/route.ts
+AUTH_PATHS, PUBLIC_PATHS 	Routing sets 	Role-aware middleware path controls
+DEMO_ROLE_COOKIE,
+DEMO_DOCUMENTS_COOKIE
+Cookie keys 	Demo-session handling and document
+simulation
+NEXT_PUBLIC_SUPABASE_URL,
+DO_SPACES_BUCKET
+Environment
+variables
+Supabase and DigitalOcean Spaces
+configuration
+
+-- 3 of 14 --
+
+3. Application Structure Standards
+The repository follows a feature-oriented Next.js layout. The folder structure is part of the architecture
+and should remain stable. New code should be added to the correct layer rather than expanding large
+route files with unrelated logic.
+Folder 	Responsibility Examples in This Project
+app/ 	Next.js pages,
+layouts, and
+HTTP route
+handlers
+app/chat/page.tsx, app/api/chat/route.ts
+components/ 	Reusable UI and
+feature
+components
+components/chat/chat-interface.tsx,
+components/teacher/analytics-page.tsx
+lib/ 	Integrations,
+server utilities,
+shared types,
+helpers
+lib/supabase/server.ts,
+lib/storage/spaces.ts, lib/ai/models.ts
+supabase/migrations/ Canonical
+schema evolution
+and RLS policies
+20260217114000_phase0_schema_foundation.sql
+scripts/ 	Bootstrap, smoke
+checks, and
+engineering
+utilities
+db-bootstrap.sh, roadmap-smoke-checks.mjs
+Import paths should prefer the root alias @/ instead of deep relative traversal. This is already the
+dominant project pattern and reduces refactor friction across App Router boundaries.
+
+-- 4 of 14 --
+
+4. API Layer Standards (app/api)
+4.1 Route Handler Design
+API route files should remain focused on HTTP concerns: session lookup, request parsing, validation,
+orchestration, and response shaping. Business logic that may be reused should live under lib/server,
+lib/ai, or another domain-specific helper file.
+export async function POST(req: Request) {
+const supabase = await createClient()
+const { data: { user } } = await supabase.auth.getUser()
+if (!user) {
+return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+}
+const body = await req.json().catch(() => ({}))
+// validate
+// orchestrate helper calls
+// return JSON
+}
+For slow operations, declare export const maxDuration near the top of the route file. This is
+already used in document and chat APIs and should be the standard for long-lived requests.
+4.2 Authentication and Permissions
+Protected routes must verify the authenticated user server-side. Role and ownership checks are required
+after authentication, not instead of it. The codebase currently uses three permission patterns:
+1. General user auth with supabase.auth.getUser().
+2. Performance-sensitive session reads with getSession() only when middleware has already
+validated access.
+3. Role-specialized helpers such as requireAdminUser().
+if (!profile || profile.role !== "student") {
+return NextResponse.json({ error: "Only students can create reminders" }, { status:
+403 })
+}
+const { data: enrollment } = await supabase
+.from("course_enrollments")
+.select("course_id")
+.eq("course_id", courseId)
+.eq("student_id", user.id)
+.maybeSingle()
+if (!enrollment) {
+return NextResponse.json({ error: "You are not enrolled in this course" }, { status:
+403 })
+}
+
+-- 5 of 14 --
+
+4.3 Input Validation and Response Contracts
+User input should be normalized as early as possible. Strings are typically coerced with
+String(...).trim(), booleans are derived explicitly, and dates are parsed into Date objects before
+database writes. Validation failures return 400; missing auth returns 401; permission failures return
+403; unexpected backend issues return 500.
+Status 	Usage in Current Project
+400 	Missing title, invalid reminder time, absent files, malformed AI output
+401 	Unauthenticated API access
+403 	Wrong role, non-enrolled student, non-admin access
+500 	Supabase insert/select failures, indexing failures, unexpected runtime errors
+Response payloads should remain predictable. Empty collections should default to [], not null.
+Record payloads should use stable object keys such as { reminders }, { documents }, or { plan
+}.
+4.4 AI-Enabled Endpoints
+AI route handlers must separate prompt construction from access control and persistence. Chat routes
+may combine role prompt, course RAG context, file-search context, and prompt override, but the
+system should still preserve clear request boundaries: authenticate, gather context, choose model,
+stream or generate output, then persist or log results.
+
+-- 6 of 14 --
+
+5. React and Frontend Standards
+5.1 Server vs Client Components
+Server Components are the default in App Router. Add "use client" only when a file needs React
+state, browser APIs, event handlers, or client-only hooks such as useChat. This project already follows
+that split in files like components/chat/chat-interface.tsx.
+5.2 Props and State Shape
+Component props should be typed with explicit interfaces, including nullable fields where data may not
+exist yet. Complex feature components should keep state names aligned with user behavior rather than
+implementation mechanics.
+interface ChatInterfaceProps {
+profile: Profile
+courses: Course[]
+materials: CourseMaterial[]
+conversationId: string | null
+pdfRagEnabled?: boolean
+ragDocumentId?: string | null
+ragDocumentName?: string | null
+}
+5.3 UI Composition
+Feature components should compose shared UI primitives instead of re-implementing them. The
+current project relies on shadcn/ui-style controls, Radix-based wrappers, and domain components. This
+layering should continue:
+1. Primitive controls in components/ui/.
+2. Feature assemblies in components/student/, components/teacher/, and
+components/chat/.
+3. Route composition in app/ files.
+5.4 Frontend Naming and Side-Effect Rules
+Effects should do one primary job per block: load initial data, sync refs, or react to route changes.
+Derived objects that depend on state may be memoized when identity stability matters, such as the
+chatBody payload passed to useChat. Browser logging may be acceptable during active debugging,
+but production standards should favor concise diagnostic logs only where they materially aid support.
+
+-- 7 of 14 --
+
+6. Supabase and Data Access Standards
+6.1 Request-Scoped Clients
+Server-side code should obtain a Supabase client through createClient() inside the request scope.
+The helper wraps cookie access and keeps authentication behavior consistent for route handlers and
+server components.
+export async function createClient() {
+const cookieStore = await cookies()
+return createServerClient(
+process.env.NEXT_PUBLIC_SUPABASE_URL!,
+process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+{ cookies: { getAll() { ... }, setAll(cookiesToSet) { ... } } }
+)
+}
+6.2 Query Patterns
+Supabase queries should stay explicit and chainable. Use .single() when exactly one record must
+exist, .maybeSingle() when absence is acceptable, and .order() for stable list output. Avoid broad
+select("*") in public responses when a narrower projection is sufficient.
+Pattern 	Current Use
+.single() 	Required profile, course, or inserted row fetches
+.maybeSingle() 	Enrollment existence checks and optional records
+.order(...) 	Reminder order, document lists, audit log chronology
+Explicit column list 	Document listing and route-specific payload shaping
+6.3 Storage and Object-Key Rules
+File storage keys must be sanitized and generated centrally. The current DigitalOcean Spaces helper
+strips unsafe characters, normalizes user-derived folder names, and appends random entropy to
+preserve uniqueness. Future uploads should always use the centralized helper rather than custom object
+key generation.
+function buildUserDocumentObjectKey(input: {
+userId: string
+fileName: string
+userEmail?: string
+userLabel?: string
+}): string {
+const safeName = sanitizeFileName(input.fileName) || "file"
+const random = crypto.randomBytes(6).toString("hex")
+const userFolder = buildReadableUserFolder(input.userId, input.userEmail,
+input.userLabel)
+
+-- 8 of 14 --
+
+return `${userFolder}/documents/${Date.now()}-${random}-${safeName}`
+}
+7. AI Integration Standards
+7.1 Model Configuration
+General chat models should be defined centrally in lib/ai/models.ts. Each entry should declare a
+stable internal ID, label, provider model, system prompt, token limits, and enablement flag. This keeps
+the UI selector and server logic aligned.
+Current Config Field 	Purpose
+id 	Stable application-facing selector value
+providerModel 	Provider-specific model identifier
+systemPrompt 	Default assistant behavior
+maxOutputTokens, temperature 	Runtime tuning defaults
+7.2 Service Separation
+The project currently uses both the Vercel AI SDK and the Google GenAI SDK. That split is acceptable
+when the reasons are clear: streaming conversational output uses streamText, while structured one-
+shot generation such as the study planner may use @google/genai. Future additions should
+document which SDK is being used and why.
+7.3 Grounding and Retrieval
+The project’s AI layer is not pure free-form prompting. Current behavior includes:
+Course-aware RAG using course_material_chunks and vector search.
+Gemini file-search indexing for uploaded PDFs.
+Fallback PDF text extraction for attached documents.
+Role-specific prompt framing for students, teachers, and MFU-wide guidance.
+New AI features should preserve traceable context flow: source documents first, prompt template
+second, model call third, and persistence/logging last.
+
+-- 9 of 14 --
+
+8. Error Handling and Observability Standards
+8.1 Error Shape
+Route handlers should return safe error messages to clients and avoid leaking secrets, stack traces, or
+internal service configuration. When possible, include a user-actionable message such as "No files
+provided" or "Reminder time must be in the future".
+8.2 Central Error Tracking
+Unexpected API failures should be recorded with trackApiError(). This helper normalizes the error
+payload, logs it to stderr, and attempts to insert an api.error record into audit_logs. This is the
+project standard for route-level observability.
+await trackApiError({
+route: "/api/documents:GET",
+error,
+})
+8.3 Audit Logging
+Significant write actions should record audit events when an actor ID is available. The existing reminder
+flow already uses this pattern. Future admin, teacher, and compliance-sensitive operations should do
+the same.
+await logAuditEvent({
+supabase: supabase as any,
+actorId: user.id,
+action: "reminder.created",
+resourceType: "study_reminder",
+resourceId: reminder.id,
+metadata: { courseId, reminderTime },
+ipAddress: req.headers.get("x-forwarded-for"),
+userAgent: req.headers.get("user-agent"),
+})
+
+-- 10 of 14 --
+
+9. Security Standards
+9.1 Middleware Route Guards
+Authentication and role-based redirects are enforced in lib/supabase/middleware.ts. Protected
+route families are defined by helper predicates such as isTeacherRoute(), isStudentRoute(),
+and isAdminRoute(). New protected areas should extend these predicates or equivalent centralized
+helpers rather than open-coding route checks.
+9.2 Admin Access
+Admin-only APIs must verify admin status server-side with requireAdminUser(). Acceptable admin
+criteria in the current project are:
+profiles.role = 'admin', or
+the user email is listed in ADMIN_EMAILS, or
+a demo admin cookie session is active.
+9.3 Secret Management and Storage Access
+Secrets must come from environment variables, not hard-coded constants. Storage access should use
+signed URLs for private buckets and public URLs only when the bucket is intentionally public. The
+helper requireEnv() is the preferred pattern for mandatory runtime configuration.
+9.4 Database Security
+New tables must enable row-level security and define explicit policies. The migration files in this project
+already follow that pattern for announcements, consents, audit logs, notification jobs, system policies,
+and vector chunks. RLS is not optional.
+
+-- 11 of 14 --
+
+10. Database Migration Standards (supabase/migrations)
+10.1 Canonical Schema Flow
+Schema changes belong in versioned SQL under supabase/migrations/. The roadmap and
+README both treat this path as the canonical source of truth. Ad-hoc manual schema edits should be
+avoided because they break reproducibility and smoke checks.
+10.2 Idempotent SQL Style
+Existing migration files show the preferred style:
+create extension if not exists ...
+create table if not exists ...
+create index if not exists ...
+do $$ begin ... if not exists (...) then create policy ... end if;
+end $$;
+This style is especially important for multi-environment bootstrap and repair scenarios.
+10.3 Vector and RAG Schema Rules
+AI retrieval schema is part of the production data model. The migration
+20260217162000_phase2_rag_chunks_and_jobs.sql defines the project’s preferred shape for
+vector storage: stable UUID primary keys, explicit foreign keys, non-negative chunk indexes, fixed
+embedding size, RLS, and a database function for semantic matching.
+create table if not exists public.course_material_chunks (
+id uuid primary key default gen_random_uuid(),
+course_id uuid not null references public.courses(id) on delete cascade,
+material_id uuid not null references public.course_materials(id) on delete cascade,
+chunk_index integer not null check (chunk_index >= 0),
+chunk_text text not null,
+embedding vector(768) not null,
+created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+unique(material_id, chunk_index)
+);
+
+-- 12 of 14 --
+
+11. Testing and Quality Gates
+11.1 Repository Checks
+The project exposes several engineering commands that should be treated as the standard validation
+baseline after meaningful changes:
+Command 	Purpose
+npm run type-check 	TypeScript correctness
+npm run lint 	Static code-quality checks
+npm run build 	Next.js production build verification
+npm run test:roadmap 	Repository smoke checks for roadmap-critical features
+npm run perf:chat-baseline 	Chat latency baseline utility
+11.2 Smoke-Check Expectations
+The existing smoke-check script validates that critical route files, migrations, and PDF-RAG wiring
+remain present. This expresses a useful project rule: tests are not limited to isolated functions; they
+should also protect architecture and feature wiring that the roadmap depends on.
+11.3 Definition of Done for Code Changes
+1. Use the correct folder and naming convention for the new code.
+2. Preserve auth, role checks, and RLS assumptions.
+3. Handle invalid input with explicit status codes.
+4. Use shared helpers for Supabase, storage, admin auth, logging, or AI config where applicable.
+5. Update migrations instead of mutating schema manually.
+6. Run relevant validation commands before merging.
+
+-- 13 of 14 --
+
+12. Current Project Data Snapshot
+The following entities and subsystems are already part of the repository and should guide future
+standardization work:
+Area 	Current Project Data
+Roles 	student, teacher, admin
+Primary app stacks Next.js 15, React 19, TypeScript, Supabase, DigitalOcean Spaces, Gemini integrations
+Core persistence
+tables
+profiles, courses, course_enrollments, course_materials,
+study_reminders, conversations, messages, user_documents, audit_logs,
+notification_jobs, consents
+AI support
+tables/functions
+course_material_chunks, match_course_material_chunks(...), Gemini
+file-search metadata fields
+Protected route
+families
+/studentportal, /teacherportal, /dashboard/teacher, /admin
+Project-wide
+engineering goal
+Production-ready AI teaching assistant with RBAC, grounded chat, reminders,
+analytics, and privacy controls
+These standards should be treated as a living reference. When the codebase evolves, this document
+should be updated from the repository itself, not from memory or aspirational architecture alone.
+End of document.
+
+-- 14 of 14 --
+
