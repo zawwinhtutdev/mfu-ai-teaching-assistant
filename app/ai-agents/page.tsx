@@ -47,7 +47,7 @@ export default function AgentsListPage() {
     } catch {}
   }
 
-  const useInChat = (agent: AgentConfig) => {
+  const handleUseInChat = (agent: AgentConfig) => {
     const systemPrompt = [agent.description, agent.instructions].filter(Boolean).join("\n\n").trim()
     const payload = { id: agent.id, name: agent.name, model: agent.model, systemPrompt, starters: agent.starters }
     try { localStorage.setItem("agent-active", JSON.stringify(payload)) } catch {}
@@ -95,7 +95,7 @@ export default function AgentsListPage() {
                       <Trash2 className="mr-2 h-4 w-4" />
                       Delete
                     </Button>
-                    <Button size="sm" onClick={() => useInChat(a)}>
+                    <Button size="sm" onClick={() => handleUseInChat(a)}>
                       <Wand2 className="mr-2 h-4 w-4" />
                       Use in Chat
                     </Button>

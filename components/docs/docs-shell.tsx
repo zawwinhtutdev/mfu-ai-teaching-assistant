@@ -667,10 +667,10 @@ export function DocsShell({
             </button>
           </div>
           <div className="flex items-center justify-end gap-1">
-            <a href="/" aria-label="Back to MFU AI platform" className="hidden items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground sm:flex">
+            <Link href="/" aria-label="Back to MFU AI platform" className="hidden items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground sm:flex">
               <Home className="size-4" />
               <span className="hidden 2xl:inline">Back to platform</span>
-            </a>
+            </Link>
             <ThemeToggle />
           </div>
         </div>
