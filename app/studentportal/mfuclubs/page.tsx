@@ -3,7 +3,7 @@
 import { motion } from "framer-motion"
 import { 
   Users,
-  Facebook,
+  ExternalLink,
   Building2,
   GraduationCap
 } from "lucide-react"
@@ -93,7 +93,7 @@ export default function MFUClubsPage() {
                           </span>
                         </div>
                         <div className="flex items-center gap-2 mt-1.5">
-                          <Facebook className="h-3 w-3 text-blue-500" />
+                          <ExternalLink className="h-3 w-3 text-blue-500" />
                           <span className="text-xs text-gray-400 dark:text-gray-500 truncate">
                             {link.url.replace('https://www.', '').replace('https://', '')}
                           </span>
