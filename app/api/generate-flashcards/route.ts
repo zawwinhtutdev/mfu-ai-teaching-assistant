@@ -1,4 +1,4 @@
-import { generateObject } from "ai"
+import { generateText, Output } from "ai"
 import { google } from "@ai-sdk/google"
 import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
@@ -35,9 +35,9 @@ export async function POST(req: Request) {
   })
 
   // Generate flashcards
-  const { object } = await generateObject({
+  const { output } = await generateText({
     model: google("gemini-3.8-flash"),
-    schema: flashcardsSchema,
+    output: Output.object({ schema: flashcardsSchema }),
     prompt: `Generate 5-10 educational flashcards from the following material. Each flashcard should have a clear question and a concise answer that helps students learn and remember key concepts.
 
 Material Title: ${materialSource.title}
@@ -52,7 +52,7 @@ Create flashcards that:
   })
 
   // Save flashcards to database
-  const flashcardsToInsert = object.flashcards.map((fc) => ({
+  const flashcardsToInsert = output.flashcards.map((fc) => ({
     student_id: studentId,
     course_id: courseId,
     material_id: materialId,

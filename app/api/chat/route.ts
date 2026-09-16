@@ -1,5 +1,5 @@
-import { convertToModelMessages, streamText } from "ai"
-import { createGoogleGenerativeAI } from "@ai-sdk/google"
+import { convertToModelMessages, createUIMessageStreamResponse, streamText, toUIMessageStream } from "ai"
+import { createGoogle } from "@ai-sdk/google"
 import { cookies } from "next/headers"
 import { getUserFacingChatError } from "@/lib/ai/chat-errors"
 import { getModelConfig, normalizeGoogleProviderModel } from "@/lib/ai/models"
@@ -632,7 +632,7 @@ Guidelines:
       }
     }
 
-    const modelMessages = convertToModelMessages([
+    const modelMessages = await convertToModelMessages([
       ...(imageParts.length ? [{ id: "attachments", role: "user", parts: imageParts }] as any : []),
       ...messages,
     ])
@@ -645,7 +645,7 @@ Guidelines:
       console.error("[v0] ERROR: GOOGLE_GENERATIVE_AI_API_KEY is not set!")
       return Response.json({ error: "Google Gemini API key not configured" }, { status: 500 })
     }
-    const google = createGoogleGenerativeAI({
+    const google = createGoogle({
       apiKey: apiKey,
     })
 
@@ -663,7 +663,7 @@ Guidelines:
       result = streamText({
         model: google(selectedGoogleModel),
         messages: modelMessages,
-        system: [
+        instructions: [
           systemPrompt,
           courseSettingsNote,
           courseRetrievalNote,
@@ -683,7 +683,8 @@ Guidelines:
       throw streamError
     }
 
-    return result.toUIMessageStreamResponse({
+    const uiStream = toUIMessageStream({
+      stream: result.stream,
       onError: (streamError: unknown) => {
         console.error("[v0] Chat stream error:", streamError)
         return getUserFacingChatError(streamError)
@@ -739,6 +740,8 @@ Guidelines:
         }
       },
     } as any)
+
+    return createUIMessageStreamResponse({ stream: uiStream })
   } catch (error) {
     console.error("[v0] Chat API error:", error)
     await trackApiError({
