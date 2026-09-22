@@ -1,4 +1,4 @@
-import { generateObject } from "ai"
+import { generateText, Output } from "ai"
 import { google } from "@ai-sdk/google"
 import { z } from "zod"
 import { createClient } from "@/lib/supabase/server"
@@ -37,9 +37,9 @@ export async function POST(req: Request) {
   })
 
   // Generate quiz
-  const { object } = await generateObject({
+  const { output } = await generateText({
     model: google("gemini-3.8-flash"),
-    schema: quizSchema,
+    output: Output.object({ schema: quizSchema }),
     prompt: `Generate a quiz with 5 multiple-choice questions based on the following educational material.
 
 Material Title: ${materialSource.title}
@@ -61,8 +61,8 @@ Return a quiz title and the questions array.`,
     .from("quizzes")
     .insert({
       course_id: courseId,
-      title: object.title,
-      questions: object.questions,
+      title: output.title,
+      questions: output.questions,
     })
     .select()
     .single()
