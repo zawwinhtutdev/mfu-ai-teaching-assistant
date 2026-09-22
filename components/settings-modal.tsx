@@ -36,9 +36,9 @@ import { useTheme } from "next-themes";
 const formSchema = z.object({
   language: z.string(),
   theme: z.string(),
-  emailNotifications: z.boolean().default(false),
-  lineNotification: z.boolean().default(false),
-  twoFactorAuth: z.boolean().default(false),
+  emailNotifications: z.boolean(),
+  lineNotification: z.boolean(),
+  twoFactorAuth: z.boolean(),
   fullName: z.string().optional(),
   email: z.string().email().optional(),
 });
