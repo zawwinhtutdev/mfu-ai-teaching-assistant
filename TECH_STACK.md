@@ -3,36 +3,41 @@
 ## 🚀 **Current Technology Stack**
 
 ### **Frontend Framework**
-- **Next.js 15.5.6** - React framework with App Router
-- **React 19.2.0** - UI library
-- **TypeScript 5** - Type-safe JavaScript
+- **Next.js 16.4.2** - React framework with App Router (Turbopack builds, `proxy.ts` request boundary)
+- **React 19.3.1** - UI library
+- **TypeScript 6.0** - Type-safe JavaScript (TS 7 deferred until typescript-eslint supports it)
+- **Node.js 22+** - Runtime requirement (AI SDK 7 is ESM-only)
 
 ### **Styling & UI Components**
-- **Tailwind CSS 4.1.9** - Utility-first CSS framework
+- **Tailwind CSS 4.3.3** - Utility-first CSS framework
 - **Radix UI** - Headless UI components
   - Accordion, Alert Dialog, Avatar, Checkbox, Dialog, Dropdown Menu, etc.
 - **Shadcn/ui** - Pre-built UI components based on Radix
-- **Next Themes** - Dark mode support
-- **Lucide React** - Icon library
-- **Recharts 2.15.4** - Charts and data visualization
+- **Next Themes 0.4.6** - Dark mode support
+- **Lucide React 1.59** - Icon library
+- **Recharts 3.10.1** - Charts and data visualization
+- **Framer Motion 14.3** - Animation
 
 ### **State Management & Forms**
-- **React Hook Form 7.60.0** - Form handling
-- **Zod 3.25.76** - Schema validation
-- **@hookform/resolvers** - Form validation integration
+- **React Hook Form 7.90.0** - Form handling
+- **Zod 4.6.7** - Schema validation
+- **@hookform/resolvers 5.9.2** - Form validation integration
 
 ### **Backend & Database**
 - **Supabase** - Backend as a Service
-  - **@supabase/supabase-js** - Supabase client
-  - **@supabase/ssr** - Server-side rendering support
+  - **@supabase/supabase-js 2.118.0** - Supabase client
+  - **@supabase/ssr 0.12.7** - Server-side rendering support
   - **PostgreSQL** - Database (via Supabase)
   - **Row Level Security (RLS)** - Data security
+- **DigitalOcean Spaces** - Document storage
+  - **@aws-sdk/client-s3 3.1152** + s3-request-presigner - S3-compatible client
 
 ### **AI & Chat Features** ⭐
-- **Vercel AI SDK (ai)** - AI framework
-- **@ai-sdk/google** - Google Gemini provider integration
-- **@ai-sdk/react** - React hooks for AI
-- **Gemini 2.5 Flash** - AI model for chat responses
+- **Vercel AI SDK 7.0.143 (`ai`)** - AI framework
+- **@ai-sdk/google 4.0.99** - Google Gemini provider integration
+- **@ai-sdk/react 4.0.147** - React hooks for AI (`useChat` + `DefaultChatTransport`)
+- **Gemini 3.8 Flash** - AI model for chat responses
+- **@google/genai 2.30** - Direct Gemini client (file search, embeddings, audio transcription)
 
 ### **Authentication**
 - **Supabase Auth** - User authentication
@@ -41,17 +46,19 @@
   - Role-based access control (Student/Teacher)
 
 ### **Development Tools**
-- **ESLint** - Code linting
-- **PostCSS** - CSS processing
-- **Autoprefixer** - CSS vendor prefixing
+- **ESLint 10** - Code linting (flat config in `eslint.config.mjs`)
+- **Turbopack** - Default bundler for `next dev` and `next build`
+- **PostCSS 8.5** - CSS processing
+- **Autoprefixer 10.6** - CSS vendor prefixing
 
 ### **Additional Libraries**
-- **date-fns 4.1.0** - Date manipulation
-- **cmdk** - Command menu
-- **sonner** - Toast notifications
-- **embla-carousel-react** - Carousel component
+- **cmdk 1.1** - Command menu
+- **sonner 2.0** - Toast notifications
+- **embla-carousel-react 8.6** - Carousel component
 - **class-variance-authority** - CSS variant handling
-- **clsx & tailwind-merge** - Conditional CSS classes
+- **clsx & tailwind-merge 3** - Conditional CSS classes
+- **pdf-parse 2.4** - PDF text extraction
+- **web-push 3.6** - Browser push notifications
 
 ---
 
@@ -122,8 +129,8 @@ DO_SPACES_PUBLIC=false
 ## 🛠️ **Development Commands**
 
 ```bash
-# Install dependencies
-npm install --legacy-peer-deps
+# Install dependencies (Node.js 22+)
+npm ci
 
 # Run development server
 npm run dev
@@ -170,24 +177,23 @@ ai-teaching-assistant/
 
 ## 🔄 **Recent Updates**
 
-### ✅ **Vercel AI SDK Integration** (Latest)
-- Migrated from Vercel AI Gateway to direct Gemini provider
-- Added `@ai-sdk/google` package
-- Configured Gemini 2.5 Flash model
-- Streaming AI responses
-- Database persistence for chat history
+### ✅ **Tech Stack Upgrade — October 19, 2026**
+- Next.js 15.5.12 → **16.4.2** (Turbopack by default; `middleware.ts` → `proxy.ts`)
+- AI SDK 5 → **7** (`generateObject` → `generateText` + `Output.object`, async `convertToModelMessages`, stateless UI stream helpers)
+- React 19.2 → **19.3.1**; TypeScript 5.9 → **6.0** (TS 7 builds but breaks `typescript-eslint`); ESLint 9 → **10** (flat config)
+- Zod 3 → **4**; `@hookform/resolvers` 3 → **5**
+- Tailwind CSS 4.1 → **4.3.3**; lucide-react 0.454 → **1.59**; Recharts 2 → **3**
+- Supabase SSR 0.7 → **0.12.7**; `@google/genai` 1 → **2**; framer-motion 12 → **14**
+- Removed unused deps: `animate-ui`, `tokenlens`, `streamdown`, `nanoid`, `slick-carousel`, `date-fns`, `tailwindcss-animate`, `motion`
+- Removed `legacy-peer-deps` (`.npmrc` deleted); Vercel installs with `npm ci`
+- `npm audit`: 3 critical / 10 high → **0 critical**, 5 high (dev-only ESLint transitive deps)
+- Verified after every step with `tsc --noEmit`, `eslint .`, `next build` and a production-server smoke test
 
-### ✅ **Database Setup**
-- Created profiles, conversations, and messages tables
-- Implemented Row Level Security (RLS)
-- Automatic profile creation trigger
-- Foreign key constraints and indexes
-
-### ✅ **Authentication**
-- Supabase authentication integration
-- Role-based access control
-- Protected routes with middleware
-- Session management
+### ✅ **Earlier Work**
+- Migrated from Vercel AI Gateway to the direct Gemini provider
+- Streaming AI responses with database persistence for chat history
+- Supabase auth, profiles/conversations/messages tables, RLS and triggers
+- Role-based route protection (now enforced in `proxy.ts`)
 
 ---
 
@@ -250,5 +256,5 @@ vercel --prod
 
 ---
 
-**Last Updated:** October 23, 2025
+**Last Updated:** October 19, 2026
 **Version:** 0.1.0
