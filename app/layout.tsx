@@ -1,6 +1,5 @@
 import type React from "react"
 import type { Metadata, Viewport } from "next"
-import { Analytics } from "@vercel/analytics/next"
 import { ThemeProvider } from "@/components/theme-provider"
 import { ServiceWorkerRegister } from "@/components/sw-register"
 import "./globals.css"
@@ -48,7 +47,6 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={true} disableTransitionOnChange>
           {children}
         </ThemeProvider>
-        <Analytics />
         <ServiceWorkerRegister />
       </body>
     </html>

@@ -1,0 +1,41 @@
+name: scheduled-jobs
+
+# Replaces the two Vercel crons that used to live in vercel.json.
+# Repo secrets required:
+#   APP_BASE_URL  e.g. https://ata.example.com   (no trailing slash)
+#   CRON_SECRET   must match the app's CRON_SECRET env var
+
+on:
+  schedule:
+    - cron: "0 7 * * *" # daily  -> notification dispatch
+    - cron: "0 0 * * 0" # weekly -> keep-alive
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Which job to run"
+        type: choice
+        options: [notifications, keep-alive]
+        default: notifications
+
+jobs:
+  notifications:
+    if: github.event.schedule == '0 7 * * *' || inputs.job == 'notifications'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch queued notifications
+        run: |
+          curl -fsS -X POST "${{ secrets.APP_BASE_URL }}/api/notifications/process" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -o response.json -w "HTTP %{http_code}\n"
+          cat response.json
+
+  keep-alive:
+    if: github.event.schedule == '0 0 * * 0' || inputs.job == 'keep-alive'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping app
+        run: |
+          curl -fsS "${{ secrets.APP_BASE_URL }}/api/keep-alive" \
+            -o response.json -w "HTTP %{http_code}\n"
+          cat response.json

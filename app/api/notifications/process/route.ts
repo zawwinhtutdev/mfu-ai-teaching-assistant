@@ -53,9 +53,6 @@ async function sendEmailJob(params: {
 }
 
 function isAuthorizedCronRequest(req: Request) {
-  const cronHeader = req.headers.get("x-vercel-cron")
-  if (cronHeader) return true
-
   const expectedSecret = process.env.CRON_SECRET || process.env.NOTIFICATION_CRON_SECRET
   if (!expectedSecret) return false
 
