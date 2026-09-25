@@ -37,6 +37,29 @@ services:
       retries: 3
       start_period: 20s
 
+  api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    image: ai-teaching-assistant-api:local
+    container_name: ata-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # Shares Supabase Auth with the web app; this service only verifies tokens.
+      SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      ENVIRONMENT: ${ENVIRONMENT:-local}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   db:
     image: pgvector/pgvector:pg16
     container_name: ata-db

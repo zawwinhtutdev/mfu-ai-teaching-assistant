@@ -1,0 +1,23 @@
+[project]
+name = "ata-api"
+version = "0.1.0"
+description = "FastAPI service for the AI Teaching Assistant platform"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_unused_ignores = true
+no_implicit_optional = true
+check_untyped_defs = true
+disallow_incomplete_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
