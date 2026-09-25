@@ -264,8 +264,8 @@ Self-hosted: the app ships as a container image. No Vercel dependency.
 ### Docker (recommended)
 
 ```bash
-# build + run
-docker compose up --build
+# build + run (pass --env-file so NEXT_PUBLIC_* are baked in correctly)
+docker compose --env-file .env.local up --build
 
 # or build the image directly
 docker build -t ai-teaching-assistant .
@@ -278,7 +278,7 @@ includes a container `HEALTHCHECK` against `/`.
 To bring up the future data layer (Postgres + pgvector, Redis):
 
 ```bash
-docker compose --profile platform up --build
+docker compose --env-file .env.local --profile platform up --build
 ```
 
 ### Any container host

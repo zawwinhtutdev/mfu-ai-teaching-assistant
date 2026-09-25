@@ -1,7 +1,11 @@
 # Local + single-host deployment.
 #
-#   docker compose up --build            # web only (current state)
-#   docker compose --profile platform up # + Postgres/pgvector & Redis (phase 2)
+#   docker compose --env-file .env.local up --build            # web + api
+#   docker compose --env-file .env.local --profile platform up # + Postgres/pgvector & Redis
+#
+# IMPORTANT: pass `--env-file .env.local`. NEXT_PUBLIC_* values are inlined into
+# the web bundle at BUILD time, so the build needs the real ones — not just the
+# runtime environment.
 #
 # Platform services are behind a profile so the app can ship before the
 # FastAPI/RAG work lands.
