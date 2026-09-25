@@ -259,26 +259,62 @@ For detailed tech stack information, see [TECH_STACK.md](./TECH_STACK.md)
 
 ## 🚢 Deployment
 
-### Deploy to Vercel (Recommended)
+Self-hosted: the app ships as a container image. No Vercel dependency.
 
-1. **Push your code to GitHub**
+### Docker (recommended)
 
-2. **Connect to Vercel**
-   - Go to [vercel.com](https://vercel.com)
-   - Import your repository
-   - Add environment variables in Vercel dashboard
+```bash
+# build + run
+docker compose up --build
 
-3. **Deploy**
-   ```bash
-   vercel --prod
-   ```
+# or build the image directly
+docker build -t ai-teaching-assistant .
+docker run -p 3000:3000 --env-file .env.local ai-teaching-assistant
+```
+
+The image uses Next.js `output: "standalone"`, runs as a non-root user, and
+includes a container `HEALTHCHECK` against `/`.
+
+To bring up the future data layer (Postgres + pgvector, Redis):
+
+```bash
+docker compose --profile platform up --build
+```
+
+### Any container host
+
+Build once, run anywhere: Fly.io, Railway, a Hetzner VPS with Coolify, or
+Kubernetes. The only requirement is a host that can run a container and reach
+your Supabase project (auth) and AI provider.
 
 ### Environment Variables in Production
 
-Make sure to set these in your Vercel dashboard:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY` — server-only
 - `GOOGLE_GENERATIVE_AI_API_KEY`
+- `CRON_SECRET` — bearer token for the scheduled jobs (see below)
+
+**Never** commit these. In containers pass them with `--env-file` or your
+host's secret store.
+
+### Scheduled jobs
+
+The two former Vercel crons now run from GitHub Actions
+(`.github/workflows/scheduled-jobs.yml`). Add two repository secrets:
+
+| Secret | Value |
+|---|---|
+| `APP_BASE_URL` | public URL of the deployed app, no trailing slash |
+| `CRON_SECRET` | must equal the app's `CRON_SECRET` |
+
+The workflow calls `POST /api/notifications/process` daily and
+`GET /api/keep-alive` weekly, both authenticated with `Authorization: Bearer`.
+
+### CI
+
+`.github/workflows/ci.yml` runs type-check, lint, `next build`, then builds the
+Docker image and smoke-tests it against `/`.
 
 ---
 

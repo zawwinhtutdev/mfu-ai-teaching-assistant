@@ -1,0 +1,72 @@
+# Local + single-host deployment.
+#
+#   docker compose up --build            # web only (current state)
+#   docker compose --profile platform up # + Postgres/pgvector & Redis (phase 2)
+#
+# Platform services are behind a profile so the app can ship before the
+# FastAPI/RAG work lands.
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+    image: ai-teaching-assistant-web:local
+    container_name: ata-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      # Auth + data still served by Supabase in this phase.
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+      # AI (chat stays degraded until a key is present)
+      GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      # Scheduled jobs are authenticated with this bearer token.
+      CRON_SECRET: ${CRON_SECRET:-}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: ata-db
+    profiles: ["platform"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ata
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ata-local-dev}
+      POSTGRES_DB: ata
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ata -d ata"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: ata-redis
+    profiles: ["platform"]
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+
+volumes:
+  pgdata:
+  redisdata:
