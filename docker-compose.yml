@@ -67,6 +67,8 @@ services:
       CHAT_MODEL: ${CHAT_MODEL:-gemini-2.5-flash}
       ALLOW_INSECURE_DEV_AUTH: ${ALLOW_INSECURE_DEV_AUTH:-false}
       ENVIRONMENT: ${ENVIRONMENT:-local}
+      # Only reachable when the `platform` profile is enabled.
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ata:ata-local-dev@db:5432/ata}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status==200 else 1)"]
       interval: 30s

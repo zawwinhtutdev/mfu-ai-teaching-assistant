@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import uuid
+from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Role = Literal["system", "user", "assistant"]
 
@@ -61,3 +63,42 @@ class DoneEvent(BaseModel):
 class ErrorEvent(BaseModel):
     type: Literal["error"] = "error"
     message: str
+
+
+class DocumentOut(BaseModel):
+    """Public view of an uploaded document."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    filename: str
+    status: str
+    error: str | None = None
+    page_count: int | None = None
+    chunk_count: int
+    size_bytes: int | None = None
+    course_id: uuid.UUID | None = None
+    created_at: datetime
+
+
+class SearchRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=2000)
+    course_id: uuid.UUID | None = None
+    limit: int = Field(default=5, ge=1, le=20)
+
+
+class SearchHitOut(BaseModel):
+    chunk_id: uuid.UUID
+    document_id: uuid.UUID
+    filename: str
+    content: str
+    page_from: int | None
+    page_to: int | None
+    section: str | None
+    score: float
+    citation: str
+
+
+class SearchResponse(BaseModel):
+    query: str
+    hits: list[SearchHitOut]
