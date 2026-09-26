@@ -46,7 +46,12 @@ pytestmark = pytest.mark.skipif(not _db_reachable(), reason="Postgres not reacha
 
 
 def _settings(**overrides: object) -> Settings:
-    base = {"database_url": DATABASE_URL, "gemini_api_key": "", "refusal_threshold": 0.0}
+    base = {
+        "database_url": DATABASE_URL,
+        "gemini_api_key": "",
+        "refusal_threshold": 0.0,
+        "ai_provider": "stub",
+    }
     base.update(overrides)
     return Settings(**base)
 

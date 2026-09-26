@@ -403,11 +403,24 @@ The similarity gate is skipped when the offline hashing embedder is in use —
 that embedder has no semantics, so gating on it would refuse valid questions.
 Set `REFUSAL_THRESHOLD=0` to disable the gate entirely.
 
-**Provider selection** is automatic: `GEMINI_API_KEY` (or
-`GOOGLE_GENERATIVE_AI_API_KEY`) present → Gemini; absent → a deterministic
-**stub** provider that streams a clearly-labelled placeholder. That keeps the
-whole path testable offline; swapping in LiteLLM later means one new file
-implementing `stream()`.
+**Provider selection** is controlled by `AI_PROVIDER` (`auto` by default):
+
+| value | behaviour |
+|---|---|
+| `auto` | Gemini when `GEMINI_API_KEY` is set, otherwise Ollama |
+| `gemini` | Gemini (`CHAT_MODEL`, default `gemini-2.5-flash`) |
+| `ollama` | local models via `OLLAMA_BASE_URL` / `OLLAMA_MODEL` |
+| `stub` | deterministic placeholder, for tests |
+
+Ollama needs no key:
+
+```bash
+ollama pull nomic-embed-text   # 274 MB, 768 dims — matches the schema
+ollama pull qwen2.5:7b         # 4.7 GB, chat
+```
+
+Both providers implement the same two interfaces, so LiteLLM or another vendor
+is one new file implementing `stream()` / `embed()`.
 
 ### Local demo without a Supabase project
 
@@ -463,30 +476,47 @@ cd services/api
 python evals/run.py --dev-principal eval@mfu.ac.th
 ```
 
-Latest run — **offline stub model + hashing embedder**, 25 cases × 3 configs:
+#### Run 1 — offline stub (validates plumbing, not quality)
 
-| config | recall@5 | refusal acc. | citation rate | grounded | bad citations | p50 | p95 |
+| config | recall@5 | refusal | citation | grounded | cite support | bad cite | p50 |
 |---|---|---|---|---|---|---|---|
-| no-retrieval | n/a | 84% | 100% | 0% | 0 | 2 ms | 34 ms |
-| vector | 90% | 84% | 100% | 100% | 0 | 4 ms | 24 ms |
-| **hybrid** | **90%** | 84% | 100% | 100% | 0 | **3 ms** | **4 ms** |
+| no-retrieval | n/a | 84% | 100% | 0% | 0% | 0 | 2 ms |
+| vector | 90% | 84% | 100% | 100% | 0% | 0 | 4 ms |
+| hybrid | 90% | 84% | 100% | 100% | 0% | 0 | 3 ms |
 
-**How to read this honestly**
+Vector and hybrid **tie**: the hashing stub is itself lexical, so the vector
+branch duplicates the lexical one. Refusal is stuck at 84% because the
+similarity gate is disabled for a non-semantic embedder.
 
-- Retrieval works: 90% recall@5, all citations valid, no broken markers.
-- **Vector and hybrid tie here — because the stub embedder is itself lexical.**
-  A hashing embedder has no semantics, so the vector branch is doing keyword
-  matching and adds nothing beyond the lexical branch. The hybrid advantage
-  appears only with a real embedding model.
-- **Refusal accuracy is 84%, not 100%**: the 4 unanswerable questions are not
-  refused, because the gate is deliberately disabled for the stub embedder and
-  the stub never refuses. With a semantic embedder plus `REFUSAL_THRESHOLD`,
-  this is the metric to watch.
-- Latency is retrieval-only; with a real model, generation dominates
-  (~1.5–3 s for Gemini, ~7–11 s for a local 7B).
+#### Run 2 — local `nomic-embed-text` + `qwen2.5:7b` (Ollama, no API key)
 
-So this run validates the *plumbing*, not the *model*. Add a Gemini key or an
-Ollama model and the same command produces the numbers that matter.
+| config | recall@5 | refusal | citation | grounded | cite support | bad cite | p50 | p95 |
+|---|---|---|---|---|---|---|---|---|
+| no-retrieval | n/a | 84% | 0% | 0% | 0% | 0 | 7071 ms | 22739 ms |
+| vector | **100%** | 96% | 100% | 100% | **80%** | 0 | 2407 ms | 6752 ms |
+| hybrid | **100%** | **100%** | 100% | 100% | 71% | 1 | 2428 ms | 6224 ms |
+
+**What the second run establishes**
+
+- **Retrieval works**: 100% recall@5 with real embeddings; every citation is a
+  valid marker pointing at a supplied source.
+- **Refusal works**: 96–100% accuracy including the 4 unanswerable questions —
+  up from 84% with the stub.
+- **Grounding makes answers *faster*, not slower** (2.4 s vs 7.1 s p50): a
+  grounded answer is short and constrained, while an ungrounded 7B model
+  rambles.
+- **The remaining weakness is citation *support*, not retrieval**: 71–80% of
+  answers cite the source that actually contains the fact. A 7B model often
+  picks the wrong number even when the right chunk is in context. This is the
+  metric a bigger model (Gemini) would move most.
+- **Hybrid ≈ vector on this corpus** (24 chunks, 100% both). Hybrid's advantage
+  appears on larger corpora and rarer tokens; at this size retrieval is
+  saturated, and reporting otherwise would be dishonest.
+
+Exact-token queries are why the lexical branch exists: `403` scores only 0.392
+cosine similarity — *below* the 0.495 that unanswerable questions reach — so a
+pure similarity gate would refuse it. The gate therefore also accepts a hit when
+the lexical branch matched.
 
 **Checks.**
 

@@ -20,6 +20,7 @@ class Source:
     page_from: int | None
     page_to: int | None
     section: str | None
+    content: str
 
 
 @dataclass(frozen=True)
@@ -80,6 +81,7 @@ def build_context(hits: list[SearchHit], max_chars: int = 2400) -> BuiltContext:
                 page_from=hit.page_from,
                 page_to=hit.page_to,
                 section=hit.section,
+                content=hit.content,
             )
         )
         label = f"[{n}] ({hit.filename}, {_page_label(hit.page_from, hit.page_to)}"

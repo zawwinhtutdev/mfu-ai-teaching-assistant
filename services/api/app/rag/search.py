@@ -28,11 +28,15 @@ class SearchHit:
     score: float
     # Cosine similarity from the vector branch; the gate for refusals.
     similarity: float | None = None
+    # True when the lexical branch matched: strong evidence even if the
+    # embedding similarity happens to be low (e.g. exact identifiers).
+    matched_lexically: bool = False
 
 
 _VECTOR_SQL = """
 select c.id, c.document_id, c.content, c.page_from, c.page_to, c.section,
        1 - (c.embedding <=> cast(:vector as vector)) as similarity,
+       false as from_lexical,
        row_number() over (order by c.embedding <=> cast(:vector as vector)) as rank
 from document_chunks c
 where (cast(:course_id as uuid) is null or c.document_id in (
@@ -45,6 +49,7 @@ limit :pool
 _LEXICAL_SQL = """
 select c.id, c.document_id, c.content, c.page_from, c.page_to, c.section,
        null::float as similarity,
+       true as from_lexical,
        row_number() over (order by ts_rank(c.tsv, plainto_tsquery('english', :query)) desc) as rank
 from document_chunks c
 where c.tsv @@ plainto_tsquery('english', :query)
@@ -61,20 +66,21 @@ with vector_hits as ({vector_sql}),
      fused as (
         select id, document_id, content, page_from, page_to, section,
                sum(score) as score,
-               max(similarity) as similarity
+               max(similarity) as similarity,
+               bool_or(from_lexical) as matched_lexically
         from (
             select id, document_id, content, page_from, page_to, section, similarity,
-                   1.0 / (:rrf_k + rank) as score
+                   from_lexical, 1.0 / (:rrf_k + rank) as score
             from vector_hits
             union all
             select id, document_id, content, page_from, page_to, section, similarity,
-                   1.0 / (:rrf_k + rank) as score
+                   from_lexical, 1.0 / (:rrf_k + rank) as score
             from lexical_hits
         ) parts
         group by id, document_id, content, page_from, page_to, section
      )
 select f.id, f.document_id, d.filename, f.content, f.page_from, f.page_to,
-       f.section, f.score, f.similarity
+       f.section, f.score, f.similarity, f.matched_lexically
 from fused f
 join documents d on d.id = f.document_id
 order by f.score desc
@@ -103,7 +109,7 @@ async def hybrid_search(
         # Lexical branch disabled: used as an evaluation baseline.
         lexical = (
             "select c.id, c.document_id, c.content, c.page_from, c.page_to, c.section, "
-            "null::float as similarity, row_number() over () as rank "
+            "null::float as similarity, false as from_lexical, row_number() over () as rank "
             "from document_chunks c where false"
         )
     else:
@@ -134,6 +140,7 @@ async def hybrid_search(
             section=row.section,
             score=float(row.score),
             similarity=float(row.similarity) if row.similarity is not None else None,
+            matched_lexically=bool(row.matched_lexically),
         )
         for row in rows
     ]

@@ -18,6 +18,7 @@ def _settings(**overrides: object) -> Settings:
         "supabase_jwt_secret": "",
         "environment": "local",
         "allow_insecure_dev_auth": True,
+        "ai_provider": "stub",
     }
     base.update(overrides)
     return Settings(**base)
