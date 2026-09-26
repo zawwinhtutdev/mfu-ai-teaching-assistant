@@ -34,3 +34,11 @@ next-env.d.ts
 
 # local verification artifacts
 .local-shots
+
+# python service
+services/api/.venv
+**/__pycache__
+.pytest_cache
+.mypy_cache
+.ruff_cache
+*.pyc

@@ -313,8 +313,57 @@ The workflow calls `POST /api/notifications/process` daily and
 
 ### CI
 
-`.github/workflows/ci.yml` runs type-check, lint, `next build`, then builds the
-Docker image and smoke-tests it against `/`.
+`.github/workflows/ci.yml` runs three jobs:
+
+| Job | Checks |
+|---|---|
+| `checks` | `tsc --noEmit`, `eslint`, `next build` |
+| `api` | `ruff`, `mypy`, `pytest` for the FastAPI service |
+| `docker` | builds the image and smoke-tests the container against `/` |
+
+---
+
+## ⚙️ Services
+
+The platform is split into two deployable services.
+
+### `web` — Next.js 16
+
+UI, session handling, and the existing route handlers. Runs on port `3000`.
+
+### `api` — FastAPI (Python 3.12)
+
+Owns AI orchestration and (from phase 3) the database. Runs on port `8000`.
+
+```bash
+cd services/api
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+uvicorn app.main:app --reload      # http://localhost:8000/docs
+```
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /health` | liveness |
+| `GET /ready` | readiness + config checks |
+| `GET /v1/me` | verified caller (requires a Supabase access token) |
+| `GET /docs` | OpenAPI UI |
+
+**Authentication.** The web app keeps Supabase Auth; this service never issues
+tokens. It verifies the same access token:
+
+- `SUPABASE_JWT_SECRET` set → legacy HS256 shared secret
+- otherwise → asymmetric keys from `<SUPABASE_URL>/auth/v1/.well-known/jwks.json`
+
+Both use audience `authenticated`. Add `require_role("teacher", "admin")` to a
+route to restrict it.
+
+**Checks.**
+
+```bash
+cd services/api
+ruff check . && mypy app && pytest -q
+```
 
 ---
 
