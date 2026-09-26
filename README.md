@@ -373,14 +373,35 @@ browser → POST /api/chat/stream (Next)  → resolves session, forwards Bearer
 Events:
 
 ```
+data: {"type":"sources","sources":[{"n":1,"citation":"standards.pdf, pp. 8–9, § 6.1 HTTP Errors"}],"grounded":true}
+
 data: {"type":"start","provider":"gemini","model":"gemini-2.5-flash"}
 
-data: {"type":"delta","text":"The late policy is…"}
+data: {"type":"delta","text":"Invalid input returns 400 [1]…"}
 
-data: {"type":"done","finish_reason":"stop"}
+data: {"type":"done","sources_used":[1],"invalid_citations":[]}
 
 data: [DONE]
 ```
+
+`sources` is emitted **before** the first token so the UI can render citation
+chips immediately. `done.sources_used` lists the markers the answer actually
+cited; `invalid_citations` lists any marker pointing at a source that was not
+supplied.
+
+**Grounded answering.** When retrieval is enabled:
+
+1. the question is embedded and searched (hybrid by default)
+2. if nothing is retrieved, or the best cosine similarity is below
+   `REFUSAL_THRESHOLD`, the service answers *"The course materials do not cover
+   this."* **without calling the model**
+3. retrieved chunks are deduplicated, budgeted to `CONTEXT_CHARS`, numbered
+   `[1]…[n]`, and injected as the system prompt
+4. the answer is streamed, then its `[n]` markers are validated
+
+The similarity gate is skipped when the offline hashing embedder is in use —
+that embedder has no semantics, so gating on it would refuse valid questions.
+Set `REFUSAL_THRESHOLD=0` to disable the gate entirely.
 
 **Provider selection** is automatic: `GEMINI_API_KEY` (or
 `GOOGLE_GENERATIVE_AI_API_KEY`) present → Gemini; absent → a deterministic
@@ -431,11 +452,47 @@ Each hit carries a citation: filename, page range and nearest heading
 statuses, error strings. The lexical branch catches them; RRF merges the two
 rankings without needing score calibration.
 
+### Evaluation
+
+`evals/dataset.yaml` holds 25 cases written against the bundled coding-standards
+PDF: 12 single-section, 5 multi-section, 4 exact-token and 4 **not in the
+document** (the refusal cases most projects skip).
+
+```bash
+cd services/api
+python evals/run.py --dev-principal eval@mfu.ac.th
+```
+
+Latest run — **offline stub model + hashing embedder**, 25 cases × 3 configs:
+
+| config | recall@5 | refusal acc. | citation rate | grounded | bad citations | p50 | p95 |
+|---|---|---|---|---|---|---|---|
+| no-retrieval | n/a | 84% | 100% | 0% | 0 | 2 ms | 34 ms |
+| vector | 90% | 84% | 100% | 100% | 0 | 4 ms | 24 ms |
+| **hybrid** | **90%** | 84% | 100% | 100% | 0 | **3 ms** | **4 ms** |
+
+**How to read this honestly**
+
+- Retrieval works: 90% recall@5, all citations valid, no broken markers.
+- **Vector and hybrid tie here — because the stub embedder is itself lexical.**
+  A hashing embedder has no semantics, so the vector branch is doing keyword
+  matching and adds nothing beyond the lexical branch. The hybrid advantage
+  appears only with a real embedding model.
+- **Refusal accuracy is 84%, not 100%**: the 4 unanswerable questions are not
+  refused, because the gate is deliberately disabled for the stub embedder and
+  the stub never refuses. With a semantic embedder plus `REFUSAL_THRESHOLD`,
+  this is the metric to watch.
+- Latency is retrieval-only; with a real model, generation dominates
+  (~1.5–3 s for Gemini, ~7–11 s for a local 7B).
+
+So this run validates the *plumbing*, not the *model*. Add a Gemini key or an
+Ollama model and the same command produces the numbers that matter.
+
 **Checks.**
 
 ```bash
 cd services/api
-ruff check . && mypy app && pytest -q   # 39 tests; DB integration tests skip if Postgres is down
+ruff check . && mypy app && pytest -q   # 50 tests; DB integration tests skip if Postgres is down
 ```
 
 ---

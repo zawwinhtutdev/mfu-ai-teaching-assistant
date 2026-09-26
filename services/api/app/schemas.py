@@ -39,9 +39,13 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1)
     conversation_id: str | None = None
-    course_id: str | None = None
+    course_id: uuid.UUID | None = None
     # Optional override; validated by the provider factory.
     model: str | None = None
+    # Retrieval controls (used by the evaluation harness as baselines).
+    use_retrieval: bool = True
+    retrieval_mode: Literal["hybrid", "vector"] = "hybrid"
+    top_k: int = Field(default=5, ge=1, le=20)
 
 
 class StartEvent(BaseModel):
@@ -55,9 +59,29 @@ class DeltaEvent(BaseModel):
     text: str
 
 
+class SourceOut(BaseModel):
+    n: int
+    chunk_id: uuid.UUID
+    document_id: uuid.UUID
+    filename: str
+    page_from: int | None = None
+    page_to: int | None = None
+    section: str | None = None
+    citation: str
+
+
+class SourcesEvent(BaseModel):
+    type: Literal["sources"] = "sources"
+    sources: list[SourceOut]
+    grounded: bool = True
+
+
 class DoneEvent(BaseModel):
     type: Literal["done"] = "done"
     finish_reason: str = "stop"
+    sources_used: list[int] = Field(default_factory=list)
+    invalid_citations: list[int] = Field(default_factory=list)
+    refusal: bool = False
 
 
 class ErrorEvent(BaseModel):
@@ -96,6 +120,7 @@ class SearchHitOut(BaseModel):
     page_to: int | None
     section: str | None
     score: float
+    similarity: float | None = None
     citation: str
 
 

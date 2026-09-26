@@ -50,6 +50,7 @@ async def search(
                 page_to=hit.page_to,
                 section=hit.section,
                 score=round(hit.score, 6),
+                similarity=round(hit.similarity, 4) if hit.similarity is not None else None,
                 citation=_citation(hit.filename, hit.page_from, hit.page_to, hit.section),
             )
             for hit in hits

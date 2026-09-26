@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings, get_settings
+from app.db import get_session
 from app.main import app
 from app.providers.factory import get_provider
 from app.providers.gemini import GeminiProvider
@@ -52,6 +53,8 @@ def _events(body: str) -> list[dict[str, object]]:
 @pytest.fixture(autouse=True)
 def _clear_overrides() -> None:
     app.dependency_overrides[get_settings] = _override
+    # Retrieval is covered by the DB integration tests; keep these hermetic.
+    app.dependency_overrides[get_session] = lambda: None
     yield
     app.dependency_overrides.clear()
 
@@ -80,10 +83,11 @@ def test_stream_is_sse_and_ordered() -> None:
     assert response.headers["content-type"].startswith("text/event-stream")
 
     events = _events(response.text)
-    assert events[0]["type"] == "start"
-    assert events[0]["provider"] == "stub"
+    assert events[0]["type"] == "sources"
+    starts = [e for e in events if e["type"] == "start"]
+    assert starts and starts[0]["provider"] == "stub"
     assert events[-1]["type"] == "done"
-    assert all(e["type"] in {"start", "delta", "done"} for e in events)
+    assert all(e["type"] in {"sources", "start", "delta", "done"} for e in events)
 
 
 def test_stub_stream_contains_echoed_question() -> None:

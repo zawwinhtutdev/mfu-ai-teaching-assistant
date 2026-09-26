@@ -78,6 +78,15 @@ class Settings(BaseSettings):
     chunk_chars: int = 1200
     chunk_overlap: int = 200
 
+    # ---- Retrieval / grounding ----
+    top_k: int = 5
+    context_chars: int = 2400
+    # Cosine similarity below which we refuse instead of calling the model.
+    refusal_threshold: float = Field(
+        default=0.20,
+        validation_alias=AliasChoices("REFUSAL_THRESHOLD"),
+    )
+
     @property
     def jwks_url(self) -> str:
         return f"{self.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"

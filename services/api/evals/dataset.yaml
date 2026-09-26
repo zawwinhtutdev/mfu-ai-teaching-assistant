@@ -1,0 +1,170 @@
+# Grounded-answering evaluation set.
+#
+# Written against reports/mfu-ai-teaching-assistant-coding-standards.pdf
+# (16 pages, 12 sections). `expect` is either `answer` or `refusal`.
+# `keywords` are used for retrieval scoring and are checked case-insensitively
+# against the retrieved source text (not the generated answer), so recall is
+# measurable even with a stub model.
+#
+#   type: single   -> answerable from one section
+#   type: multi    -> needs two sections
+#   type: exact    -> exact identifier / code token (where lexical search matters)
+#   type: absent   -> NOT in the document; correct behaviour is refusal
+
+dataset: mfu-coding-standards
+document: reports/mfu-ai-teaching-assistant-coding-standards.pdf
+
+cases:
+  # ---------- answerable, single section (12) ----------
+  - id: single-http-400
+    type: single
+    expect: answer
+    question: "Which HTTP status code should be returned for invalid input?"
+    keywords: ["400"]
+
+  - id: single-http-401
+    type: single
+    expect: answer
+    question: "Which status code is used when the user is not authenticated?"
+    keywords: ["401"]
+
+  - id: single-http-403
+    type: single
+    expect: answer
+    question: "Which status code means the user is authenticated but not permitted?"
+    keywords: ["403"]
+
+  - id: single-naming-functions
+    type: single
+    expect: answer
+    question: "How should function names begin?"
+    keywords: ["verb"]
+
+  - id: single-route-handler
+    type: single
+    expect: answer
+    question: "What should a route handler be responsible for?"
+    keywords: ["checks", "orchestration", "response"]
+
+  - id: single-validation-commands
+    type: single
+    expect: answer
+    question: "Which validation commands are documented for the project?"
+    keywords: ["type-check", "lint"]
+
+  - id: single-audit-logging
+    type: single
+    expect: answer
+    question: "What do the service responsibilities say about audit logging?"
+    keywords: ["audit"]
+
+  - id: single-timestamps
+    type: single
+    expect: answer
+    question: "How should timestamp values be stored?"
+    keywords: ["timestamp"]
+
+  - id: single-secrets
+    type: single
+    expect: answer
+    question: "How should sensitive configuration values be handled?"
+    keywords: ["environment"]
+
+  - id: single-migrations
+    type: single
+    expect: answer
+    question: "What do the database migration standards require for tables?"
+    keywords: ["constraint", "relationship"]
+
+  - id: single-ai-output
+    type: single
+    expect: answer
+    question: "What should happen when structured AI output is malformed?"
+    keywords: ["parse", "structure"]
+
+  - id: single-notifications
+    type: single
+    expect: answer
+    question: "What must be prepared before inserting a queued notification?"
+    keywords: ["template", "payload"]
+
+  # ---------- answerable, needs two sections (5) ----------
+  - id: multi-auth-and-routes
+    type: multi
+    expect: answer
+    question: "How do route handlers and authentication rules combine to protect a route?"
+    keywords: ["403", "auth"]
+
+  - id: multi-write-pattern
+    type: multi
+    expect: answer
+    question: "What is the write pattern for updates, including partial updates?"
+    keywords: ["updateData", "undefined"]
+
+  - id: multi-order-and-timestamps
+    type: multi
+    expect: answer
+    question: "How should ordered output and timestamp storage stay consistent?"
+    keywords: ["order", "timestamp"]
+
+  - id: multi-schedule-and-reminders
+    type: multi
+    expect: answer
+    question: "How should schedule and reminder date values be handled?"
+    keywords: ["reminder", "date"]
+
+  - id: multi-logging-and-audit
+    type: multi
+    expect: answer
+    question: "How do logging helpers and audit traceability complement each other?"
+    keywords: ["audit", "error"]
+
+  # ---------- exact tokens (4) ----------
+  - id: exact-env-var
+    type: exact
+    expect: answer
+    question: "NEXT_PUBLIC_SUPABASE_URL"
+    keywords: ["NEXT_PUBLIC_SUPABASE_URL"]
+
+  - id: exact-status-403
+    type: exact
+    expect: answer
+    question: "403"
+    keywords: ["403"]
+
+  - id: exact-npm-script
+    type: exact
+    expect: answer
+    question: "npm run type-check"
+    keywords: ["type-check"]
+
+  - id: exact-log-tag
+    type: exact
+    expect: answer
+    question: "stringifyError"
+    keywords: ["stringifyError"]
+
+  # ---------- not in the document (4) ----------
+  - id: absent-parking
+    type: absent
+    expect: refusal
+    question: "How much is the campus parking fee per semester?"
+    keywords: []
+
+  - id: absent-dean
+    type: absent
+    expect: refusal
+    question: "Who is the current dean of the faculty?"
+    keywords: []
+
+  - id: absent-refund
+    type: absent
+    expect: refusal
+    question: "What is the tuition refund policy?"
+    keywords: []
+
+  - id: absent-credits
+    type: absent
+    expect: refusal
+    question: "How many credits is CS303 worth?"
+    keywords: []
