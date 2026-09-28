@@ -20,6 +20,7 @@ yarn-error.log*
 .env*
 !.envrc
 !.envrc.private.example
+!.env.example
 .envrc.private
 
 # vercel
