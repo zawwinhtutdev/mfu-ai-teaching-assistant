@@ -21,7 +21,7 @@ from functools import lru_cache
 from typing import Annotated, Any
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWKClient
 from jwt.types import Options
@@ -88,9 +88,22 @@ def decode_token(token: str, settings: Settings) -> dict[str, Any]:
 def get_principal(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
     settings: Annotated[Settings, Depends(get_settings)],
+    x_dev_principal: Annotated[str | None, Header()] = None,
 ) -> Principal:
-    """FastAPI dependency yielding the verified caller."""
+    """FastAPI dependency yielding the verified caller.
+
+    ``X-Dev-Principal`` is honoured only when ``ALLOW_INSECURE_DEV_AUTH=true``
+    *and* the environment is not production. It exists so the local demo can be
+    exercised without a Supabase project; it is never a production auth path.
+    """
     if credentials is None or credentials.scheme.lower() != "bearer":
+        if settings.dev_auth_allowed and x_dev_principal:
+            return Principal(
+                subject=x_dev_principal,
+                email=x_dev_principal if "@" in x_dev_principal else None,
+                role="student",
+                claims={"dev": True},
+            )
         raise _unauthorized("Missing bearer token")
 
     claims = decode_token(credentials.credentials, settings)

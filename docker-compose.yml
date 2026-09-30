@@ -34,6 +34,13 @@ services:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       # Scheduled jobs are authenticated with this bearer token.
       CRON_SECRET: ${CRON_SECRET:-}
+      # Chat proxy -> FastAPI (in-network service name).
+      API_SERVICE_URL: ${API_SERVICE_URL:-http://api:8000}
+      DEV_PRINCIPAL: ${DEV_PRINCIPAL:-demo.student@mfu.ac.th}
+      ALLOW_INSECURE_DEV_AUTH: ${ALLOW_INSECURE_DEV_AUTH:-false}
+    depends_on:
+      api:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
@@ -56,6 +63,9 @@ services:
       SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
       SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      GEMINI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY:-}
+      CHAT_MODEL: ${CHAT_MODEL:-gemini-2.5-flash}
+      ALLOW_INSECURE_DEV_AUTH: ${ALLOW_INSECURE_DEV_AUTH:-false}
       ENVIRONMENT: ${ENVIRONMENT:-local}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status==200 else 1)"]

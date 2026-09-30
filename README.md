@@ -347,6 +347,7 @@ uvicorn app.main:app --reload      # http://localhost:8000/docs
 | `GET /health` | liveness |
 | `GET /ready` | readiness + config checks |
 | `GET /v1/me` | verified caller (requires a Supabase access token) |
+| `POST /v1/chat` | streaming chat over SSE |
 | `GET /docs` | OpenAPI UI |
 
 **Authentication.** The web app keeps Supabase Auth; this service never issues
@@ -357,6 +358,39 @@ tokens. It verifies the same access token:
 
 Both use audience `authenticated`. Add `require_role("teacher", "admin")` to a
 route to restrict it.
+
+### Chat flow
+
+```
+browser → POST /api/chat/stream (Next)  → resolves session, forwards Bearer
+        → POST /v1/chat (FastAPI)       → provider.stream()
+        → text/event-stream back        → UI consumes deltas
+```
+
+Events:
+
+```
+data: {"type":"start","provider":"gemini","model":"gemini-2.5-flash"}
+
+data: {"type":"delta","text":"The late policy is…"}
+
+data: {"type":"done","finish_reason":"stop"}
+
+data: [DONE]
+```
+
+**Provider selection** is automatic: `GEMINI_API_KEY` (or
+`GOOGLE_GENERATIVE_AI_API_KEY`) present → Gemini; absent → a deterministic
+**stub** provider that streams a clearly-labelled placeholder. That keeps the
+whole path testable offline; swapping in LiteLLM later means one new file
+implementing `stream()`.
+
+### Local demo without a Supabase project
+
+Set `ALLOW_INSECURE_DEV_AUTH=true` and the proxy falls back to
+`X-Dev-Principal` (from `DEV_PRINCIPAL`) instead of a real token. The API honours
+that header **only** when `ENVIRONMENT` is not `production` — it refuses to
+start if both are set.
 
 **Checks.**
 

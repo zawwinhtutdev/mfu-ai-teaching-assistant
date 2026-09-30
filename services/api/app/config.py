@@ -44,9 +44,43 @@ class Settings(BaseSettings):
     jwt_audience: str = "authenticated"
     cors_origins: str = "http://localhost:3000"
 
+    # ---- AI ----
+    gemini_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "GEMINI_API_KEY",
+            "GOOGLE_GENERATIVE_AI_API_KEY",
+            "GOOGLE_API_KEY",
+        ),
+    )
+    chat_model: str = Field(
+        default="gemini-2.5-flash",
+        validation_alias=AliasChoices("CHAT_MODEL", "GEMINI_CHAT_MODEL"),
+    )
+
+    # ---- Local development only ----
+    # Allows X-Dev-Principal in place of a bearer token so the demo can run
+    # without a Supabase project. Refused outside non-production environments.
+    allow_insecure_dev_auth: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("ALLOW_INSECURE_DEV_AUTH"),
+    )
+
     @property
     def jwks_url(self) -> str:
         return f"{self.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
+
+    @property
+    def ai_api_key(self) -> str:
+        return self.gemini_api_key.strip()
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment.strip().lower() in {"production", "prod"}
+
+    @property
+    def dev_auth_allowed(self) -> bool:
+        return self.allow_insecure_dev_auth and not self.is_production
 
     @property
     def allowed_origins(self) -> list[str]:

@@ -6,9 +6,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import health, me
+from app.routers import chat, health, me
 
 settings = get_settings()
+
+# Fail fast rather than run a production deployment with dev auth enabled.
+if settings.is_production and settings.allow_insecure_dev_auth:
+    raise RuntimeError(
+        "ALLOW_INSECURE_DEV_AUTH must not be enabled when ENVIRONMENT=production"
+    )
 
 app = FastAPI(
     title="AI Teaching Assistant API",
@@ -33,6 +39,7 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(me.router, prefix="/v1")
+app.include_router(chat.router, prefix="/v1")
 
 
 @app.get("/", include_in_schema=False)
