@@ -348,6 +348,9 @@ uvicorn app.main:app --reload      # http://localhost:8000/docs
 | `GET /ready` | readiness + config checks |
 | `GET /v1/me` | verified caller (requires a Supabase access token) |
 | `POST /v1/chat` | streaming chat over SSE |
+| `POST /v1/documents` | upload a PDF (async ingestion) |
+| `GET /v1/documents` | list documents + ingestion status |
+| `POST /v1/search` | hybrid retrieval with citations |
 | `GET /docs` | OpenAPI UI |
 
 **Authentication.** The web app keeps Supabase Auth; this service never issues
@@ -392,11 +395,47 @@ Set `ALLOW_INSECURE_DEV_AUTH=true` and the proxy falls back to
 that header **only** when `ENVIRONMENT` is not `production` — it refuses to
 start if both are set.
 
+### Documents & retrieval
+
+PDFs are extracted, chunked, embedded and stored in Postgres + pgvector, then
+retrieved with **hybrid search** (vector + BM25-style lexical, fused by
+reciprocal rank).
+
+```bash
+# apply schema (documents, document_chunks, HNSW + GIN indexes)
+cd services/api && alembic upgrade head
+
+# upload
+curl -X POST localhost:8000/v1/documents \
+  -H "X-Dev-Principal: demo.teacher@mfu.ac.th" \
+  -F "file=@reports/coding-standards.pdf"
+
+# poll until status=ready, then search
+curl -X POST localhost:8000/v1/search \
+  -H "Content-Type: application/json" -H "X-Dev-Principal: demo.teacher@mfu.ac.th" \
+  -d '{"query":"what are the rules for HTTP errors?","limit":3}'
+```
+
+Each hit carries a citation: filename, page range and nearest heading
+(`§ 6.1 HTTP Errors`).
+
+| Piece | Implementation |
+|---|---|
+| Extraction | `pypdf`, per page; scanned PDFs rejected with a clear error |
+| Chunking | ~1200 chars, 200 overlap, paragraph→sentence boundaries, page + heading tracked |
+| Embeddings | Gemini `text-embedding-004` (768d); hashing embedder when no key |
+| Storage | `documents` + `document_chunks`, `vector(768)`, generated `tsv` column |
+| Retrieval | HNSW cosine + `tsquery` lexical, RRF fusion (`k=60`) |
+
+**Why hybrid:** vector-only search misses exact identifiers — course codes, HTTP
+statuses, error strings. The lexical branch catches them; RRF merges the two
+rankings without needing score calibration.
+
 **Checks.**
 
 ```bash
 cd services/api
-ruff check . && mypy app && pytest -q
+ruff check . && mypy app && pytest -q   # 39 tests; DB integration tests skip if Postgres is down
 ```
 
 ---

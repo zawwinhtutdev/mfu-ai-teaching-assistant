@@ -66,9 +66,31 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("ALLOW_INSECURE_DEV_AUTH"),
     )
 
+    # ---- Data ----
+    database_url: str = Field(
+        default="postgresql+asyncpg://ata:ata-local-dev@127.0.0.1:5432/ata",
+        validation_alias=AliasChoices("DATABASE_URL"),
+    )
+    embedding_model: str = Field(
+        default="text-embedding-004",
+        validation_alias=AliasChoices("EMBEDDING_MODEL"),
+    )
+    chunk_chars: int = 1200
+    chunk_overlap: int = 200
+
     @property
     def jwks_url(self) -> str:
         return f"{self.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
+
+    @property
+    def database_dsn(self) -> str:
+        """SQLAlchemy DSN; accepts a plain postgres:// URL and normalises it."""
+        url = self.database_url.strip()
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif url.startswith("postgresql://"):
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return url
 
     @property
     def ai_api_key(self) -> str:
