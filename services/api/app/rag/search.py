@@ -26,10 +26,13 @@ class SearchHit:
     page_to: int | None
     section: str | None
     score: float
+    # Cosine similarity from the vector branch; the gate for refusals.
+    similarity: float | None = None
 
 
 _VECTOR_SQL = """
 select c.id, c.document_id, c.content, c.page_from, c.page_to, c.section,
+       1 - (c.embedding <=> cast(:vector as vector)) as similarity,
        row_number() over (order by c.embedding <=> cast(:vector as vector)) as rank
 from document_chunks c
 where (cast(:course_id as uuid) is null or c.document_id in (
@@ -41,6 +44,7 @@ limit :pool
 
 _LEXICAL_SQL = """
 select c.id, c.document_id, c.content, c.page_from, c.page_to, c.section,
+       null::float as similarity,
        row_number() over (order by ts_rank(c.tsv, plainto_tsquery('english', :query)) desc) as rank
 from document_chunks c
 where c.tsv @@ plainto_tsquery('english', :query)
@@ -56,20 +60,21 @@ with vector_hits as ({vector_sql}),
      lexical_hits as ({lexical_sql}),
      fused as (
         select id, document_id, content, page_from, page_to, section,
-               sum(score) as score
+               sum(score) as score,
+               max(similarity) as similarity
         from (
-            select id, document_id, content, page_from, page_to, section,
+            select id, document_id, content, page_from, page_to, section, similarity,
                    1.0 / (:rrf_k + rank) as score
             from vector_hits
             union all
-            select id, document_id, content, page_from, page_to, section,
+            select id, document_id, content, page_from, page_to, section, similarity,
                    1.0 / (:rrf_k + rank) as score
             from lexical_hits
         ) parts
         group by id, document_id, content, page_from, page_to, section
      )
 select f.id, f.document_id, d.filename, f.content, f.page_from, f.page_to,
-       f.section, f.score
+       f.section, f.score, f.similarity
 from fused f
 join documents d on d.id = f.document_id
 order by f.score desc
@@ -89,13 +94,22 @@ async def hybrid_search(
     course_id: uuid.UUID | None = None,
     limit: int = 5,
     pool: int = 30,
+    mode: str = "hybrid",
 ) -> list[SearchHit]:
     if not query.strip():
         return []
 
-    statement = text(
-        _FUSE_SQL.format(vector_sql=_VECTOR_SQL, lexical_sql=_LEXICAL_SQL)
-    )
+    if mode == "vector":
+        # Lexical branch disabled: used as an evaluation baseline.
+        lexical = (
+            "select c.id, c.document_id, c.content, c.page_from, c.page_to, c.section, "
+            "null::float as similarity, row_number() over () as rank "
+            "from document_chunks c where false"
+        )
+    else:
+        lexical = _LEXICAL_SQL
+
+    statement = text(_FUSE_SQL.format(vector_sql=_VECTOR_SQL, lexical_sql=lexical))
 
     rows = await session.execute(
         statement,
@@ -119,6 +133,7 @@ async def hybrid_search(
             page_to=row.page_to,
             section=row.section,
             score=float(row.score),
+            similarity=float(row.similarity) if row.similarity is not None else None,
         )
         for row in rows
     ]

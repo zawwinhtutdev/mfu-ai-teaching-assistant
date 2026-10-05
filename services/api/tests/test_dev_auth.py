@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings, get_settings
+from app.db import get_session
 from app.main import app
 
 client = TestClient(app)
@@ -24,6 +25,7 @@ def _settings(**overrides: object) -> Settings:
 
 @pytest.fixture(autouse=True)
 def _clear_overrides() -> None:
+    app.dependency_overrides[get_session] = lambda: None
     yield
     app.dependency_overrides.clear()
 

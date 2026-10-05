@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import uuid
 
 import pytest
 
@@ -69,8 +70,11 @@ async def _roundtrip() -> None:
     factory = get_session_factory(settings)
     embedder = StubEmbeddings()
 
+    course_id = uuid.uuid4()
+
     async with factory() as session:
         document = Document(
+            course_id=course_id,
             filename="cs303-policy.md",
             content_type="text/markdown",
             size_bytes=len(PAGES[0]),
@@ -106,7 +110,9 @@ async def _roundtrip() -> None:
             # Semantic-ish query
             query = "late submission penalty"
             vector = await embedder.embed_query(query)
-            hits = await hybrid_search(session, query=query, vector=vector, limit=5)
+            hits = await hybrid_search(
+                session, query=query, vector=vector, limit=5, course_id=course_id
+            )
             assert hits, "expected at least one hit"
             assert any(
                 "Late submissions" in hit.content or "50 percent" in hit.content
@@ -118,14 +124,22 @@ async def _roundtrip() -> None:
             # Exact identifier, the case vector-only search misses
             exact = "CS303"
             exact_hits = await hybrid_search(
-                session, query=exact, vector=await embedder.embed_query(exact), limit=5
+                session,
+                query=exact,
+                vector=await embedder.embed_query(exact),
+                limit=5,
+                course_id=course_id,
             )
             assert any("CS303" in hit.content for hit in exact_hits)
 
             # Unrelated query still returns ranked rows, with lower fused scores
             other = "campus parking"
             other_hits = await hybrid_search(
-                session, query=other, vector=await embedder.embed_query(other), limit=5
+                session,
+                query=other,
+                vector=await embedder.embed_query(other),
+                limit=5,
+                course_id=course_id,
             )
             no_exact_match = not any("CS303" in hit.content for hit in other_hits)
             assert no_exact_match or other_hits[0].score <= hits[0].score

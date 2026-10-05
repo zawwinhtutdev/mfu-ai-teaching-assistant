@@ -1,13 +1,14 @@
 """Streaming chat endpoint.
 
-Emits Server-Sent Events so any client — the Next.js proxy, curl, or a test —
-can consume tokens as they arrive:
+Emits Server-Sent Events:
 
-    data: {"type":"start","provider":"stub","model":"stub-stream-v1"}
+    data: {"type":"sources","sources":[...],"grounded":true}
 
-    data: {"type":"delta","text":"Hello"}
+    data: {"type":"start","provider":"gemini","model":"gemini-2.5-flash"}
 
-    data: {"type":"done","finish_reason":"stop"}
+    data: {"type":"delta","text":"For HTTP errors, the standard specifies…"}
+
+    data: {"type":"done","sources_used":[1],"invalid_citations":[]}
 
     data: [DONE]
 """
@@ -19,22 +20,19 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import CurrentPrincipal
 from app.config import Settings, get_settings
+from app.db import get_session
 from app.providers.factory import get_provider
-from app.providers.gemini import ProviderError
-from app.schemas import (
-    ChatRequest,
-    DeltaEvent,
-    DoneEvent,
-    ErrorEvent,
-    StartEvent,
-)
+from app.rag.pipeline import StreamEvent, stream_grounded_reply
+from app.schemas import ChatRequest
 
 router = APIRouter(tags=["chat"])
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 SSE_HEADERS = {
     "Cache-Control": "no-cache, no-transform",
@@ -44,28 +42,31 @@ SSE_HEADERS = {
 }
 
 
-def _encode(event: StartEvent | DeltaEvent | DoneEvent | ErrorEvent) -> str:
+def _encode(event: StreamEvent) -> str:
     return f"data: {event.model_dump_json()}\n\n"
 
 
-@router.post("/chat", summary="Stream a chat completion")
+@router.post("/chat", summary="Stream a grounded chat completion")
 async def chat(
     request: ChatRequest,
     principal: CurrentPrincipal,
     settings: SettingsDep,
+    session: SessionDep,
 ) -> StreamingResponse:
     provider = get_provider(settings, request.model)
 
     async def event_stream() -> AsyncIterator[str]:
-        yield _encode(StartEvent(provider=provider.name, model=provider.model))
-        try:
-            async for delta in provider.stream(request.messages):
-                if delta:
-                    yield _encode(DeltaEvent(text=delta))
-        except ProviderError as exc:
-            yield _encode(ErrorEvent(message=str(exc)))
-            return
-        yield _encode(DoneEvent())
+        async for event in stream_grounded_reply(
+            messages=request.messages,
+            settings=settings,
+            provider=provider,
+            session=session,
+            course_id=request.course_id,
+            use_retrieval=request.use_retrieval,
+            retrieval_mode=request.retrieval_mode,
+            top_k=request.top_k,
+        ):
+            yield _encode(event)
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(
