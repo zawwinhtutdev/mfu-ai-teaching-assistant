@@ -67,6 +67,7 @@ class SourceOut(BaseModel):
     page_from: int | None = None
     page_to: int | None = None
     section: str | None = None
+    snippet: str = ""
     citation: str
 
 
@@ -121,6 +122,7 @@ class SearchHitOut(BaseModel):
     section: str | None
     score: float
     similarity: float | None = None
+    matched_lexically: bool = False
     citation: str
 
 

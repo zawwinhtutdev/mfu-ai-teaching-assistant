@@ -27,6 +27,7 @@ def _override() -> Settings:
         supabase_jwt_secret=SECRET,
         jwt_audience="authenticated",
         gemini_api_key="",
+        ai_provider="stub",
     )
 
 
@@ -118,7 +119,7 @@ def test_stream_terminates_with_done_sentinel() -> None:
     assert response.text.rstrip().endswith("data: [DONE]")
 
 
-def test_provider_selection_without_key_is_stub() -> None:
+def test_provider_selection_explicit_stub() -> None:
     provider = get_provider(_override())
     assert isinstance(provider, StubProvider)
 
@@ -128,6 +129,7 @@ def test_provider_selection_with_key_is_gemini() -> None:
         supabase_url="https://project.supabase.co",
         gemini_api_key="fake-key",
         chat_model="gemini-2.5-flash",
+        ai_provider="gemini",
     )
     provider = get_provider(settings)
     assert isinstance(provider, GeminiProvider)
@@ -135,7 +137,11 @@ def test_provider_selection_with_key_is_gemini() -> None:
 
 
 def test_provider_selection_honours_model_override() -> None:
-    settings = Settings(supabase_url="https://project.supabase.co", gemini_api_key="fake-key")
+    settings = Settings(
+        supabase_url="https://project.supabase.co",
+        gemini_api_key="fake-key",
+        ai_provider="gemini",
+    )
     provider = get_provider(settings, model="gemini-2.5-pro")
     assert isinstance(provider, GeminiProvider)
     assert provider.model == "gemini-2.5-pro"

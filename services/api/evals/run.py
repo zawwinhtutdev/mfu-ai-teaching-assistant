@@ -120,6 +120,20 @@ async def run_case(
     text = result["text"]
     cited = "[" in text and "]" in text
 
+    # Does a cited source actually contain the expected terms?
+    cited_numbers = result["done"].get("sources_used", [])
+    cited_snippets = [
+        source.get("snippet", "")
+        for source in result["sources"]
+        if source["n"] in cited_numbers
+    ]
+    support_haystack = " ".join(cited_snippets).lower()
+    citation_supported: bool | None = None
+    if case["keywords"] and not refused:
+        citation_supported = any(
+            keyword.lower() in support_haystack for keyword in case["keywords"]
+        )
+
     recall: bool | None = None
     if config.get("use_retrieval") and case["keywords"]:
         hits = await search_once(client, case, headers)
@@ -136,6 +150,7 @@ async def run_case(
         "grounded": bool(result["sources"]),
         "sources": len(result["sources"]),
         "citation_present": cited,
+        "citation_supported": citation_supported,
         "invalid_citations": result["done"].get("invalid_citations", []),
         "recall": recall,
         "latency_ms": round(result["latency_ms"], 1),
@@ -159,6 +174,9 @@ def summarise(rows: list[dict[str, Any]], config: str) -> dict[str, Any]:
         "recall@5": pct(recalls) if recalls else None,
         "refusal_acc": pct([row["refusal_ok"] for row in subset]),
         "citation_rate": pct([row["citation_present"] for row in answered]),
+        "citation_support": pct(
+            [row["citation_supported"] for row in answered if row["citation_supported"] is not None]
+        ),
         "grounded_rate": pct([row["grounded"] for row in answered]),
         "invalid_citations": sum(1 for row in subset if row["invalid_citations"]),
         "p50_ms": round(statistics.median(latencies), 1) if latencies else 0,
@@ -177,7 +195,7 @@ def print_table(summaries: list[dict[str, Any]], provider: str | None) -> None:
     print(f"\nmodel provider: {provider or 'unknown'}\n")
     header = (
         f"{'config':<14}{'recall@5':>10}{'refusal':>10}{'citation':>10}"
-        f"{'grounded':>10}{'bad cite':>10}{'p50 ms':>9}{'p95 ms':>9}"
+        f"{'grounded':>10}{'cite sup.':>11}{'bad cite':>10}{'p50 ms':>9}{'p95 ms':>9}"
     )
     print(header)
     print("-" * len(header))
@@ -186,6 +204,7 @@ def print_table(summaries: list[dict[str, Any]], provider: str | None) -> None:
         print(
             f"{row['config']:<14}{recall:>10}{row['refusal_acc']:>9.0f}%"
             f"{row['citation_rate']:>9.0f}%{row['grounded_rate']:>9.0f}%"
+            f"{row['citation_support']:>10.0f}%"
             f"{row['invalid_citations']:>10}{row['p50_ms']:>9.0f}{row['p95_ms']:>9.0f}"
         )
 

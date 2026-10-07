@@ -57,6 +57,7 @@ def _source_out(source: Source) -> SourceOut:
         page_from=source.page_from,
         page_to=source.page_to,
         section=source.section,
+        snippet=" ".join(source.content.split())[:300],
         citation=_citation(source.filename, source.page_from, source.page_to, source.section),
     )
 
@@ -120,8 +121,15 @@ async def stream_grounded_reply(
                 yield DoneEvent(finish_reason="refusal", refusal=True)
                 return
 
+            # Strong lexical evidence (exact identifiers, error codes) must not
+            # be refused just because embeddings score it low.
             best = hits[0].similarity
-            if gate_active and best is not None and best < settings.refusal_threshold:
+            if (
+                gate_active
+                and best is not None
+                and best < settings.refusal_threshold
+                and not hits[0].matched_lexically
+            ):
                 yield SourcesEvent(sources=[], grounded=True)
                 yield DeltaEvent(text=REFUSAL_TEXT)
                 yield DoneEvent(finish_reason="refusal", refusal=True)

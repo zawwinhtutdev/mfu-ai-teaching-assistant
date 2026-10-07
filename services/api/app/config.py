@@ -58,6 +58,24 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("CHAT_MODEL", "GEMINI_CHAT_MODEL"),
     )
 
+    # ---- Local models (Ollama) ----
+    ai_provider: str = Field(
+        default="auto",
+        validation_alias=AliasChoices("AI_PROVIDER"),
+    )
+    ollama_base_url: str = Field(
+        default="http://127.0.0.1:11434",
+        validation_alias=AliasChoices("OLLAMA_BASE_URL"),
+    )
+    ollama_model: str = Field(
+        default="qwen2.5:7b",
+        validation_alias=AliasChoices("OLLAMA_MODEL"),
+    )
+    ollama_embedding_model: str = Field(
+        default="nomic-embed-text",
+        validation_alias=AliasChoices("OLLAMA_EMBEDDING_MODEL"),
+    )
+
     # ---- Local development only ----
     # Allows X-Dev-Principal in place of a bearer token so the demo can run
     # without a Supabase project. Refused outside non-production environments.
@@ -83,7 +101,7 @@ class Settings(BaseSettings):
     context_chars: int = 2400
     # Cosine similarity below which we refuse instead of calling the model.
     refusal_threshold: float = Field(
-        default=0.20,
+        default=0.55,
         validation_alias=AliasChoices("REFUSAL_THRESHOLD"),
     )
 
@@ -104,6 +122,14 @@ class Settings(BaseSettings):
     @property
     def ai_api_key(self) -> str:
         return self.gemini_api_key.strip()
+
+    @property
+    def resolved_provider(self) -> str:
+        """auto -> gemini when a key exists, else ollama when no key is set."""
+        choice = self.ai_provider.strip().lower()
+        if choice in {"gemini", "ollama", "stub"}:
+            return choice
+        return "gemini" if self.ai_api_key else "ollama"
 
     @property
     def is_production(self) -> bool:
