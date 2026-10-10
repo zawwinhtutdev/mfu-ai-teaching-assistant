@@ -45,6 +45,7 @@ class ChatRequest(BaseModel):
     # Retrieval controls (used by the evaluation harness as baselines).
     use_retrieval: bool = True
     retrieval_mode: Literal["hybrid", "vector"] = "hybrid"
+    prompt_variant: Literal["baseline", "quote_first"] = "baseline"
     top_k: int = Field(default=5, ge=1, le=20)
 
 
@@ -83,6 +84,9 @@ class DoneEvent(BaseModel):
     sources_used: list[int] = Field(default_factory=list)
     invalid_citations: list[int] = Field(default_factory=list)
     refusal: bool = False
+    # Deterministic marker corrections: [from_n] -> [to_n] inside `sentence`.
+    citation_revisions: list[dict[str, object]] = Field(default_factory=list)
+    repaired_text: str | None = None
 
 
 class ErrorEvent(BaseModel):

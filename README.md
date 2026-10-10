@@ -513,6 +513,26 @@ similarity gate is disabled for a non-semantic embedder.
   appears on larger corpora and rarer tokens; at this size retrieval is
   saturated, and reporting otherwise would be dishonest.
 
+#### Citation tuning (three prompts vs deterministic repair)
+
+Prompt changes do **not** fix citation accuracy on a 7B model:
+
+| variant | support (raw) | after repair | revisions | invalid markers |
+|---|---|---|---|---|
+| A baseline, k=5 | 81% | 81% | 4 | 0 |
+| B k=3 | 76% | **81%** | 5 | 1 |
+| C k=3 + quote-first | 76% | 71% | 1 | 1 |
+
+Quote-first shortened answers (43 → 19 words) but *hurt* support, so it is not
+the default. Instead, `app/rag/citation_repair.py` checks each cited claim
+against every supplied source and rewrites the marker when another source
+supports it better (token overlap, 0.20 floor, 0.15 margin). Every change is
+reported in `done.citation_revisions` and the corrected text in
+`done.repaired_text` — never silent.
+
+Measured example: `"Use 401 when the user is not authenticated [2]."` became
+`... [1]`, because source [1] is § 6.1 HTTP Errors and [2] is not.
+
 Exact-token queries are why the lexical branch exists: `403` scores only 0.392
 cosine similarity — *below* the 0.495 that unanswerable questions reach — so a
 pure similarity gate would refuse it. The gate therefore also accepts a hit when
