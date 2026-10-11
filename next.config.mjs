@@ -2,6 +2,9 @@
 const nextConfig = {
   // Self-hosted deployment: emit a minimal server bundle for the Docker image.
   output: "standalone",
+  // Allow the dev server on both loopback spellings; otherwise the client
+  // bundle is blocked cross-origin and the page never hydrates.
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   images: {
     unoptimized: true,
   },
