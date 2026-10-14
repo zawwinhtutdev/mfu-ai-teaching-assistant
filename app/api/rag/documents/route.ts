@@ -30,10 +30,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
   }
 
-  // Only teachers and administrators may add course material.
+  // Course materials are uploaded by teachers only.
   if (!(await canManageMaterials())) {
     return NextResponse.json(
-      { error: "Only teachers and administrators can upload materials" },
+      { error: "Only teachers can upload materials" },
       { status: 403 },
     )
   }

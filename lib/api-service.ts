@@ -67,6 +67,7 @@ export async function resolveRole(): Promise<Role | null> {
 }
 
 export async function canManageMaterials(): Promise<boolean> {
+  // Course materials belong to teachers; admins do not upload them.
   const role = await resolveRole()
-  return role === "teacher" || role === "admin"
+  return role === "teacher"
 }

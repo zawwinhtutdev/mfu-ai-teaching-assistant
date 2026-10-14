@@ -5,7 +5,6 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
   BarChart3,
-  Library,
   Users,
   FileText,
   ShieldCheck,
@@ -21,7 +20,6 @@ import { BrandIcon } from "@/components/brand-icon"
 const NAV_ITEMS = [
   { href: "/admin/dashboard", label: "Overview", icon: BarChart3 },
   { href: "/admin/dashboard/users", label: "Users", icon: Users },
-  { href: "/admin/dashboard/knowledge", label: "Knowledge", icon: Library },
   { href: "/admin/dashboard/audit-logs", label: "Audit Logs", icon: FileText },
   { href: "/admin/dashboard/privacy", label: "Privacy", icon: ShieldCheck },
   { href: "/admin/dashboard/notifications", label: "Notifications", icon: Bell },
