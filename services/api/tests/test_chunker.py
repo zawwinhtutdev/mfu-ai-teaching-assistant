@@ -68,3 +68,33 @@ def test_invalid_parameters_rejected() -> None:
         chunk_pages(["text"], target_chars=0)
     with pytest.raises(ValueError):
         chunk_pages(["text"], target_chars=100, overlap_chars=100)
+
+
+def test_sanitize_removes_nul_and_control_characters() -> None:
+    from app.rag.ingest import sanitize_text
+
+    raw = "Midterm\x00 Brief\x00 Memo\n\x01\x02Table\trow\r\nLine"
+    cleaned = sanitize_text(raw)
+    assert "\x00" not in cleaned
+    assert "\x01" not in cleaned
+    assert "\n" in cleaned
+    assert "\t" in cleaned
+    assert cleaned.startswith("Midterm Brief Memo")
+
+
+def test_sanitize_keeps_normal_text() -> None:
+    from app.rag.ingest import sanitize_text
+
+    text = "Use 403 when the user is authenticated but not permitted."
+    assert sanitize_text(text) == text
+
+
+def test_concise_error_hides_sql() -> None:
+    from app.rag.ingest import concise_error
+
+    exc = RuntimeError(
+        "(asyncpg.Error) invalid byte sequence\n[SQL: INSERT INTO x]\n[parameters: ('a\x00b')]"
+    )
+    message = concise_error(exc)
+    assert "[SQL" not in message
+    assert len(message) <= 300
