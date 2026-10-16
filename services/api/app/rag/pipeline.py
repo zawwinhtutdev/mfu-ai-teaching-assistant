@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import Settings
 from app.providers.base import ChatProvider
 from app.providers.gemini import ProviderError
+from app.rag.citation_repair import repair_citations
 from app.rag.context import Source, build_context
 from app.rag.factory import get_embedder
 from app.rag.prompts import REFUSAL_TEXT, grounded_system_prompt
@@ -85,6 +86,7 @@ async def stream_grounded_reply(
     use_retrieval: bool = True,
     retrieval_mode: str = "hybrid",
     top_k: int = 5,
+    prompt_variant: str = "baseline",
 ) -> AsyncIterator[StreamEvent]:
     """Yield SSE-ready events for one chat turn."""
     sources: list[Source] = []
@@ -139,7 +141,7 @@ async def stream_grounded_reply(
             if not built.is_empty:
                 sources = built.sources
                 grounded = True
-                system_prompt = grounded_system_prompt(built.text)
+                system_prompt = grounded_system_prompt(built.text, variant=prompt_variant)
             else:
                 system_prompt = UNGROUNDED_SYSTEM
         else:
@@ -163,8 +165,22 @@ async def stream_grounded_reply(
         yield ErrorEvent(message=f"Model call failed: {exc}")
         return
 
-    cited = sorted({int(match) for match in CITATION_RE.findall(text)})
+    repaired_text = text
+    revisions: list[dict[str, object]] = []
+    if grounded and sources:
+        repaired_text, revisions_found = repair_citations(text, sources)
+        revisions = [
+            {"sentence": item.sentence, "from_n": item.from_n, "to_n": item.to_n}
+            for item in revisions_found
+        ]
+
+    cited = sorted({int(match) for match in CITATION_RE.findall(repaired_text)})
     valid = [n for n in cited if 1 <= n <= len(sources)]
     invalid = [n for n in cited if not 1 <= n <= len(sources)]
 
-    yield DoneEvent(sources_used=valid, invalid_citations=invalid)
+    yield DoneEvent(
+        sources_used=valid,
+        invalid_citations=invalid,
+        citation_revisions=revisions,
+        repaired_text=repaired_text if revisions else None,
+    )

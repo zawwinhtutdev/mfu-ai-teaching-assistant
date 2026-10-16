@@ -65,6 +65,7 @@ async def chat(
             use_retrieval=request.use_retrieval,
             retrieval_mode=request.retrieval_mode,
             top_k=request.top_k,
+            prompt_variant=request.prompt_variant,
         ):
             yield _encode(event)
         yield "data: [DONE]\n\n"

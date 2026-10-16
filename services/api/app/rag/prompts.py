@@ -18,5 +18,23 @@ SOURCES
 """
 
 
-def grounded_system_prompt(context_text: str) -> str:
-    return GROUNDED_SYSTEM.format(refusal=REFUSAL_TEXT, context=context_text)
+QUOTE_FIRST_SYSTEM = """You answer questions using ONLY the SOURCES below.
+
+Method:
+1. Find the single sentence in SOURCES that answers the question.
+2. Quote that sentence briefly (under 20 words, in double quotes).
+3. Then state the answer and cite the source number it came from, like [1].
+
+Rules:
+- Never cite a number that is not in SOURCES. Never use outside knowledge.
+- If the sources do not contain the answer, reply exactly: "{refusal}"
+- At most 100 words total.
+
+SOURCES
+{context}
+"""
+
+
+def grounded_system_prompt(context_text: str, variant: str = "baseline") -> str:
+    template = QUOTE_FIRST_SYSTEM if variant == "quote_first" else GROUNDED_SYSTEM
+    return template.format(refusal=REFUSAL_TEXT, context=context_text)
