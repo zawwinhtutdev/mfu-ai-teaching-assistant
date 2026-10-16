@@ -22,8 +22,12 @@ export async function serviceHeaders(req?: Request): Promise<Record<string, stri
   }
 
   if (process.env.ALLOW_INSECURE_DEV_AUTH === "true") {
+    // Prefer the signed-in demo user so uploaded_by reflects who did it,
+    // not a shared default principal.
+    const jar = await cookies()
     const principal =
       req?.headers.get("x-dev-principal") ??
+      jar.get("mfu_demo_email")?.value ??
       process.env.DEV_PRINCIPAL ??
       "demo.student@mfu.ac.th"
     return { "X-Dev-Principal": principal }
