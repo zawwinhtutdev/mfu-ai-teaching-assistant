@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 
-import { API_URL, serviceHeaders } from "@/lib/api-service"
+import { API_URL, canManageMaterials, serviceHeaders } from "@/lib/api-service"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -28,6 +28,14 @@ export async function POST(req: Request) {
   const headers = await serviceHeaders(req)
   if (!headers) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+  }
+
+  // Only teachers and administrators may add course material.
+  if (!(await canManageMaterials())) {
+    return NextResponse.json(
+      { error: "Only teachers and administrators can upload materials" },
+      { status: 403 },
+    )
   }
 
   const form = await req.formData()
