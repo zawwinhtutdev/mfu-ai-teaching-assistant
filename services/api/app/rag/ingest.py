@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import re
 import uuid
 
 from sqlalchemy import delete, select
@@ -15,6 +16,24 @@ from app.rag.embeddings import EmbeddingProvider
 
 MAX_PDF_BYTES = 25 * 1024 * 1024
 MIN_TEXT_CHARS = 50
+
+# Postgres text cannot store NUL, and control characters only confuse the
+# tokenizer; pypdf does emit them for some fonts and ligatures.
+CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+SQL_NOISE = re.compile(r"\[SQL:.*", re.DOTALL)
+
+
+def sanitize_text(text: str) -> str:
+    """Remove characters Postgres cannot store and normalise line endings."""
+    cleaned = CONTROL_CHARS.sub("", text.replace("\r\n", "\n").replace("\r", "\n"))
+    return cleaned.replace("\u00a0", " ")
+
+
+def concise_error(exc: Exception) -> str:
+    """A short, user-facing reason instead of a SQLAlchemy dump."""
+    message = str(exc).splitlines()[0] if str(exc) else exc.__class__.__name__
+    message = SQL_NOISE.sub("", message).strip()
+    return message[:300] or exc.__class__.__name__
 
 
 class ExtractionError(RuntimeError):
@@ -33,7 +52,7 @@ def extract_pages(data: bytes) -> list[str]:
     pages: list[str] = []
     for page in reader.pages:
         try:
-            pages.append(page.extract_text() or "")
+            pages.append(sanitize_text(page.extract_text() or ""))
         except Exception:
             pages.append("")
 
@@ -107,7 +126,7 @@ async def ingest_pdf(
         failed = await session.get(Document, document_id)
         if failed is not None:
             failed.status = "failed"
-            failed.error = str(exc)[:1000]
+            failed.error = concise_error(exc)
             await session.commit()
         raise
 

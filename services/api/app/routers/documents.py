@@ -69,6 +69,14 @@ async def upload_document(
     digest = content_hash(data)
     existing = await find_by_hash(session, digest)
     if existing is not None:
+        # A failed earlier attempt must be retryable with the same file
+        # (identical SHA-256 would otherwise short-circuit forever).
+        if existing.status == "failed":
+            existing.status = "queued"
+            existing.error = None
+            await session.commit()
+            await session.refresh(existing)
+            background.add_task(_run_ingest, existing.id, data, settings)
         response.status_code = 200
         return existing
 
