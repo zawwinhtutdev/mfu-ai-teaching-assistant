@@ -419,7 +419,7 @@ Please review these materials before the workshop to maximize your learning expe
     },
   ]
 
-  const isDemoCourse = course.id.startsWith("teacher-course-") || course.id.startsWith("mock-")
+  const isDemoCourse = course.id.startsWith("course-") || course.id.startsWith("mock-")
 
   const mapApiAnnouncement = (item: any): AnnouncementFeedItem => ({
     id: item.id,

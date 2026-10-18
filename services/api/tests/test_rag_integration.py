@@ -70,7 +70,7 @@ async def _roundtrip() -> None:
     factory = get_session_factory(settings)
     embedder = StubEmbeddings()
 
-    course_id = uuid.uuid4()
+    course_id = f"course-test-{uuid.uuid4()}"
 
     async with factory() as session:
         document = Document(

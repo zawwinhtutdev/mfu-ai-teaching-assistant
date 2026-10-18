@@ -39,8 +39,8 @@ select c.id, c.document_id, c.content, c.page_from, c.page_to, c.section,
        false as from_lexical,
        row_number() over (order by c.embedding <=> cast(:vector as vector)) as rank
 from document_chunks c
-where (cast(:course_id as uuid) is null or c.document_id in (
-    select id from documents where course_id = cast(:course_id as uuid)
+where (cast(:course_id as text) is null or c.document_id in (
+    select id from documents where course_id = cast(:course_id as text)
 ))
 order by c.embedding <=> cast(:vector as vector)
 limit :pool
@@ -53,8 +53,8 @@ select c.id, c.document_id, c.content, c.page_from, c.page_to, c.section,
        row_number() over (order by ts_rank(c.tsv, plainto_tsquery('english', :query)) desc) as rank
 from document_chunks c
 where c.tsv @@ plainto_tsquery('english', :query)
-  and (cast(:course_id as uuid) is null or c.document_id in (
-      select id from documents where course_id = cast(:course_id as uuid)
+  and (cast(:course_id as text) is null or c.document_id in (
+      select id from documents where course_id = cast(:course_id as text)
   ))
 order by ts_rank(c.tsv, plainto_tsquery('english', :query)) desc
 limit :pool
@@ -97,7 +97,7 @@ async def hybrid_search(
     *,
     query: str,
     vector: list[float],
-    course_id: uuid.UUID | None = None,
+    course_id: str | None = None,
     limit: int = 5,
     pool: int = 30,
     mode: str = "hybrid",
