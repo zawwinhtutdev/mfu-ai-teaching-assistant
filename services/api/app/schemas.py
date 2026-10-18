@@ -39,7 +39,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1)
     conversation_id: str | None = None
-    course_id: uuid.UUID | None = None
+    course_id: str | None = None
     # Optional override; validated by the provider factory.
     model: str | None = None
     # Retrieval controls (used by the evaluation harness as baselines).
@@ -106,13 +106,13 @@ class DocumentOut(BaseModel):
     page_count: int | None = None
     chunk_count: int
     size_bytes: int | None = None
-    course_id: uuid.UUID | None = None
+    course_id: str | None = None
     created_at: datetime
 
 
 class SearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
-    course_id: uuid.UUID | None = None
+    course_id: str | None = None
     limit: int = Field(default=5, ge=1, le=20)
 
 

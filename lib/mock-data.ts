@@ -100,7 +100,7 @@ export const mockCourses = [
 // Teacher courses - courses that Aj. Alex teaches
 export const mockTeacherCourses = [
   {
-    id: "teacher-course-csb321",
+    id: "course-csb321",
     name: "Software Business Entrepreneurship",
     title: "Software Business Entrepreneurship",
     code: "CSB321",
@@ -115,7 +115,7 @@ export const mockTeacherCourses = [
     updated_at: new Date().toISOString(),
   },
   {
-    id: "teacher-course-csd323",
+    id: "course-csd323",
     name: "Seminar in Software Engineering",
     title: "Seminar in Software Engineering",
     code: "CSD323",
@@ -130,7 +130,7 @@ export const mockTeacherCourses = [
     updated_at: new Date().toISOString(),
   },
   {
-    id: "teacher-course-csa411",
+    id: "course-csa411",
     name: "Software Automation Testing with AI",
     title: "Software Automation Testing with AI",
     code: "CSA411",
@@ -145,7 +145,7 @@ export const mockTeacherCourses = [
     updated_at: new Date().toISOString(),
   },
   {
-    id: "teacher-course-csd322",
+    id: "course-csd322",
     name: "Platform Development",
     title: "Platform Development",
     code: "CSD322",
@@ -160,7 +160,7 @@ export const mockTeacherCourses = [
     updated_at: new Date().toISOString(),
   },
   {
-    id: "teacher-course-ai-edu",
+    id: "course-ai-edu",
     name: "AI for Edu week (staffs)",
     title: "AI for Edu week (staffs)",
     code: "AI-EDU",
@@ -372,7 +372,7 @@ export const mockMaterials = [
   // CSA411 - Software Automation Testing with AI
   {
     id: "material-5a",
-    course_id: "teacher-course-csa411",
+    course_id: "course-csa411",
     title: "Lecture 1 – Introduction to AI-Enhanced Testing",
     content: "Overview of software testing fundamentals and how AI is transforming the testing landscape. Topics include: traditional testing vs AI-powered testing, benefits of AI in test automation, overview of AI testing tools, and future trends in automated testing.",
     material_type: "lecture" as const,
@@ -382,7 +382,7 @@ export const mockMaterials = [
   },
   {
     id: "material-5b",
-    course_id: "teacher-course-csa411",
+    course_id: "course-csa411",
     title: "Lecture 2 – Test Automation Frameworks",
     content: "Deep dive into popular test automation frameworks: Selenium, Cypress, Playwright, and Jest. Learn how to set up automation frameworks, write test scripts, and integrate with CI/CD pipelines. Hands-on examples and best practices.",
     material_type: "lecture" as const,
@@ -392,7 +392,7 @@ export const mockMaterials = [
   },
   {
     id: "material-5c",
-    course_id: "teacher-course-csa411",
+    course_id: "course-csa411",
     title: "Lecture 3 – AI-Driven Test Automation",
     content: "Explore AI-powered testing tools and techniques: self-healing tests, visual regression testing with AI, intelligent test case generation, predictive test maintenance, and AI-based bug detection. Case studies from industry implementations.",
     material_type: "lecture" as const,
@@ -402,7 +402,7 @@ export const mockMaterials = [
   },
   {
     id: "material-5d",
-    course_id: "teacher-course-csa411",
+    course_id: "course-csa411",
     title: "Lab – Setting Up Test Automation Environment",
     content: "Hands-on lab: Set up a complete test automation environment. Install and configure testing tools, create your first automated test suite, integrate with version control, and set up continuous testing in a CI/CD pipeline.",
     material_type: "other" as const,
@@ -412,7 +412,7 @@ export const mockMaterials = [
   },
   {
     id: "material-5e",
-    course_id: "teacher-course-csa411",
+    course_id: "course-csa411",
     title: "Assignment – AI-Powered Test Case Generation",
     content: "Use AI tools to generate test cases for a sample application. Compare AI-generated tests with manually written tests. Write a report (5-7 pages) analyzing: test coverage, test quality, maintenance effort, and recommendations for AI testing adoption.",
     material_type: "document" as const,
@@ -422,7 +422,7 @@ export const mockMaterials = [
   },
   {
     id: "material-5f",
-    course_id: "teacher-course-csa411",
+    course_id: "course-csa411",
     title: "Reading – AI Testing Tools Comparison",
     content: "Comprehensive comparison of AI-powered testing tools: TestCraft, Functionize, Applitools, ReTest, and others. Evaluate features, pricing, integration capabilities, and use cases. Includes practical recommendations for tool selection.",
     material_type: "document" as const,
@@ -433,7 +433,7 @@ export const mockMaterials = [
   // AI-EDU - AI for Edu week (staffs)
   {
     id: "material-6a",
-    course_id: "teacher-course-ai-edu",
+    course_id: "course-ai-edu",
     title: "Session 1 – Introduction to AI in Education",
     content: "Overview of AI technologies and their applications in educational settings. Topics include: understanding AI capabilities, AI tools for educators, benefits and challenges, and getting started with AI in teaching. Designed for university staff with varying technical backgrounds.",
     material_type: "lecture" as const,
@@ -443,7 +443,7 @@ export const mockMaterials = [
   },
   {
     id: "material-6b",
-    course_id: "teacher-course-ai-edu",
+    course_id: "course-ai-edu",
     title: "Session 2 – AI Tools for Content Creation",
     content: "Hands-on workshop on using AI tools for educational content creation: ChatGPT for lesson planning, AI-powered presentation tools, content generation, video creation with AI, and automated quiz generation. Practical exercises and tool demonstrations.",
     material_type: "lecture" as const,
@@ -453,7 +453,7 @@ export const mockMaterials = [
   },
   {
     id: "material-6c",
-    course_id: "teacher-course-ai-edu",
+    course_id: "course-ai-edu",
     title: "Session 3 – AI-Powered Assessment and Feedback",
     content: "Explore AI applications in student assessment: automated grading, AI feedback systems, plagiarism detection, learning analytics, and personalized learning recommendations. Ethical considerations and best practices for AI-assisted assessment.",
     material_type: "lecture" as const,
@@ -463,7 +463,7 @@ export const mockMaterials = [
   },
   {
     id: "material-6d",
-    course_id: "teacher-course-ai-edu",
+    course_id: "course-ai-edu",
     title: "Session 4 – Ethical AI Use in Academic Settings",
     content: "Critical discussion on ethical AI use in education: academic integrity, student privacy, bias in AI systems, transparency requirements, and institutional policies. Case studies and guidelines for responsible AI adoption in educational contexts.",
     material_type: "lecture" as const,
@@ -473,7 +473,7 @@ export const mockMaterials = [
   },
   {
     id: "material-6e",
-    course_id: "teacher-course-ai-edu",
+    course_id: "course-ai-edu",
     title: "Resource – ChatGPT for Educators Guide",
     content: "Comprehensive guide to using ChatGPT for educational purposes: lesson planning, creating assignments, generating examples, answering student questions, and developing teaching materials. Includes prompts, examples, and best practices.",
     material_type: "document" as const,
@@ -483,7 +483,7 @@ export const mockMaterials = [
   },
   {
     id: "material-6f",
-    course_id: "teacher-course-ai-edu",
+    course_id: "course-ai-edu",
     title: "Resource – AI-Powered Grading Tools Comparison",
     content: "Comparison of AI grading tools: Gradescope, Turnitin, Grammarly, and others. Evaluate features, accuracy, integration with LMS, cost, and suitability for different assessment types. Helpful for staff considering AI grading solutions.",
     material_type: "document" as const,
@@ -718,7 +718,7 @@ export const mockFlashcards = [
   // CSA411 - Software Automation Testing with AI
   {
     id: "flashcard-5a",
-    course_id: "teacher-course-csa411",
+    course_id: "course-csa411",
     student_id: "mock-student-1",
     material_id: "material-5a",
     question: "What are the main benefits of AI-enhanced testing?",
@@ -727,7 +727,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-5b",
-    course_id: "teacher-course-csa411",
+    course_id: "course-csa411",
     student_id: "mock-student-1",
     material_id: "material-5c",
     question: "What is self-healing test automation?",
@@ -736,7 +736,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-5c",
-    course_id: "teacher-course-csa411",
+    course_id: "course-csa411",
     student_id: "mock-student-1",
     material_id: "material-5b",
     question: "What is the difference between Selenium and Playwright?",
@@ -746,7 +746,7 @@ export const mockFlashcards = [
   // CSA411 - Software Automation Testing with AI (Teacher)
   {
     id: "flashcard-5t1",
-    course_id: "teacher-course-csa411",
+    course_id: "course-csa411",
     student_id: "mock-teacher-1",
     material_id: "material-5a",
     question: "What are the main benefits of AI-enhanced testing?",
@@ -755,7 +755,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-5t2",
-    course_id: "teacher-course-csa411",
+    course_id: "course-csa411",
     student_id: "mock-teacher-1",
     material_id: "material-5c",
     question: "What is self-healing test automation?",
@@ -764,7 +764,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-5t3",
-    course_id: "teacher-course-csa411",
+    course_id: "course-csa411",
     student_id: "mock-teacher-1",
     material_id: "material-5b",
     question: "What is the difference between Selenium and Playwright?",
@@ -773,7 +773,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-5t4",
-    course_id: "teacher-course-csa411",
+    course_id: "course-csa411",
     student_id: "mock-teacher-1",
     material_id: "material-5a",
     question: "What is visual regression testing and how does AI enhance it?",
@@ -782,7 +782,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-5t5",
-    course_id: "teacher-course-csa411",
+    course_id: "course-csa411",
     student_id: "mock-teacher-1",
     material_id: "material-5c",
     question: "What is intelligent test case generation?",
@@ -791,7 +791,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-5t6",
-    course_id: "teacher-course-csa411",
+    course_id: "course-csa411",
     student_id: "mock-teacher-1",
     material_id: "material-5b",
     question: "What are the key features of Cypress testing framework?",
@@ -800,7 +800,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-5t7",
-    course_id: "teacher-course-csa411",
+    course_id: "course-csa411",
     student_id: "mock-teacher-1",
     material_id: "material-5f",
     question: "What are popular AI-powered testing tools and their use cases?",
@@ -809,7 +809,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-5t8",
-    course_id: "teacher-course-csa411",
+    course_id: "course-csa411",
     student_id: "mock-teacher-1",
     material_id: "material-5d",
     question: "What is the role of CI/CD in test automation?",
@@ -819,7 +819,7 @@ export const mockFlashcards = [
   // AI-EDU - AI for Edu week (staffs)
   {
     id: "flashcard-6a",
-    course_id: "teacher-course-ai-edu",
+    course_id: "course-ai-edu",
     student_id: "mock-student-1",
     material_id: "material-6a",
     question: "What are the main applications of AI in education?",
@@ -828,7 +828,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-6b",
-    course_id: "teacher-course-ai-edu",
+    course_id: "course-ai-edu",
     student_id: "mock-student-1",
     material_id: "material-6d",
     question: "What are key ethical considerations when using AI in education?",
@@ -837,7 +837,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-6c",
-    course_id: "teacher-course-ai-edu",
+    course_id: "course-ai-edu",
     student_id: "mock-student-1",
     material_id: "material-6a",
     question: "How can ChatGPT be used for lesson planning?",
@@ -846,7 +846,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-6d",
-    course_id: "teacher-course-ai-edu",
+    course_id: "course-ai-edu",
     student_id: "mock-student-1",
     material_id: "material-6a",
     question: "What is an AI-powered intelligent tutoring system?",
@@ -855,7 +855,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-6e",
-    course_id: "teacher-course-ai-edu",
+    course_id: "course-ai-edu",
     student_id: "mock-student-1",
     material_id: "material-6a",
     question: "What are the benefits of AI-generated educational content?",
@@ -864,7 +864,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-6f",
-    course_id: "teacher-course-ai-edu",
+    course_id: "course-ai-edu",
     student_id: "mock-student-1",
     material_id: "material-6a",
     question: "How does AI support personalized learning?",
@@ -873,7 +873,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-6g",
-    course_id: "teacher-course-ai-edu",
+    course_id: "course-ai-edu",
     student_id: "mock-student-1",
     material_id: "material-6a",
     question: "What is the role of learning analytics in AI-enhanced education?",
@@ -884,7 +884,7 @@ export const mockFlashcards = [
   // CSB321 - Software Business Entrepreneurship (Teacher)
   {
     id: "flashcard-t1",
-    course_id: "teacher-course-csb321",
+    course_id: "course-csb321",
     student_id: "mock-teacher-1",
     material_id: "material-1",
     question: "What is a Business Model Canvas?",
@@ -893,7 +893,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-t1b",
-    course_id: "teacher-course-csb321",
+    course_id: "course-csb321",
     student_id: "mock-teacher-1",
     material_id: "material-1",
     question: "What are the key components of a startup pitch deck?",
@@ -902,7 +902,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-t1c",
-    course_id: "teacher-course-csb321",
+    course_id: "course-csb321",
     student_id: "mock-teacher-1",
     material_id: "material-1",
     question: "What is the difference between B2B and B2C business models?",
@@ -911,7 +911,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-t1d",
-    course_id: "teacher-course-csb321",
+    course_id: "course-csb321",
     student_id: "mock-teacher-1",
     material_id: "material-1d",
     question: "What is TAM, SAM, and SOM in market research?",
@@ -920,7 +920,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-t1e",
-    course_id: "teacher-course-csb321",
+    course_id: "course-csb321",
     student_id: "mock-teacher-1",
     material_id: "material-1e",
     question: "What is the difference between SaaS and freemium revenue models?",
@@ -929,7 +929,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-t1f",
-    course_id: "teacher-course-csb321",
+    course_id: "course-csb321",
     student_id: "mock-teacher-1",
     material_id: "material-1f",
     question: "What is an MVP and why is it important?",
@@ -938,7 +938,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-t1g",
-    course_id: "teacher-course-csb321",
+    course_id: "course-csb321",
     student_id: "mock-teacher-1",
     material_id: "material-1g",
     question: "What is the difference between seed funding and Series A?",
@@ -948,7 +948,7 @@ export const mockFlashcards = [
   // CSD322 - Platform Development (Teacher)
   {
     id: "flashcard-t2",
-    course_id: "teacher-course-csd322",
+    course_id: "course-csd322",
     student_id: "mock-teacher-1",
     material_id: "material-2",
     question: "Define API endpoint.",
@@ -957,7 +957,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-t2b",
-    course_id: "teacher-course-csd322",
+    course_id: "course-csd322",
     student_id: "mock-teacher-1",
     material_id: "material-2",
     question: "What is RESTful API?",
@@ -966,7 +966,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-t2c",
-    course_id: "teacher-course-csd322",
+    course_id: "course-csd322",
     student_id: "mock-teacher-1",
     material_id: "material-2",
     question: "What is API authentication and why is it important?",
@@ -975,7 +975,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-t2d",
-    course_id: "teacher-course-csd322",
+    course_id: "course-csd322",
     student_id: "mock-teacher-1",
     material_id: "material-2f",
     question: "What is CI/CD and why is it important for platform development?",
@@ -984,7 +984,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-t2e",
-    course_id: "teacher-course-csd322",
+    course_id: "course-csd322",
     student_id: "mock-teacher-1",
     material_id: "material-2b",
     question: "What are the main benefits and challenges of microservices architecture?",
@@ -993,7 +993,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-t2f",
-    course_id: "teacher-course-csd322",
+    course_id: "course-csd322",
     student_id: "mock-teacher-1",
     material_id: "material-2h",
     question: "What is serverless computing and when should you use it?",
@@ -1003,7 +1003,7 @@ export const mockFlashcards = [
   // CSD323 - Seminar in Software Engineering (Teacher)
   {
     id: "flashcard-t4",
-    course_id: "teacher-course-csd323",
+    course_id: "course-csd323",
     student_id: "mock-teacher-1",
     material_id: "material-4",
     question: "What is Agile methodology?",
@@ -1012,7 +1012,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-t4b",
-    course_id: "teacher-course-csd323",
+    course_id: "course-csd323",
     student_id: "mock-teacher-1",
     material_id: "material-4",
     question: "What are the key principles of Scrum?",
@@ -1021,7 +1021,7 @@ export const mockFlashcards = [
   },
   {
     id: "flashcard-t4c",
-    course_id: "teacher-course-csd323",
+    course_id: "course-csd323",
     student_id: "mock-teacher-1",
     material_id: "material-4b",
     question: "What is DevOps and how does it improve software delivery?",
@@ -1253,7 +1253,7 @@ export const mockQuizzes = [
   },
   {
     id: "quiz-6",
-    course_id: "teacher-course-csa411",
+    course_id: "course-csa411",
     title: "Test Automation Fundamentals Quiz",
     questions: [
       {
@@ -1281,7 +1281,7 @@ export const mockQuizzes = [
   },
   {
     id: "quiz-6b",
-    course_id: "teacher-course-csa411",
+    course_id: "course-csa411",
     title: "AI Testing Tools Quiz",
     questions: [
       {
@@ -1309,7 +1309,7 @@ export const mockQuizzes = [
   },
   {
     id: "quiz-7",
-    course_id: "teacher-course-ai-edu",
+    course_id: "course-ai-edu",
     title: "AI in Education Basics Quiz",
     questions: [
       {
@@ -1334,7 +1334,7 @@ export const mockQuizzes = [
   // CSB321 - Software Business Entrepreneurship (Teacher)
   {
     id: "quiz-t1",
-    course_id: "teacher-course-csb321",
+    course_id: "course-csb321",
     title: "Startup Basics Quiz",
     questions: [
       {
@@ -1377,7 +1377,7 @@ export const mockQuizzes = [
   },
   {
     id: "quiz-t1b",
-    course_id: "teacher-course-csb321",
+    course_id: "course-csb321",
     title: "Business Model Canvas Quiz",
     questions: [
       {
@@ -1406,7 +1406,7 @@ export const mockQuizzes = [
   // CSD322 - Platform Development (Teacher)
   {
     id: "quiz-t2",
-    course_id: "teacher-course-csd322",
+    course_id: "course-csd322",
     title: "API Development Quiz",
     questions: [
       {
@@ -1435,7 +1435,7 @@ export const mockQuizzes = [
   // CSD323 - Seminar in Software Engineering (Teacher)
   {
     id: "quiz-t4",
-    course_id: "teacher-course-csd323",
+    course_id: "course-csd323",
     title: "Software Engineering Practices Quiz",
     questions: [
       {
@@ -1539,7 +1539,7 @@ export const mockReminders = [
   {
     id: "reminder-5",
     student_id: "mock-student-1",
-    course_id: "teacher-course-csa411",
+    course_id: "course-csa411",
     reminder_text: "AI-Powered Test Case Generation Assignment – Software Automation Testing with AI: Submit report analyzing AI-generated vs manual tests",
     reminder_time: new Date("2025-11-20").toISOString(),
     is_completed: false,
@@ -1548,7 +1548,7 @@ export const mockReminders = [
   {
     id: "reminder-6",
     student_id: "mock-student-1",
-    course_id: "teacher-course-ai-edu",
+    course_id: "course-ai-edu",
     reminder_text: "AI for Edu Week Workshop – Day 1: Introduction to AI in Education session at Center for Teaching and Learning",
     reminder_time: new Date("2025-11-18").toISOString(),
     is_completed: false,

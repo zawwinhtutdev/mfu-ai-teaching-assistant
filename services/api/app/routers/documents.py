@@ -58,7 +58,7 @@ async def upload_document(
     session: SessionDep,
     background: BackgroundTasks,
     response: Response,
-    course_id: Annotated[uuid.UUID | None, Form()] = None,
+    course_id: Annotated[str | None, Form()] = None,
 ) -> Document:
     data = await file.read()
     if not data:
@@ -69,6 +69,13 @@ async def upload_document(
     digest = content_hash(data)
     existing = await find_by_hash(session, digest)
     if existing is not None:
+        # Uploading the same file into a course assigns it there, so a file
+        # uploaded before course scoping can be filed correctly.
+        if course_id and existing.course_id != course_id:
+            existing.course_id = course_id
+            await session.commit()
+            await session.refresh(existing)
+
         # A failed earlier attempt must be retryable with the same file
         # (identical SHA-256 would otherwise short-circuit forever).
         if existing.status == "failed":
@@ -101,10 +108,12 @@ async def upload_document(
 async def list_documents(
     principal: CurrentPrincipal,
     session: SessionDep,
+    course_id: str | None = None,
 ) -> list[Document]:
-    result = await session.execute(
-        select(Document).order_by(Document.created_at.desc()).limit(100)
-    )
+    statement = select(Document).order_by(Document.created_at.desc()).limit(100)
+    if course_id is not None:
+        statement = statement.where(Document.course_id == course_id)
+    result = await session.execute(statement)
     return list(result.scalars().all())
 
 

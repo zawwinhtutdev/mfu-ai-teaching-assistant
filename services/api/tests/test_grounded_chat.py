@@ -119,7 +119,7 @@ async def _grounded_reply() -> None:
     from app.rag.pipeline import stream_grounded_reply
     from app.schemas import ChatMessage
 
-    course_id = uuid.uuid4()
+    course_id = f"course-test-{uuid.uuid4()}"
     session, document = await _seed(course_id)
     try:
         events = [
