@@ -1,6 +1,7 @@
-import { DocumentsPage } from "@/components/chat/documents-page"
+import { KnowledgeConsole } from "@/components/knowledge/knowledge-console"
+
+export const dynamic = "force-dynamic"
 
 export default function ChatDocumentsPage() {
-  return <DocumentsPage />
+  return <KnowledgeConsole canUpload={false} />
 }
-
