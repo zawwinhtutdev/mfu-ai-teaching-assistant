@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
-import { createServiceRoleClient, hasServiceRoleKey, DEMO_STATS } from "@/lib/supabase/admin"
+import { createServiceRoleClient, hasServiceRoleKey } from "@/lib/supabase/admin"
+import { seedStats } from "@/lib/demo-seed"
 import { requireAdminUser } from "@/lib/server/admin-auth"
 
 export async function GET() {
@@ -9,9 +10,9 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Demo mode fallback
+    // Demo mode fallback: derived from the seeded teachers/courses/enrollments.
     if (!hasServiceRoleKey()) {
-      return NextResponse.json({ stats: DEMO_STATS })
+      return NextResponse.json({ stats: seedStats() })
     }
 
     const serviceClient = createServiceRoleClient()

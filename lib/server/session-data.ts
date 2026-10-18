@@ -4,10 +4,17 @@ import { createClient } from "@/lib/supabase/server"
 import {
   DEMO_EMAIL_COOKIE,
   DEMO_ROLE_COOKIE,
-  getDemoAccountByRole,
+  findDemoAccountByEmail,
   isDemoRole,
+  type DemoAccount,
   type DemoRole,
 } from "@/lib/demo-auth"
+import {
+  coursesForStudent,
+  coursesForTeacher,
+  studentById,
+  teacherById,
+} from "@/lib/demo-seed"
 import {
   mockCourses,
   mockMaterials,
@@ -29,6 +36,21 @@ interface SessionContext {
   supabase: SupabaseClient | null
 }
 
+function demoProfileFor(account: DemoAccount): Profile {
+  const now = new Date().toISOString()
+  const teacher = teacherById(account.profileId)
+  const student = studentById(account.profileId)
+  return {
+    id: account.profileId,
+    email: account.email,
+    full_name: teacher?.fullName ?? student?.fullName ?? account.fullName,
+    role: account.role,
+    avatar_url: null,
+    created_at: now,
+    updated_at: now,
+  }
+}
+
 function toProfileFromRow(row: any, fallbackEmail: string): Profile {
   const role: UserRole = row?.role === "teacher" ? "teacher" : row?.role === "admin" ? "admin" : "student"
   return {
@@ -48,14 +70,14 @@ const getSessionContext = cache(async (): Promise<SessionContext> => {
   const demoEmail = cookieStore.get(DEMO_EMAIL_COOKIE)?.value
 
   if (isDemoRole(demoRoleValue)) {
-    const demoAccount = getDemoAccountByRole(demoRoleValue)
+    const demoAccount = findDemoAccountByEmail(demoEmail)
 
-    if (demoAccount && demoEmail?.toLowerCase() === demoAccount.email.toLowerCase()) {
+    if (demoAccount && demoAccount.role === demoRoleValue) {
       return {
         isDemo: true,
         role: demoRoleValue,
         userId: demoAccount.profileId,
-        profile: demoRoleValue === "teacher" ? mockTeacherProfile : mockStudentProfile,
+        profile: demoProfileFor(demoAccount),
         supabase: null,
       }
     }
@@ -238,7 +260,7 @@ export async function getStudentPortalData() {
   if (context.isDemo) {
     return {
       ...context,
-      courses: mockCourses,
+      courses: coursesForStudent(context.userId) as Course[],
     }
   }
 
@@ -261,10 +283,11 @@ export async function getTeacherPortalData() {
   const context = await getSessionContext()
 
   if (context.isDemo) {
+    const owned = new Set(coursesForTeacher(context.userId).map((course) => course.id))
     return {
       ...context,
-      courses: mockTeacherCourses,
-      queries: mockQueries,
+      courses: coursesForTeacher(context.userId) as any,
+      queries: mockQueries.filter((query: { course_id: string }) => owned.has(query.course_id)),
     }
   }
 
@@ -350,7 +373,7 @@ export async function getChatData() {
 export async function getStudentCourseById(courseId: string) {
   const data = await getStudentPortalData()
 
-  const course = data.courses.find((item) => item.id === courseId)
+  const course = data.courses.find((item: { id: string }) => item.id === courseId)
   if (!course) {
     return null
   }
@@ -397,7 +420,7 @@ export async function getStudentCourseBySlug(courseSlug: string) {
 
 export async function getTeacherCourseById(courseId: string) {
   const data = await getTeacherPortalData()
-  const course = data.courses.find((item) => item.id === courseId)
+  const course = data.courses.find((item: { id: string }) => item.id === courseId)
 
   if (!course) {
     return null

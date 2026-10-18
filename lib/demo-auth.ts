@@ -1,3 +1,5 @@
+import { DEMO_STUDENTS, DEMO_TEACHERS } from "@/lib/demo-seed"
+
 export type DemoRole = "student" | "teacher" | "admin"
 
 export interface DemoAccount {
@@ -11,21 +13,24 @@ export interface DemoAccount {
 export const DEMO_ROLE_COOKIE = "mfu_demo_role"
 export const DEMO_EMAIL_COOKIE = "mfu_demo_email"
 
+const TEACHER_PASSWORD = "teacher1234"
+const STUDENT_PASSWORD = "student1234"
+
 export const DEMO_ACCOUNTS: DemoAccount[] = [
-  {
-    role: "student",
-    email: "demo.student@mfu.ac.th",
-    password: "demo1234",
-    fullName: "Demo Student",
-    profileId: "mock-student-1",
-  },
-  {
-    role: "teacher",
-    email: "demo.teacher@mfu.ac.th",
-    password: "demo1234",
-    fullName: "Demo Teacher",
-    profileId: "mock-teacher-1",
-  },
+  ...DEMO_TEACHERS.map((teacher) => ({
+    role: "teacher" as const,
+    email: teacher.email,
+    password: TEACHER_PASSWORD,
+    fullName: teacher.fullName,
+    profileId: teacher.id,
+  })),
+  ...DEMO_STUDENTS.slice(0, 4).map((student) => ({
+    role: "student" as const,
+    email: student.email,
+    password: STUDENT_PASSWORD,
+    fullName: student.fullName,
+    profileId: student.id,
+  })),
   {
     role: "admin",
     email: "admin@mfu.ac.th",
@@ -49,6 +54,15 @@ export function findDemoAccount(email: string, password: string): DemoAccount | 
     DEMO_ACCOUNTS.find((account) => normalizeEmail(account.email) === normalized && account.password === password) ||
     null
   )
+}
+
+/** Resolve the account for a specific signed-in demo user. */
+export function findDemoAccountByEmail(email: string | null | undefined): DemoAccount | null {
+  if (!email) {
+    return null
+  }
+  const normalized = normalizeEmail(email)
+  return DEMO_ACCOUNTS.find((account) => normalizeEmail(account.email) === normalized) || null
 }
 
 export function getDemoAccountByRole(role: string | null | undefined): DemoAccount | null {
