@@ -210,7 +210,7 @@ export function KnowledgeConsole({ canUpload }: { canUpload: boolean }) {
           </>
         ) : (
           <p className="text-muted-foreground rounded-lg border border-dashed p-4 text-xs">
-            Only teachers and administrators can add course materials.
+            Only teachers can add course materials.
           </p>
         )}
 
