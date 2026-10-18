@@ -1,5 +1,8 @@
-import { DocumentsPage } from "@/components/chat/documents-page"
+import { KnowledgeConsole } from "@/components/knowledge/knowledge-console"
+
+export const dynamic = "force-dynamic"
 
 export default function StudentPortalDocumentsPage() {
-  return <DocumentsPage />
+  // Students can read and ask, but cannot upload course material.
+  return <KnowledgeConsole canUpload={false} />
 }
