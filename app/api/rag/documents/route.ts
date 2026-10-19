@@ -5,7 +5,7 @@ import { API_URL, canManageMaterials, serviceHeaders } from "@/lib/api-service"
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
-export async function GET() {
+export async function GET(req: Request) {
   if (!API_URL) {
     return NextResponse.json({ error: "API service not configured" }, { status: 503 })
   }
@@ -15,7 +15,12 @@ export async function GET() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
   }
 
-  const response = await fetch(`${API_URL}/v1/documents`, { headers, cache: "no-store" })
+  const courseId = new URL(req.url).searchParams.get("course_id")
+  const query = courseId ? `?course_id=${encodeURIComponent(courseId)}` : ""
+  const response = await fetch(`${API_URL}/v1/documents${query}`, {
+    headers,
+    cache: "no-store",
+  })
   const data = await response.json().catch(() => [])
   return NextResponse.json(data, { status: response.status })
 }

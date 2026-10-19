@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-import uuid
 from collections.abc import AsyncIterator
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -82,7 +81,7 @@ async def stream_grounded_reply(
     settings: Settings,
     provider: ChatProvider,
     session: AsyncSession | None = None,
-    course_id: uuid.UUID | None = None,
+    course_id: str | None = None,
     use_retrieval: bool = True,
     retrieval_mode: str = "hybrid",
     top_k: int = 5,

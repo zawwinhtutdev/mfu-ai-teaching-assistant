@@ -36,7 +36,9 @@ class Document(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
     )
-    course_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    # Plain text: demo ids ("course-csb321") and Supabase UUIDs both fit,
+    # and courses live in a different database.
+    course_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     uploaded_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
     filename: Mapped[str] = mapped_column(String(512), nullable=False)
     content_type: Mapped[str | None] = mapped_column(String(128), nullable=True)

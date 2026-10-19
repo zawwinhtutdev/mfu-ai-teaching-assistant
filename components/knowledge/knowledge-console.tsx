@@ -35,7 +35,20 @@ const STATUS_STYLE: Record<string, string> = {
   failed: "bg-red-100 text-red-800",
 }
 
-export function KnowledgeConsole({ canUpload }: { canUpload: boolean }) {
+export interface CourseOption {
+  id: string
+  code: string
+  title: string
+}
+
+export function KnowledgeConsole({
+  canUpload,
+  courses = [],
+}: {
+  canUpload: boolean
+  courses?: CourseOption[]
+}) {
+  const [courseId, setCourseId] = useState<string>(courses[0]?.id ?? "")
   const [documents, setDocuments] = useState<DocumentRecord[]>([])
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -50,9 +63,11 @@ export function KnowledgeConsole({ canUpload }: { canUpload: boolean }) {
   const bottomRef = useRef<HTMLDivElement | null>(null)
 
   const loadDocuments = useCallback(async () => {
-    const response = await fetch("/api/rag/documents", { cache: "no-store" })
+    const query = courseId ? `?course_id=${encodeURIComponent(courseId)}` : ""
+    const response = await fetch(`/api/rag/documents${query}`, { cache: "no-store" })
     if (response.ok) setDocuments(await response.json())
-  }, [])
+    else setDocuments([])
+  }, [courseId])
 
   useEffect(() => {
     void loadDocuments()
@@ -85,6 +100,7 @@ export function KnowledgeConsole({ canUpload }: { canUpload: boolean }) {
       try {
         const form = new FormData()
         form.append("file", file)
+        if (courseId) form.append("course_id", courseId)
         const response = await fetch("/api/rag/documents", { method: "POST", body: form })
         const data = await response.json()
         if (!response.ok) {
@@ -99,7 +115,7 @@ export function KnowledgeConsole({ canUpload }: { canUpload: boolean }) {
         setUploading(false)
       }
     },
-    [loadDocuments, pollUntilReady],
+    [courseId, loadDocuments, pollUntilReady],
   )
 
   const ask = useCallback(async () => {
@@ -126,6 +142,7 @@ export function KnowledgeConsole({ canUpload }: { canUpload: boolean }) {
             content: message.text,
           })),
           top_k: 5,
+          ...(courseId ? { course_id: courseId } : {}),
         }),
       })
 
@@ -177,7 +194,7 @@ export function KnowledgeConsole({ canUpload }: { canUpload: boolean }) {
       setStreaming(false)
       setStreamingText("")
     }
-  }, [messages, question, streaming])
+  }, [courseId, messages, question, streaming])
 
   return (
     <div className="mx-auto grid max-w-6xl gap-6 px-4 py-8 lg:grid-cols-[320px_1fr]">
@@ -188,6 +205,30 @@ export function KnowledgeConsole({ canUpload }: { canUpload: boolean }) {
             Upload a PDF, then ask questions answered only from its contents.
           </p>
         </div>
+
+        {courses.length > 0 && (
+          <label className="block text-sm">
+            <span className="text-muted-foreground mb-1 block text-xs uppercase tracking-wide">
+              Course
+            </span>
+            <select
+              value={courseId}
+              onChange={(event) => {
+                setCourseId(event.target.value)
+                setMessages([])
+                setLiveSources([])
+                setStreamingText("")
+              }}
+              className="border-border w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+            >
+              {courses.map((course) => (
+                <option key={course.id} value={course.id}>
+                  {course.code} — {course.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         {canUpload ? (
           <>
