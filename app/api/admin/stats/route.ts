@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createServiceRoleClient, hasServiceRoleKey } from "@/lib/supabase/admin"
-import { seedStats } from "@/lib/demo-seed"
+import { fetchPlatformStats } from "@/lib/server/academic"
 import { requireAdminUser } from "@/lib/server/admin-auth"
 
 export async function GET() {
@@ -10,9 +10,13 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Demo mode fallback: derived from the seeded teachers/courses/enrollments.
+    // Without a service-role key the service database is the source of truth.
     if (!hasServiceRoleKey()) {
-      return NextResponse.json({ stats: seedStats() })
+      const stats = await fetchPlatformStats()
+      if (!stats) {
+        return NextResponse.json({ error: "Stats unavailable" }, { status: 503 })
+      }
+      return NextResponse.json({ stats })
     }
 
     const serviceClient = createServiceRoleClient()

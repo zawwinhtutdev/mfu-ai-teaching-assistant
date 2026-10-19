@@ -9,12 +9,8 @@ import {
   type DemoAccount,
   type DemoRole,
 } from "@/lib/demo-auth"
-import {
-  coursesForStudent,
-  coursesForTeacher,
-  studentById,
-  teacherById,
-} from "@/lib/demo-seed"
+import { studentById, teacherById } from "@/lib/demo-seed"
+import { fetchMyCourses } from "@/lib/server/academic"
 import {
   mockCourses,
   mockMaterials,
@@ -260,7 +256,7 @@ export async function getStudentPortalData() {
   if (context.isDemo) {
     return {
       ...context,
-      courses: coursesForStudent(context.userId) as Course[],
+      courses: (await fetchMyCourses()) as unknown as Course[],
     }
   }
 
@@ -283,10 +279,20 @@ export async function getTeacherPortalData() {
   const context = await getSessionContext()
 
   if (context.isDemo) {
-    const owned = new Set(coursesForTeacher(context.userId).map((course) => course.id))
+    const apiCourses = await fetchMyCourses()
+    const owned = new Set(apiCourses.map((course) => course.id))
     return {
       ...context,
-      courses: coursesForTeacher(context.userId) as any,
+      courses: apiCourses.map((course) => ({
+        ...course,
+        name: course.title,
+        department: "School of Information Technology",
+        semester: course.semester,
+        chatbot_tone: "friendly",
+        ai_model: "qwen2.5:7b",
+        rating: 4.5,
+        updated_at: course.created_at,
+      })) as any,
       queries: mockQueries.filter((query: { course_id: string }) => owned.has(query.course_id)),
     }
   }
