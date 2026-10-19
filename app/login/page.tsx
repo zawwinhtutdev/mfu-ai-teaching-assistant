@@ -8,10 +8,16 @@ import { getDefaultRouteForRole } from "@/lib/demo-auth"
 import { EducveStyleLinks } from "@/components/educve/EducveStyleLinks"
 import { InnerPageLayout } from "@/components/educve/InnerPageLayout"
 
-const demoAccounts = [
-  { role: "student" as const, email: "demo.student@mfu.ac.th", password: "demo1234" },
-  { role: "teacher" as const, email: "demo.teacher@mfu.ac.th", password: "demo1234" },
-]
+import { DEMO_ACCOUNTS } from "@/lib/demo-auth"
+
+const demoAccounts = DEMO_ACCOUNTS.filter((account) => account.role !== "admin").map(
+  (account) => ({
+    role: account.role as "student" | "teacher",
+    email: account.email,
+    password: account.password,
+    fullName: account.fullName,
+  }),
+)
 
 const noticeStyle: React.CSSProperties = {
   borderRadius: 10,
@@ -31,7 +37,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [demoLoginRole, setDemoLoginRole] = useState<"student" | "teacher" | null>(null)
+  const [demoLoginEmail, setDemoLoginEmail] = useState<string | null>(null)
   const [acceptTerms, setAcceptTerms] = useState(false)
   const [resetSuccess, setResetSuccess] = useState(false)
 
@@ -85,7 +91,7 @@ export default function LoginPage() {
     setEmail(demoEmail)
     setPassword(demoPassword)
     setAcceptTerms(true)
-    setDemoLoginRole(role)
+    setDemoLoginEmail(demoEmail)
 
     try {
       const response = await fetch("/api/demo-auth/login", {
@@ -103,7 +109,7 @@ export default function LoginPage() {
     } catch (loginError: unknown) {
       setError(loginError instanceof Error ? loginError.message : "Demo login failed")
     } finally {
-      setDemoLoginRole(null)
+      setDemoLoginEmail(null)
     }
   }
 
@@ -243,7 +249,7 @@ export default function LoginPage() {
                       <div className="td_form_card_bottom td_mb_25">
                         <button
                           type="submit"
-                          disabled={isLoading || !acceptTerms || !!demoLoginRole}
+                          disabled={isLoading || !acceptTerms || !!demoLoginEmail}
                           className="td_btn td_style_1 td_radius_10 td_medium"
                         >
                           <span className="td_btn_in td_white_color td_accent_bg">
@@ -254,7 +260,7 @@ export default function LoginPage() {
                         <button
                           type="button"
                           onClick={handleSsoLogin}
-                          disabled={isLoading || !!demoLoginRole}
+                          disabled={isLoading || !!demoLoginEmail}
                           className="td_btn td_style_1 td_radius_10 td_medium"
                         >
                           <span className="td_btn_in td_heading_color td_white_bg">
@@ -271,17 +277,17 @@ export default function LoginPage() {
                       <div className="d-flex flex-column gap-3">
                         {demoAccounts.map((account) => (
                           <button
-                            key={account.role}
+                            key={account.email}
                             type="button"
                             className="td_btn td_style_1 td_radius_10 td_medium"
-                            disabled={!!demoLoginRole || isLoading}
+                            disabled={!!demoLoginEmail || isLoading}
                             onClick={() => handleDemoLogin(account.role, account.email, account.password)}
                           >
                             <span className="td_btn_in td_heading_color td_white_bg">
                               <span>
-                                {demoLoginRole === account.role
-                                  ? `Logging in ${account.role}...`
-                                  : `${account.role} demo: ${account.email}`}
+                                {demoLoginEmail === account.email
+                                  ? `Logging in ${account.fullName}...`
+                                  : `${account.role} · ${account.fullName}`}
                               </span>
                             </span>
                           </button>

@@ -9,7 +9,7 @@ export default async function TeacherPortalDocumentsPage() {
   return (
     <KnowledgeConsole
       canUpload
-      courses={courses.map((course) => ({
+      courses={courses.map((course: { id: string; code: string; title: string }) => ({
         id: course.id,
         code: course.code,
         title: course.title,
