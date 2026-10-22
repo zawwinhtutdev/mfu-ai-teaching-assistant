@@ -131,6 +131,13 @@ async def ingest_pdf(
         raise
 
 
-async def find_by_hash(session: AsyncSession, digest: str) -> Document | None:
-    result = await session.execute(select(Document).where(Document.sha256 == digest))
+async def find_by_hash(
+    session: AsyncSession, digest: str, course_id: str | None
+) -> Document | None:
+    """A duplicate only exists within the same course."""
+    statement = select(Document).where(
+        Document.sha256 == digest,
+        Document.course_id.is_(None) if course_id is None else Document.course_id == course_id,
+    )
+    result = await session.execute(statement)
     return result.scalar_one_or_none()
