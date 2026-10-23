@@ -18,10 +18,10 @@ type DashboardStats = {
   roleCounts: { student: number; teacher: number; admin: number }
   totalCourses: number
   totalEnrollments: number
-  totalConversations: number
-  totalAuditLogs: number
-  notifications: { queued: number; processing: number; sent: number; failed: number; canceled: number }
-  consents: { total: number; granted: number; revoked: number }
+  totalDocuments: number
+  totalChunks: number
+  documentsReady: number
+  documentsFailed: number
 }
 
 function StatCard({
@@ -103,23 +103,35 @@ export default function OverviewPage() {
             />
             <StatCard icon={BookOpen} label="Courses" value={stats.totalCourses} color="bg-violet-600" />
             <StatCard icon={GraduationCap} label="Enrollments" value={stats.totalEnrollments} color="bg-emerald-600" />
-            <StatCard icon={MessageSquare} label="Conversations" value={stats.totalConversations} color="bg-amber-600" />
+            <StatCard
+              icon={MessageSquare}
+              label="Course documents"
+              value={stats.totalDocuments}
+              subtitle={`${stats.documentsReady} ready · ${stats.documentsFailed} failed`}
+              color="bg-amber-600"
+            />
           </div>
 
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard icon={FileText} label="Audit Logs" value={stats.totalAuditLogs} color="bg-slate-600" />
+            <StatCard
+              icon={FileText}
+              label="Indexed chunks"
+              value={stats.totalChunks}
+              subtitle="searchable passages"
+              color="bg-slate-600"
+            />
             <StatCard
               icon={Bell}
-              label="Notifications"
-              value={stats.notifications.sent + stats.notifications.queued + stats.notifications.failed}
-              subtitle={`${stats.notifications.sent} sent · ${stats.notifications.failed} failed · ${stats.notifications.queued} queued`}
+              label="Teachers"
+              value={stats.roleCounts.teacher}
+              subtitle="owning at least one course"
               color="bg-rose-600"
             />
             <StatCard
               icon={ShieldCheck}
-              label="Consent Records"
-              value={stats.consents.total}
-              subtitle={`${stats.consents.granted} granted · ${stats.consents.revoked} revoked`}
+              label="Students"
+              value={stats.roleCounts.student}
+              subtitle="enrolled in at least one course"
               color="bg-teal-600"
             />
             <StatCard icon={Activity} label="System Policies" value={3} subtitle="3 known flags" color="bg-indigo-600" />
