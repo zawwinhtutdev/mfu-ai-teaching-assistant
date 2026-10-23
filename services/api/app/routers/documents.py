@@ -68,7 +68,7 @@ async def upload_document(
         raise HTTPException(status_code=413, detail=f"File exceeds {MAX_PDF_BYTES} bytes")
 
     digest = content_hash(data)
-    existing = await find_by_hash(session, digest)
+    existing = await find_by_hash(session, digest, course_id)
     if existing is not None:
         # Uploading the same file into a course assigns it there, so a file
         # uploaded before course scoping can be filed correctly.
