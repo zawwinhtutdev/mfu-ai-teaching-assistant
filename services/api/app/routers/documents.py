@@ -18,6 +18,7 @@ from fastapi import (
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.academic import assert_course_access, course_ids_for, get_person
 from app.auth import CurrentPrincipal
 from app.config import Settings, get_settings
 from app.db import get_session, get_session_factory
@@ -110,9 +111,18 @@ async def list_documents(
     session: SessionDep,
     course_id: str | None = None,
 ) -> list[Document]:
+    person = await get_person(session, principal)
     statement = select(Document).order_by(Document.created_at.desc()).limit(100)
+
     if course_id is not None:
+        # A client-supplied course id is a request, not a permission.
+        await assert_course_access(session, person, course_id)
         statement = statement.where(Document.course_id == course_id)
+    else:
+        allowed = await course_ids_for(session, person)
+        if allowed is not None:
+            statement = statement.where(Document.course_id.in_(allowed))
+
     result = await session.execute(statement)
     return list(result.scalars().all())
 

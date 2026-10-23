@@ -1,3 +1,4 @@
+import { cookies } from "next/headers"
 import { createClient } from "@/lib/supabase/server"
 
 export const dynamic = "force-dynamic"
@@ -38,7 +39,10 @@ export async function POST(req: Request) {
     headers.Authorization = `Bearer ${session.access_token}`
   } else if (process.env.ALLOW_INSECURE_DEV_AUTH === "true") {
     const devPrincipal =
-      req.headers.get("x-dev-principal") ?? process.env.DEV_PRINCIPAL ?? "demo.student@mfu.ac.th"
+      req.headers.get("x-dev-principal") ??
+      (await cookies()).get("mfu_demo_email")?.value ??
+      process.env.DEV_PRINCIPAL ??
+      "demo.student@mfu.ac.th"
     headers["X-Dev-Principal"] = devPrincipal
   } else {
     return Response.json({ error: "Not authenticated" }, { status: 401 })
@@ -53,9 +57,10 @@ export async function POST(req: Request) {
 
   if (!upstream.ok || !upstream.body) {
     const detail = await upstream.text().catch(() => "")
+    // Forward the service's verdict (403 = not your course) instead of a 502.
     return Response.json(
-      { error: "Chat service failed", status: upstream.status, detail: detail.slice(0, 500) },
-      { status: 502 },
+      { error: "Chat service refused", status: upstream.status, detail: detail.slice(0, 500) },
+      { status: upstream.status },
     )
   }
 
