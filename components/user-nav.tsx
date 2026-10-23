@@ -27,14 +27,24 @@ export function UserNav({ profile: propProfile }: UserNavProps) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    // The portal already resolved this user server-side (Supabase session or
+    // demo account); calling Supabase again would fail for demo users.
+    if (propProfile) {
+      setProfile(propProfile)
+      setIsLoading(false)
+      return
+    }
+
     const fetchUserProfile = async () => {
       try {
         const supabase = createClient()
         const { data: { user }, error: userError } = await supabase.auth.getUser()
-        
-        if (userError) {
-          console.error("Error getting user:", userError)
-          throw userError
+
+        if (userError || !user) {
+          // No session is a normal state here, not an error to surface.
+          setProfile(null)
+          setIsLoading(false)
+          return
         }
         
         if (user) {
