@@ -1,6 +1,6 @@
 ---
 title: Model and system prompt
-description: Select the course, choose an enabled Gemini model, and write the main instruction for the course assistant.
+description: Select the course, confirm which model answers, and write the main instruction for the course assistant.
 ---
 
 Open [Agent Builder](/teacherportal/agentbuilder). Settings are stored per course, so begin by choosing the course you intend to configure.
@@ -19,10 +19,11 @@ The current interface offers:
 
 | Model | Intended use |
 | --- | --- |
-| Gemini 3 Flash | Fast, efficient support for most routine course questions. |
-| Gemini 3 Pro | More advanced tasks when additional reasoning quality is worth the extra latency or cost. |
+| `qwen2.5:7b` (local, default) | Fast and private; handles most routine course questions. |
+| Larger local model | Better phrasing when latency matters less than quality. |
+| Cloud model (if configured) | Useful when the deployment has an API key and privacy rules allow it. |
 
-Availability is controlled by the platform. Re-test important workflows after changing the model because output style and detail can differ.
+Availability is controlled by the deployment. Re-test important workflows after changing the model, because output style and detail can differ. See [Local AI models](/docs/core/local-ai-models).
 
 ## Write the system prompt
 

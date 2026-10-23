@@ -1,31 +1,68 @@
 ---
 title: Manage course materials
-description: Prepare, upload, organize, and maintain documents used for course-grounded AI responses.
+description: Upload PDFs into the right course, follow processing, and keep the material students are answered from up to date.
 ---
 
-Open [Documents RAG](/teacherportal/documents) to manage course materials. Uploaded content may be processed so the assistant can retrieve relevant passages during a conversation.
+Course materials are the source of truth for course-grounded answers. A student asking a question in CSB321 is answered from CSB321's documents only.
 
-## Prepare files before upload
+## Where to upload
 
-- Use clear, descriptive filenames.
-- Confirm the document belongs to the intended course.
-- Remove duplicate or outdated versions.
-- Check that scanned documents contain readable text.
-- Remove confidential information that students should not access.
+Open **Teacher Portal → Documents RAG**. Upload controls appear only for teachers, and only for courses you teach.
 
-## Upload and verify
+| You see | Because |
+| --- | --- |
+| Only your courses in the selector | The course list comes from the database, filtered by ownership |
+| An upload control | Your account role is `teacher` |
+| An empty list for a new course | No material has been filed there yet |
 
-1. Select the intended course or collection.
-2. Choose the supported file.
-3. Wait for the upload and processing status to complete.
-4. Ask several questions whose answers appear in different parts of the file.
-5. Compare the generated answers with the original source.
+## Upload a PDF
 
-## Keep materials current
+1. Select the course.
+2. Choose **Choose a PDF**.
+3. Select a PDF up to **25 MB**.
+4. Wait for the status to reach **ready**.
 
-Review the document list when course content changes. Outdated material can cause conflicting answers, especially when multiple versions describe different rules or dates.
+Requirements for a good upload:
 
-## Respect permissions
+- The PDF has a real text layer (not a scan or photo).
+- The file is not password protected.
+- The filename describes the content, for example `CSB321-week-04-pricing.pdf`.
 
-Upload only material you are authorized to use. Avoid answer keys, private student information, licensed material without suitable permission, and internal documents that should not be visible to the course audience.
+## What the platform does with the file
 
+1. Stores the file and records its SHA-256 hash.
+2. Extracts text page by page.
+3. Splits text into overlapping chunks (about 1,200 characters with 200 characters of overlap).
+4. Creates an embedding per chunk and a keyword index of the same text.
+5. Marks the document **ready** when every chunk is stored.
+
+Because retrieval uses both embeddings and keywords, exact terms such as course codes, error numbers, or Thai names are still found reliably.
+
+## Status meaning
+
+| Status | What it means | Action |
+| --- | --- | --- |
+| queued | Accepted, not started | Wait |
+| processing | Extracting and indexing | Wait; do not re-upload |
+| ready | Usable in chat | Ask questions |
+| failed | Processing stopped | Read the message and upload a clean copy |
+
+Re-uploading the identical file to the same course retries a failed document rather than duplicating it. The same file in another course is stored separately, so each course owns its copy.
+
+## Keep material current
+
+- Replace last semester's file instead of adding a second edition.
+- Check the page count and chunk count after processing; a suspiciously low count usually means a scanned PDF.
+- Remove a document once the course no longer uses it, so students are not answered from it.
+
+## Test before students do
+
+Ask the assistant three questions after uploading:
+
+1. One factual question whose answer you know.
+2. One question about a specific section or table.
+3. One question the document does **not** answer.
+
+The first two should answer with citations. The third should refuse with "The course materials do not cover this." If it invents an answer, the material is probably ambiguous or too broad.
+
+> Uploading is a teacher action. Students can read and ask, but cannot add or remove material.
