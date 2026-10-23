@@ -43,3 +43,6 @@ services/api/.venv
 .mypy_cache
 .ruff_cache
 *.pyc
+.local-run/
+.local-demo/
+*.pid

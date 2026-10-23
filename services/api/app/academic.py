@@ -159,6 +159,21 @@ async def platform_stats(
     courses = (await session.execute(select(func.count()).select_from(Course))).scalar_one()
     enrollments = (await session.execute(select(func.count()).select_from(Enrollment))).scalar_one()
 
+    from app.models import Document, DocumentChunk
+
+    documents = (await session.execute(select(func.count()).select_from(Document))).scalar_one()
+    chunks = (await session.execute(select(func.count()).select_from(DocumentChunk))).scalar_one()
+    ready = (
+        await session.execute(
+            select(func.count()).select_from(Document).where(Document.status == "ready")
+        )
+    ).scalar_one()
+    failed = (
+        await session.execute(
+            select(func.count()).select_from(Document).where(Document.status == "failed")
+        )
+    ).scalar_one()
+
     return {
         "totalUsers": sum(by_role.values()),
         "roleCounts": {
@@ -168,6 +183,10 @@ async def platform_stats(
         },
         "totalCourses": courses,
         "totalEnrollments": enrollments,
+        "totalDocuments": documents,
+        "totalChunks": chunks,
+        "documentsReady": ready,
+        "documentsFailed": failed,
         # Not modelled yet: report zero rather than inventing numbers.
         "totalConversations": 0,
         "totalAuditLogs": 0,

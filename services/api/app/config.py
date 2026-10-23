@@ -98,7 +98,7 @@ class Settings(BaseSettings):
 
     # ---- Retrieval / grounding ----
     top_k: int = 5
-    context_chars: int = 2400
+    context_chars: int = 6000
     # Cosine similarity below which we refuse instead of calling the model.
     refusal_threshold: float = Field(
         default=0.55,
