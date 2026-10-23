@@ -56,102 +56,10 @@ export const DEMO_STUDENTS: SeedStudent[] = [
   { id: "student-6", fullName: "Krit Phan", email: "krit.phan@mfu.ac.th", year: 4 },
 ]
 
-/** Who teaches which course. */
-export const COURSE_OWNER: Record<string, string> = {
-  "course-csb321": "teacher-1",
-  "course-csd323": "teacher-1",
-  "course-csd322": "teacher-2",
-  "course-csa411": "teacher-2",
-  "course-csm324": "teacher-3",
-  "course-gen311": "teacher-3",
-  "course-ai-edu": "teacher-3",
-}
-
-/** Which courses each student is enrolled in. */
-export const ENROLLMENTS: Record<string, string[]> = {
-  "student-1": ["course-csb321", "course-csd322", "course-csm324"],
-  "student-2": ["course-csb321", "course-csd322"],
-  "student-3": ["course-csd323", "course-gen311"],
-  "student-4": ["course-csd323", "course-csm324", "course-ai-edu"],
-  "student-5": ["course-csd322", "course-csm324"],
-  "student-6": ["course-csb321", "course-gen311"],
-}
-
 export function teacherById(id: string): SeedTeacher | undefined {
   return DEMO_TEACHERS.find((teacher) => teacher.id === id)
 }
 
 export function studentById(id: string): SeedStudent | undefined {
   return DEMO_STUDENTS.find((student) => student.id === id)
-}
-
-export function ownerOfCourse(courseId: string): string | undefined {
-  return COURSE_OWNER[courseId]
-}
-
-export function courseIdsForTeacher(teacherId: string): string[] {
-  return Object.entries(COURSE_OWNER)
-    .filter(([, owner]) => owner === teacherId)
-    .map(([courseId]) => courseId)
-}
-
-export function courseIdsForStudent(studentId: string): string[] {
-  return ENROLLMENTS[studentId] ?? []
-}
-
-export function studentIdsForCourse(courseId: string): string[] {
-  return Object.entries(ENROLLMENTS)
-    .filter(([, courses]) => courses.includes(courseId))
-    .map(([studentId]) => studentId)
-}
-
-/** Enrich a student-facing course with the fields the teacher views expect. */
-function asTeacherCourse(course: (typeof mockCourses)[number]) {
-  return {
-    ...course,
-    name: course.title,
-    department: "School of Information Technology",
-    semester: "fall-2025",
-    chatbot_tone: "friendly",
-    ai_model: "qwen2.5:7b",
-    rating: 4.5,
-    teacher_id: ownerOfCourse(course.id) ?? "teacher-1",
-  }
-}
-
-/** Courses for a teacher, in a teacher-portal shape. */
-export function coursesForTeacher(teacherId: string) {
-  const owned = new Set(courseIdsForTeacher(teacherId))
-  const fromTeacherData = mockTeacherCourses.filter((course) => owned.has(course.id))
-  const teacherIds = new Set(fromTeacherData.map((course) => course.id))
-  const synthesized = mockCourses
-    .filter((course) => owned.has(course.id) && !teacherIds.has(course.id))
-    .map(asTeacherCourse)
-  return [...fromTeacherData, ...synthesized]
-}
-
-/** Courses a student is enrolled in. */
-export function coursesForStudent(studentId: string) {
-  const enrolled = new Set(courseIdsForStudent(studentId))
-  return mockCourses.filter((course) => enrolled.has(course.id))
-}
-
-export function seedStats() {
-  const enrollments = Object.values(ENROLLMENTS).reduce((total, list) => total + list.length, 0)
-  const courses = new Set([...mockCourses.map((c) => c.id), ...mockTeacherCourses.map((c) => c.id)])
-
-  return {
-    totalUsers: DEMO_TEACHERS.length + DEMO_STUDENTS.length + 1,
-    roleCounts: {
-      student: DEMO_STUDENTS.length,
-      teacher: DEMO_TEACHERS.length,
-      admin: 1,
-    },
-    totalCourses: courses.size,
-    totalEnrollments: enrollments,
-    totalConversations: 148,
-    totalAuditLogs: 326,
-    notifications: { queued: 2, processing: 0, sent: 311, failed: 3, canceled: 1 },
-    consents: { total: DEMO_STUDENTS.length + DEMO_TEACHERS.length, granted: 7, revoked: 2 },
-  }
 }

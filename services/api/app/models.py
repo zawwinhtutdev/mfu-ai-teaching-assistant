@@ -100,3 +100,47 @@ class DocumentChunk(Base):
     )
 
     document: Mapped[Document] = relationship(back_populates="chunks")
+
+
+class Person(Base):
+    """A teacher, student or administrator."""
+
+    __tablename__ = "people"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), nullable=False, unique=True)
+    full_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    department: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class Course(Base):
+    """A course owned by one teacher."""
+
+    __tablename__ = "courses"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    code: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    semester: Mapped[str] = mapped_column(String(32), nullable=False, default="fall-2025")
+    teacher_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("people.id", ondelete="RESTRICT"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class Enrollment(Base):
+    """Which student is enrolled in which course."""
+
+    __tablename__ = "enrollments"
+
+    student_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("people.id", ondelete="CASCADE"), primary_key=True
+    )
+    course_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("courses.id", ondelete="CASCADE"), primary_key=True
+    )

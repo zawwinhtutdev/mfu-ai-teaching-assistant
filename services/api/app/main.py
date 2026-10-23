@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app import academic
 from app.config import get_settings
 from app.routers import chat, documents, health, me, search
 
@@ -42,6 +43,7 @@ app.include_router(me.router, prefix="/v1")
 app.include_router(chat.router, prefix="/v1")
 app.include_router(documents.router)
 app.include_router(search.router)
+app.include_router(academic.router, prefix="/v1")
 
 
 @app.get("/", include_in_schema=False)

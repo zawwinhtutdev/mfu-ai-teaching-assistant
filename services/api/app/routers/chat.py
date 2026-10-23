@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.academic import assert_course_access, get_person
 from app.auth import CurrentPrincipal
 from app.config import Settings, get_settings
 from app.db import get_session
@@ -53,6 +54,11 @@ async def chat(
     settings: SettingsDep,
     session: SessionDep,
 ) -> StreamingResponse:
+    # A course id in the request is a request, not a permission.
+    if request.course_id is not None:
+        person = await get_person(session, principal)
+        await assert_course_access(session, person, request.course_id)
+
     provider = get_provider(settings, request.model)
 
     async def event_stream() -> AsyncIterator[str]:
