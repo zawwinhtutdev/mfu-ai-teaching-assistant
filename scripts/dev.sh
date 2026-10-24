@@ -35,7 +35,12 @@ start_api() {
 }
 
 start_web() {
-  nohup bash -c "$(declare -f detach); detach $(command -v npm) run dev" >"$WEB_LOG" 2>&1 &
+  if [ -d .next ]; then
+    WEB_CMD="run start"; echo "web  using the production build (.next present)"
+  else
+    WEB_CMD="run dev"
+  fi
+  nohup bash -c "$(declare -f detach); detach $(command -v npm) $WEB_CMD" >"$WEB_LOG" 2>&1 &
   echo $! > "$WEB_PID"
   echo "web  started (log: $WEB_LOG)"
 }
@@ -59,3 +64,18 @@ esac
 
 printf '  api   : '; curl -s -o /dev/null -w "%{http_code}\n" --max-time 10 http://127.0.0.1:8000/health || echo down
 printf '  web   : '; curl -s -o /dev/null -w "%{http_code}\n" --max-time 45 http://localhost:3000/login || echo down
+
+if [ "${1:-status}" = "start" ] || [ "${1:-status}" = "restart" ]; then
+  cat <<'LINKS'
+
+  Web app        http://localhost:3000/login
+  Teacher docs   http://localhost:3000/teacherportal/documents
+  Student docs   http://localhost:3000/studentportal/documents
+  Documentation  http://localhost:3000/docs
+  API reference  http://127.0.0.1:8000/docs
+
+  anan.suwan@mfu.ac.th / teacher1234
+  kanya.wong@mfu.ac.th / student1234
+  admin@mfu.ac.th      / admin1234
+LINKS
+fi
