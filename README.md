@@ -1,587 +1,306 @@
-# 🎓 AI Teaching Assistant
+# MFU AI Teaching Assistant
 
-An intelligent teaching assistant platform built with Next.js, Supabase, and Gemini, designed to enhance learning experiences for students and streamline course management for teachers.
+A course-scoped RAG assistant for university teaching: teachers upload PDFs into
+the courses they own, students ask questions about the courses they are enrolled
+in, and every answer is cited or refused.
 
-![Next.js](https://img.shields.io/badge/Next.js-15.5.6-black)
-![React](https://img.shields.io/badge/React-19.2.0-blue)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
-![Supabase](https://img.shields.io/badge/Supabase-Latest-green)
-![Gemini](https://img.shields.io/badge/Gemini-2.5--flash-orange)
+![Teacher portal — course-scoped document RAG](docs/assets/teacher-documents-rag.png)
 
----
-
-## ✨ Features
-
-### 👨‍🎓 For Students
-- 🤖 **AI-Powered Chat Assistant** - Get instant answers to your questions
-- 📚 **Course Materials** - Access study materials and resources
-- 📝 **Interactive Quizzes** - Test your knowledge
-- 🎴 **Flashcards** - AI-generated flashcards for better retention
-- ⏰ **Study Reminders** - Never miss important deadlines
-- 🌓 **Dark Mode** - Comfortable studying day or night
-
-### 👨‍🏫 For Teachers
-- 📊 **Course Management** - Create and manage courses easily
-- 📤 **Material Upload** - Share resources with students
-- 📈 **Analytics Dashboard** - Track student engagement
-- ⚙️ **AI Configuration** - Customize chatbot behavior
-- 👥 **Student Insights** - Monitor learning progress
+Built as a full-stack replacement for a TypeScript/Supabase prototype: the web
+app stays Next.js, and retrieval, documents, and access control now live in a
+Python service backed by PostgreSQL + pgvector and local models via Ollama.
 
 ---
 
-## 🚀 Quick Start
+## Why
 
-### Prerequisites
-- **Node.js 18+**
-- **npm** or **pnpm**
-- **Supabase Account** ([Sign up free](https://supabase.com))
-- **Gemini API Key** ([Get one here](https://aistudio.google.com/app/apikey))
+Most "chat with your PDF" demos answer from any file in one big pile. That does
+not survive contact with a university:
 
-### Installation
+- A student in CSD322 must not read CSB321's exam memo.
+- An answer about a deadline must point at the page it came from.
+- A model that has not read the material should say so instead of inventing it.
 
-1. **Clone the repository**
-   ```bash
-   git clone <your-repo-url>
-   cd ai-teaching-assistant
-   ```
+This project makes those three properties structural rather than hopeful: access
+is enforced in the service, retrieval is scoped to one course, and answers carry
+citations that are verified after generation.
 
-2. **Install dependencies**
-   ```bash
-   npm install --legacy-peer-deps
-   ```
+## What it does
 
-3. **Set up environment variables**
-   
-   Create a `.env.local` file in the root directory:
-   ```env
-   # Supabase Configuration
-   NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+| Role | Can do |
+| --- | --- |
+| **Teacher** | See only their courses, upload PDFs into them, ask questions grounded in their material, manage course assistant settings |
+| **Student** | See only enrolled courses, read uploaded material, ask grounded questions with citations |
+| **Admin** | Platform overview: people, courses, enrollments, documents, indexed chunks |
 
-   # Gemini Configuration
-   GOOGLE_GENERATIVE_AI_API_KEY=your_gemini_api_key
+Behaviour worth highlighting:
 
-   # DigitalOcean Spaces (Documents feature)
-   DO_SPACES_REGION=your_spaces_region
-   DO_SPACES_BUCKET=your_documents_bucket_name
-   DO_SPACES_KEY=your_spaces_access_key
-   DO_SPACES_SECRET=your_spaces_secret_key
-   DO_SPACES_PUBLIC=false
-   # Optional CDN base URL (without trailing slash)
-   # DO_SPACES_CDN_URL=https://your-cdn-domain
-   ```
+- **Course selector drives everything.** The document list, the chat, and the
+  citations all follow the selected course; switching clears the conversation.
+- **Enrollment is a database row, not a UI filter.** Requesting another course's
+  documents or chat returns `403` even if the URL is edited by hand.
+- **Refusal over guessing.** If retrieval finds nothing relevant, the assistant
+  replies *"The course materials do not cover this."*
+- **Citations are repaired.** When a small local model attaches a claim to the
+  wrong source number, the marker is rewritten to the passage that actually
+  supports it, and the change is reported.
+- **Per-course dedupe.** The same PDF in two courses is two documents, so each
+  course owns its copy.
 
-4. **Set up Supabase Database**
+## Architecture
 
-   Preferred (migration-first):
-   ```bash
-   npm run db:bootstrap
-   ```
+```mermaid
+flowchart LR
+    subgraph Browser
+      UI[Next.js App Router<br/>teacher / student / admin]
+    end
 
-   Use linked cloud project instead of local:
-   ```bash
-   npm run db:bootstrap -- linked
-   ```
+    subgraph Web["Next.js server"]
+      R[Route handlers<br/>/api/chat/stream<br/>/api/rag/documents]
+    end
 
-   Legacy/manual SQL setup (only if you are not using Supabase CLI):
+    subgraph API["FastAPI service :8000"]
+      A[Auth + access checks]
+      P[RAG pipeline<br/>chunk → embed → retrieve → fuse → generate → repair]
+      D[Documents + ingestion]
+    end
 
-   Go to your Supabase project → SQL Editor, and run these scripts in order:
+    subgraph Data
+      PG[(PostgreSQL 16<br/>+ pgvector<br/>people · courses · enrollments<br/>documents · chunks)]
+      O[Ollama<br/>qwen2.5:7b<br/>nomic-embed-text]
+    end
 
-   **a) Create profiles table:**
-   ```sql
-   CREATE TABLE IF NOT EXISTS profiles (
-     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-     email TEXT UNIQUE NOT NULL,
-     full_name TEXT,
-     role TEXT NOT NULL CHECK (role IN ('student', 'teacher')) DEFAULT 'student',
-     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-   );
+    UI -->|fetch / SSE| R
+    R -->|identity header| A
+    A --> P
+    A --> D
+    P --> PG
+    D --> PG
+    P --> O
+```
 
-   ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+The browser never talks to the database and never decides what it may read.
 
-   CREATE POLICY "Users can view their own profile" ON profiles FOR SELECT USING (auth.uid() = id);
-   CREATE POLICY "Users can update their own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
-   CREATE POLICY "Users can insert their own profile" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
-   ```
+## Tech stack
 
-   **b) Create auto-profile trigger:**
-   ```sql
-   CREATE OR REPLACE FUNCTION public.handle_new_user()
-   RETURNS TRIGGER AS $$
-   BEGIN
-     INSERT INTO public.profiles (id, email, full_name, role)
-     VALUES (
-       NEW.id,
-       NEW.email,
-       COALESCE(NEW.raw_user_meta_data->>'full_name', ''),
-       COALESCE(NEW.raw_user_meta_data->>'role', 'student')
-     );
-     RETURN NEW;
-   END;
-   $$ LANGUAGE plpgsql SECURITY DEFINER;
+| Layer | Choice |
+| --- | --- |
+| Web | Next.js 16 (App Router, Turbopack), React 19, TypeScript, Tailwind CSS 4, shadcn/Radix |
+| API | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2 (async), asyncpg, Alembic |
+| Data | PostgreSQL 16 + pgvector (HNSW + GIN on a generated `tsv`) |
+| Models | Ollama: `qwen2.5:7b` (chat) and `nomic-embed-text` (768-dim embeddings); Gemini optional |
+| Streaming | Server-sent events: `sources → start → delta → done → [DONE]` |
+| Packaging | Docker Compose (web, api, db, redis) or local processes |
 
-   DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-   CREATE TRIGGER on_auth_user_created
-     AFTER INSERT ON auth.users
-     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-   ```
+## How an answer is produced
 
-   **c) Create conversations and messages tables:**
-   ```sql
-   CREATE TABLE IF NOT EXISTS conversations (
-     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-     user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-     title TEXT NOT NULL,
-     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-   );
+1. **Extract** — PDF text page by page; control characters are stripped so the
+   text can be stored safely (`0x00` in a pypdf dump is a real failure mode).
+2. **Chunk** — ~1,200 characters with 200 overlap, keeping page numbers and the
+   nearest section heading.
+3. **Embed** — one 768-dim vector per chunk.
+4. **Index** — the same chunk is also indexed for keyword search.
+5. **Retrieve** — cosine similarity and lexical match, scoped to one course.
+6. **Fuse** — reciprocal rank fusion (k=60) so exact terms and paraphrases both
+   survive.
+7. **Generate** — top passages go into the prompt with a strict grounding rule
+   and a fixed refusal sentence.
+8. **Check** — every cited sentence is compared against the supplied passages;
+   a better-matching source replaces a wrong marker.
 
-   CREATE TABLE IF NOT EXISTS messages (
-     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-     conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-     role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
-     content TEXT NOT NULL,
-     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-   );
+The context budget is 6,000 characters. It was 2,400 until an evaluation run
+showed ordinary questions refusing because only two chunks ever reached the
+model — the single highest-impact fix in the project.
 
-   CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id);
-   CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON conversations(updated_at DESC);
-   CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
-   CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
+## Quickstart
 
-   ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
-   ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
-
-   CREATE POLICY "Users can view their own conversations"
-     ON conversations FOR SELECT USING (auth.uid() = user_id);
-   CREATE POLICY "Users can create their own conversations"
-     ON conversations FOR INSERT WITH CHECK (auth.uid() = user_id);
-   CREATE POLICY "Users can update their own conversations"
-     ON conversations FOR UPDATE USING (auth.uid() = user_id);
-   CREATE POLICY "Users can delete their own conversations"
-     ON conversations FOR DELETE USING (auth.uid() = user_id);
-
-   CREATE POLICY "Users can view messages in their conversations"
-     ON messages FOR SELECT
-     USING (EXISTS (SELECT 1 FROM conversations WHERE conversations.id = messages.conversation_id AND conversations.user_id = auth.uid()));
-   CREATE POLICY "Users can create messages in their conversations"
-     ON messages FOR INSERT
-     WITH CHECK (EXISTS (SELECT 1 FROM conversations WHERE conversations.id = messages.conversation_id AND conversations.user_id = auth.uid()));
-   ```
-
-   **d) Create user documents metadata table (for DigitalOcean Spaces):**
-   ```sql
-   -- Run scripts/005_create_user_documents.sql
-   ```
-
-5. **Run the development server**
-   ```bash
-   npm run dev
-   ```
-
-6. **Open your browser**
-   
-   Navigate to [http://localhost:3000](http://localhost:3000) (or the port shown in terminal)
-
----
-
-## 🛠️ Development
-
-### Available Scripts
+### Docker
 
 ```bash
-# Start development server
+cp .env.example .env.local     # fill in what you have; demo auth needs very little
+docker compose up --build
+```
+
+Web on <http://localhost:3000>, API on <http://localhost:8000/docs>.
+
+### Local processes
+
+```bash
+# database (the db service is behind the "platform" profile)
+docker compose --profile platform up -d db
+
+# api
+cd services/api
+python3 -m venv .venv
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/alembic upgrade head
+PYTHONPATH=. .venv/bin/python scripts/seed_academic.py
+ALLOW_INSECURE_DEV_AUTH=true ENVIRONMENT=local \
+  DATABASE_URL="postgresql+asyncpg://ata:ata-local-dev@127.0.0.1:5432/ata" \
+  AI_PROVIDER=ollama OLLAMA_MODEL=qwen2.5:7b \
+  .venv/bin/python -m uvicorn app.main:app --port 8000
+
+# web
+npm install
 npm run dev
-
-# Build for production
-npm run build
-
-# Start production server
-npm start
-
-# Run linter
-npm run lint
 ```
 
-### Project Structure
-
-```
-ai-teaching-assistant/
-├── app/                    # Next.js App Router
-│   ├── api/               # API routes (chat, quiz, etc.)
-│   ├── auth/              # Authentication pages
-│   ├── chat/              # Chat interface
-│   └── dashboard/         # Student/Teacher dashboards
-├── components/            # React components
-│   ├── chat/             # Chat UI components
-│   ├── student/          # Student features
-│   ├── teacher/          # Teacher features
-│   └── ui/               # Reusable UI components
-├── lib/                  # Utilities & configurations
-│   ├── supabase/         # Supabase client setup
-│   └── types.ts          # TypeScript types
-├── scripts/              # Database migration scripts
-└── public/               # Static assets
-```
-
----
-
-## 🔐 Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase project URL | ✅ Yes |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key | ✅ Yes |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | Gemini API key for AI features | ✅ Yes |
-| `DO_SPACES_REGION` | DigitalOcean Spaces region (e.g. `sgp1`) | ✅ Yes (Documents) |
-| `DO_SPACES_BUCKET` | Spaces bucket name for user documents | ✅ Yes (Documents) |
-| `DO_SPACES_KEY` | Spaces access key | ✅ Yes (Documents) |
-| `DO_SPACES_SECRET` | Spaces secret key | ✅ Yes (Documents) |
-| `DO_SPACES_PUBLIC` | `true` for public bucket, `false` for signed URLs | ✅ Yes (Documents) |
-| `DO_SPACES_CDN_URL` | Optional CDN base URL for public links | ❌ Optional |
-
----
-
-## 📚 Tech Stack
-
-- **Framework:** Next.js 15.5.6 with App Router
-- **Frontend:** React 19.2.0, TypeScript
-- **Styling:** Tailwind CSS 4.1.9, Radix UI
-- **Backend:** Supabase (PostgreSQL + Auth)
-- **AI:** Vercel AI SDK + Gemini 2.5 Flash
-- **State Management:** React Hook Form + Zod
-- **UI Components:** Shadcn/ui
-
-For detailed tech stack information, see [TECH_STACK.md](./TECH_STACK.md)
-
----
-
-## 🚢 Deployment
-
-Self-hosted: the app ships as a container image. No Vercel dependency.
-
-### Docker (recommended)
+Or the shortcut that starts both and prints the links:
 
 ```bash
-# build + run (pass --env-file so NEXT_PUBLIC_* are baked in correctly)
-docker compose --env-file .env.local up --build
-
-# or build the image directly
-docker build -t ai-teaching-assistant .
-docker run -p 3000:3000 --env-file .env.local ai-teaching-assistant
+./scripts/dev.sh start     # start | stop | restart | status
 ```
 
-The image uses Next.js `output: "standalone"`, runs as a non-root user, and
-includes a container `HEALTHCHECK` against `/`.
-
-To bring up the future data layer (Postgres + pgvector, Redis):
+### Local models
 
 ```bash
-docker compose --env-file .env.local --profile platform up --build
+ollama pull qwen2.5:7b
+ollama pull nomic-embed-text
 ```
 
-### Any container host
+With `AI_PROVIDER=ollama` nothing leaves the machine. Set
+`AI_PROVIDER=gemini` plus `GOOGLE_GENERATIVE_AI_API_KEY` to use a cloud model
+instead; `AI_PROVIDER=stub` gives deterministic fakes for tests.
 
-Build once, run anywhere: Fly.io, Railway, a Hetzner VPS with Coolify, or
-Kubernetes. The only requirement is a host that can run a container and reach
-your Supabase project (auth) and AI provider.
+## Demo accounts
 
-### Environment Variables in Production
+Demo auth is cookie-based (`mfu_demo_role`, `mfu_demo_email`) and only active
+when `ALLOW_INSECURE_DEV_AUTH=true`.
 
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY` — server-only
-- `GOOGLE_GENERATIVE_AI_API_KEY`
-- `CRON_SECRET` — bearer token for the scheduled jobs (see below)
+| Email | Password | Role | Courses |
+| --- | --- | --- | --- |
+| `anan.suwan@mfu.ac.th` | `teacher1234` | Teacher | CSB321, CSD323 |
+| `malee.chaiyaporn@mfu.ac.th` | `teacher1234` | Teacher | CSD322, CSA411 |
+| `somchai.prasert@mfu.ac.th` | `teacher1234` | Teacher | CSM324, GEN311, AI-EDU |
+| `kanya.wong@mfu.ac.th` | `student1234` | Student | CSB321, CSD322, CSM324 |
+| `pim.srisuk@mfu.ac.th` | `student1234` | Student | CSD323, GEN311 |
+| `admin@mfu.ac.th` | `admin1234` | Admin | all |
 
-**Never** commit these. In containers pass them with `--env-file` or your
-host's secret store.
+Sign in from the login page with the demo buttons.
 
-### Scheduled jobs
+## Configuration
 
-The two former Vercel crons now run from GitHub Actions
-(`.github/workflows/scheduled-jobs.yml`). Add two repository secrets:
+Set in `.env.local` (web) or the environment (api). The API reads these through
+`pydantic-settings`:
 
-| Secret | Value |
-|---|---|
-| `APP_BASE_URL` | public URL of the deployed app, no trailing slash |
-| `CRON_SECRET` | must equal the app's `CRON_SECRET` |
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AI_PROVIDER` | `auto` | `ollama`, `gemini`, `stub`, or `auto` (Gemini when a key exists) |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama endpoint |
+| `OLLAMA_MODEL` | `qwen2.5:7b` | Chat model |
+| `OLLAMA_EMBEDDING_MODEL` | `nomic-embed-text` | Embedding model (must stay 768-dim for the schema) |
+| `DATABASE_URL` | — | `postgresql+asyncpg://…` |
+| `ALLOW_INSECURE_DEV_AUTH` | `false` | Enables the demo cookie/header principal |
+| `CHUNK_CHARS` / `CHUNK_OVERLAP` | `1200` / `200` | Chunking |
+| `TOP_K` | `5` | Passages per answer |
+| `CONTEXT_CHARS` | `6000` | Character budget sent to the model |
+| `REFUSAL_THRESHOLD` | `0.55` | Minimum relevance before answering |
+| `GEMINI_API_KEY` | — | Only for `AI_PROVIDER=gemini` |
+| `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_JWT_SECRET` | — | Optional hosted auth |
 
-The workflow calls `POST /api/notifications/process` daily and
-`GET /api/keep-alive` weekly, both authenticated with `Authorization: Bearer`.
+## Project layout
 
-### CI
+```
+app/                     Next.js routes (portals, chat, docs, API handlers)
+components/              UI: knowledge console, portals, chat, docs shell
+content/docs/            Documentation pages (Markdown)
+lib/                     Session, academic helpers, demo auth, docs config
+services/api/            FastAPI service
+  app/routers/           chat, documents, search, health
+  app/rag/               ingest, chunking, retrieval, fusion, citations, pipeline
+  app/academic.py        people / courses / enrollments + access checks
+  migrations/            Alembic
+  scripts/               seed_academic.py
+  tests/                 78 tests
+scripts/                 dev.sh, smoke checks, latency baseline
+docs/                    assets, archive
+```
 
-`.github/workflows/ci.yml` runs three jobs:
+## API
 
-| Job | Checks |
-|---|---|
-| `checks` | `tsc --noEmit`, `eslint`, `next build` |
-| `api` | `ruff`, `mypy`, `pytest` for the FastAPI service |
-| `docker` | builds the image and smoke-tests the container against `/` |
+| Method | Path | Notes |
+| --- | --- | --- |
+| `POST` | `/v1/chat` | SSE answer (`sources → start → delta → done`); requires course access |
+| `GET` | `/v1/me` , `/v1/me/courses` | Caller identity and visible courses |
+| `GET` | `/v1/courses/{id}` | Course detail, access checked |
+| `GET` | `/v1/documents?course_id=` | Course documents |
+| `POST` | `/v1/documents` | Teacher-only upload, 25 MB PDF |
+| `DELETE` | `/v1/documents/{id}` | Remove a document and its chunks |
+| `POST` | `/v1/search` | Hybrid search over one course |
+| `GET` | `/v1/stats` | Platform counters |
+| `GET` | `/health`, `/ready` | Liveness, readiness |
 
----
+## Evaluation
 
-## ⚙️ Services
+A 25-question set (answerable, borderline, unanswerable) runs against three
+retrieval settings and reports recall, refusal accuracy, citation validity,
+citation support, and latency.
 
-The platform is split into two deployable services.
+Latest run on a laptop with `qwen2.5:7b`:
 
-### `web` — Next.js 16
+| Metric | Result |
+| --- | --- |
+| Recall@5 | 100% |
+| Refusal accuracy | 96–100% |
+| Citation validity | 100% |
+| Citation support | 81% after repair (76% raw) |
+| Latency | p50 ≈ 2.4 s, p95 ≈ 6.2 s |
 
-UI, session handling, and the existing route handlers. Runs on port `3000`.
+Citation support is not 100% and is not reported as such: the remaining cases are
+claims spread across two passages that one citation cannot represent. Prompt
+variants (quote-first, two-step) were tried and did **not** beat the baseline,
+so the default stays `top_k=5` + citation repair.
 
-### `api` — FastAPI (Python 3.12)
-
-Owns AI orchestration and (from phase 3) the database. Runs on port `8000`.
+## Testing
 
 ```bash
-cd services/api
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements-dev.txt
-uvicorn app.main:app --reload      # http://localhost:8000/docs
+cd services/api && .venv/bin/python -m pytest -q     # 78 tests
+cd services/api && .venv/bin/ruff check . && .venv/bin/mypy app
+npm run type-check && npm run lint
 ```
 
-| Endpoint | Purpose |
-|---|---|
-| `GET /health` | liveness |
-| `GET /ready` | readiness + config checks |
-| `GET /v1/me` | verified caller (requires a Supabase access token) |
-| `POST /v1/chat` | streaming chat over SSE |
-| `POST /v1/documents` | upload a PDF (async ingestion) |
-| `GET /v1/documents` | list documents + ingestion status |
-| `POST /v1/search` | hybrid retrieval with citations |
-| `GET /docs` | OpenAPI UI |
+The access-control tests are the important ones: they assert that a student not
+enrolled in a course gets `403` for both documents and chat.
 
-**Authentication.** The web app keeps Supabase Auth; this service never issues
-tokens. It verifies the same access token:
+## Documentation
 
-- `SUPABASE_JWT_SECRET` set → legacy HS256 shared secret
-- otherwise → asymmetric keys from `<SUPABASE_URL>/auth/v1/.well-known/jwks.json`
+The app ships its own documentation at `/docs` (sources in `content/docs/`):
 
-Both use audience `authenticated`. Add `require_role("teacher", "admin")` to a
-route to restrict it.
+- Platform architecture
+- How answers are grounded
+- Local AI models
+- Roles and access
+- Document RAG workspace (teacher and student views)
 
-### Chat flow
+![Documentation — how answers are grounded](docs/assets/grounded-answers.png)
 
-```
-browser → POST /api/chat/stream (Next)  → resolves session, forwards Bearer
-        → POST /v1/chat (FastAPI)       → provider.stream()
-        → text/event-stream back        → UI consumes deltas
-```
+## Known limitations
 
-Events:
+- **Conversation history is not persisted** in this build; the admin counters for
+  conversations/audit/consents were removed rather than shown as zeros.
+- **Citations are text, not links.** They carry filename, page, and section, but
+  do not open the PDF at that page yet.
+- **No per-request membership check** on `/v1/me/courses` beyond the database
+  role; course-level checks happen on document and chat endpoints.
+- **Scanned PDFs are rejected** (no OCR).
+- **Single-node ingestion.** Good for a course, not for a faculty.
+- Demo auth is intentionally insecure and must stay behind
+  `ALLOW_INSECURE_DEV_AUTH`.
 
-```
-data: {"type":"sources","sources":[{"n":1,"citation":"standards.pdf, pp. 8–9, § 6.1 HTTP Errors"}],"grounded":true}
+## Roadmap
 
-data: {"type":"start","provider":"gemini","model":"gemini-2.5-flash"}
+- [ ] Persist conversations and answers with feedback
+- [ ] Clickable citations that open the source page
+- [ ] Per-course unique constraints on document titles
+- [ ] OCR fallback for scanned material
+- [ ] Instructor analytics on unanswered questions
 
-data: {"type":"delta","text":"Invalid input returns 400 [1]…"}
+## Credits
 
-data: {"type":"done","sources_used":[1],"invalid_citations":[]}
+Coursework project for the AI for Delivery portfolio; the original prototype was
+a TypeScript/Supabase app, and this repository replaces its backend with the
+Python service described above.
 
-data: [DONE]
-```
+## License
 
-`sources` is emitted **before** the first token so the UI can render citation
-chips immediately. `done.sources_used` lists the markers the answer actually
-cited; `invalid_citations` lists any marker pointing at a source that was not
-supplied.
-
-**Grounded answering.** When retrieval is enabled:
-
-1. the question is embedded and searched (hybrid by default)
-2. if nothing is retrieved, or the best cosine similarity is below
-   `REFUSAL_THRESHOLD`, the service answers *"The course materials do not cover
-   this."* **without calling the model**
-3. retrieved chunks are deduplicated, budgeted to `CONTEXT_CHARS`, numbered
-   `[1]…[n]`, and injected as the system prompt
-4. the answer is streamed, then its `[n]` markers are validated
-
-The similarity gate is skipped when the offline hashing embedder is in use —
-that embedder has no semantics, so gating on it would refuse valid questions.
-Set `REFUSAL_THRESHOLD=0` to disable the gate entirely.
-
-**Provider selection** is controlled by `AI_PROVIDER` (`auto` by default):
-
-| value | behaviour |
-|---|---|
-| `auto` | Gemini when `GEMINI_API_KEY` is set, otherwise Ollama |
-| `gemini` | Gemini (`CHAT_MODEL`, default `gemini-2.5-flash`) |
-| `ollama` | local models via `OLLAMA_BASE_URL` / `OLLAMA_MODEL` |
-| `stub` | deterministic placeholder, for tests |
-
-Ollama needs no key:
-
-```bash
-ollama pull nomic-embed-text   # 274 MB, 768 dims — matches the schema
-ollama pull qwen2.5:7b         # 4.7 GB, chat
-```
-
-Both providers implement the same two interfaces, so LiteLLM or another vendor
-is one new file implementing `stream()` / `embed()`.
-
-### Local demo without a Supabase project
-
-Set `ALLOW_INSECURE_DEV_AUTH=true` and the proxy falls back to
-`X-Dev-Principal` (from `DEV_PRINCIPAL`) instead of a real token. The API honours
-that header **only** when `ENVIRONMENT` is not `production` — it refuses to
-start if both are set.
-
-### Documents & retrieval
-
-PDFs are extracted, chunked, embedded and stored in Postgres + pgvector, then
-retrieved with **hybrid search** (vector + BM25-style lexical, fused by
-reciprocal rank).
-
-```bash
-# apply schema (documents, document_chunks, HNSW + GIN indexes)
-cd services/api && alembic upgrade head
-
-# upload
-curl -X POST localhost:8000/v1/documents \
-  -H "X-Dev-Principal: demo.teacher@mfu.ac.th" \
-  -F "file=@reports/coding-standards.pdf"
-
-# poll until status=ready, then search
-curl -X POST localhost:8000/v1/search \
-  -H "Content-Type: application/json" -H "X-Dev-Principal: demo.teacher@mfu.ac.th" \
-  -d '{"query":"what are the rules for HTTP errors?","limit":3}'
-```
-
-Each hit carries a citation: filename, page range and nearest heading
-(`§ 6.1 HTTP Errors`).
-
-| Piece | Implementation |
-|---|---|
-| Extraction | `pypdf`, per page; scanned PDFs rejected with a clear error |
-| Chunking | ~1200 chars, 200 overlap, paragraph→sentence boundaries, page + heading tracked |
-| Embeddings | Gemini `text-embedding-004` (768d); hashing embedder when no key |
-| Storage | `documents` + `document_chunks`, `vector(768)`, generated `tsv` column |
-| Retrieval | HNSW cosine + `tsquery` lexical, RRF fusion (`k=60`) |
-
-**Why hybrid:** vector-only search misses exact identifiers — course codes, HTTP
-statuses, error strings. The lexical branch catches them; RRF merges the two
-rankings without needing score calibration.
-
-### Evaluation
-
-`evals/dataset.yaml` holds 25 cases written against the bundled coding-standards
-PDF: 12 single-section, 5 multi-section, 4 exact-token and 4 **not in the
-document** (the refusal cases most projects skip).
-
-```bash
-cd services/api
-python evals/run.py --dev-principal eval@mfu.ac.th
-```
-
-#### Run 1 — offline stub (validates plumbing, not quality)
-
-| config | recall@5 | refusal | citation | grounded | cite support | bad cite | p50 |
-|---|---|---|---|---|---|---|---|
-| no-retrieval | n/a | 84% | 100% | 0% | 0% | 0 | 2 ms |
-| vector | 90% | 84% | 100% | 100% | 0% | 0 | 4 ms |
-| hybrid | 90% | 84% | 100% | 100% | 0% | 0 | 3 ms |
-
-Vector and hybrid **tie**: the hashing stub is itself lexical, so the vector
-branch duplicates the lexical one. Refusal is stuck at 84% because the
-similarity gate is disabled for a non-semantic embedder.
-
-#### Run 2 — local `nomic-embed-text` + `qwen2.5:7b` (Ollama, no API key)
-
-| config | recall@5 | refusal | citation | grounded | cite support | bad cite | p50 | p95 |
-|---|---|---|---|---|---|---|---|---|
-| no-retrieval | n/a | 84% | 0% | 0% | 0% | 0 | 7071 ms | 22739 ms |
-| vector | **100%** | 96% | 100% | 100% | **80%** | 0 | 2407 ms | 6752 ms |
-| hybrid | **100%** | **100%** | 100% | 100% | 71% | 1 | 2428 ms | 6224 ms |
-
-**What the second run establishes**
-
-- **Retrieval works**: 100% recall@5 with real embeddings; every citation is a
-  valid marker pointing at a supplied source.
-- **Refusal works**: 96–100% accuracy including the 4 unanswerable questions —
-  up from 84% with the stub.
-- **Grounding makes answers *faster*, not slower** (2.4 s vs 7.1 s p50): a
-  grounded answer is short and constrained, while an ungrounded 7B model
-  rambles.
-- **The remaining weakness is citation *support*, not retrieval**: 71–80% of
-  answers cite the source that actually contains the fact. A 7B model often
-  picks the wrong number even when the right chunk is in context. This is the
-  metric a bigger model (Gemini) would move most.
-- **Hybrid ≈ vector on this corpus** (24 chunks, 100% both). Hybrid's advantage
-  appears on larger corpora and rarer tokens; at this size retrieval is
-  saturated, and reporting otherwise would be dishonest.
-
-#### Citation tuning (three prompts vs deterministic repair)
-
-Prompt changes do **not** fix citation accuracy on a 7B model:
-
-| variant | support (raw) | after repair | revisions | invalid markers |
-|---|---|---|---|---|
-| A baseline, k=5 | 81% | 81% | 4 | 0 |
-| B k=3 | 76% | **81%** | 5 | 1 |
-| C k=3 + quote-first | 76% | 71% | 1 | 1 |
-
-Quote-first shortened answers (43 → 19 words) but *hurt* support, so it is not
-the default. Instead, `app/rag/citation_repair.py` checks each cited claim
-against every supplied source and rewrites the marker when another source
-supports it better (token overlap, 0.20 floor, 0.15 margin). Every change is
-reported in `done.citation_revisions` and the corrected text in
-`done.repaired_text` — never silent.
-
-Measured example: `"Use 401 when the user is not authenticated [2]."` became
-`... [1]`, because source [1] is § 6.1 HTTP Errors and [2] is not.
-
-Exact-token queries are why the lexical branch exists: `403` scores only 0.392
-cosine similarity — *below* the 0.495 that unanswerable questions reach — so a
-pure similarity gate would refuse it. The gate therefore also accepts a hit when
-the lexical branch matched.
-
-**Checks.**
-
-```bash
-cd services/api
-ruff check . && mypy app && pytest -q   # 50 tests; DB integration tests skip if Postgres is down
-```
-
----
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
----
-
-## 📝 License
-
-This project is licensed under the MIT License.
-
----
-
-## 🆘 Support
-
-If you encounter any issues:
-
-1. Check the [TECH_STACK.md](./TECH_STACK.md) documentation
-2. Review the Supabase setup steps
-3. Ensure all environment variables are set correctly
-4. Check that your Gemini API key is valid
-
----
-
-## 🙏 Acknowledgments
-
-- Built with [Next.js](https://nextjs.org/)
-- Backend by [Supabase](https://supabase.com)
-- AI powered by [Google Gemini](https://ai.google.dev/)
-- UI components from [Shadcn/ui](https://ui.shadcn.com)
-- Icons by [Lucide](https://lucide.dev)
-
----
-
-**Made with ❤️ for Mae Fah Luang University (MFU)**
+MIT — see [LICENSE](LICENSE).
