@@ -4,14 +4,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import * as React from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
-  FormLabel,
 } from "@/components/ui/form";
 import {
   Select,
@@ -21,14 +20,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Bell, Palette, Shield, User } from "lucide-react";
+  Bell,
+  ChevronRight,
+  FileText,
+  Globe,
+  Lock,
+  Mail,
+  MessageCircle,
+  Moon,
+  Shield,
+  User,
+  X,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/types";
 import { useTheme } from "next-themes";
@@ -48,13 +53,46 @@ interface SettingsModalProps {
   onClose: () => void;
 }
 
+type SettingsTab = "profile" | "notifications" | "appearance" | "security" | "about";
+
+const TABS: { id: SettingsTab; label: string }[] = [
+  { id: "profile", label: "Profile" },
+  { id: "notifications", label: "Notifications" },
+  { id: "appearance", label: "Appearance" },
+  { id: "security", label: "Security" },
+  { id: "about", label: "About" },
+];
+
+function Row({
+  icon,
+  label,
+  hint,
+  children,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  hint?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="mf-set-row">
+      <span className="mf-row-icon">{icon}</span>
+      <span className="mf-set-label">
+        {label}
+        {hint ? <span className="mf-set-hint">{hint}</span> : null}
+      </span>
+      {children}
+    </div>
+  );
+}
+
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
   const [userProfile, setUserProfile] = React.useState<Profile | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = React.useState(true);
+  const [activeTab, setActiveTab] = React.useState<SettingsTab>("profile");
 
-  // Handle mounting to avoid hydration mismatch
   React.useEffect(() => {
     setMounted(true);
   }, []);
@@ -72,41 +110,29 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     },
   });
 
-  // Update form when theme changes
   React.useEffect(() => {
-    if (mounted && theme) {
-      form.setValue("theme", theme);
-    }
+    if (mounted && theme) form.setValue("theme", theme);
   }, [theme, mounted, form]);
 
-  const [activeTab, setActiveTab] = React.useState<"notifications" | "personalization" | "security" | "profile">("profile");
-
-  // Fetch user profile data
   React.useEffect(() => {
     const fetchUserProfile = async () => {
       if (!isOpen) return;
-      
+
       setIsLoadingProfile(true);
       try {
         const supabase = createClient();
         const { data: { user }, error: userError } = await supabase.auth.getUser();
-        
-        if (userError) {
-          console.error("Error getting user:", userError);
-          throw userError;
-        }
-        
+
+        if (userError) throw userError;
+
         if (user) {
-          // Fetch profile data from profiles table
           const { data: profileData, error: profileError } = await supabase
             .from("profiles")
             .select("*")
             .eq("id", user.id)
             .single();
 
-          if (profileError) {
-            console.error("Error fetching profile:", profileError);
-          }
+          if (profileError) console.error("Error fetching profile:", profileError);
 
           if (profileData) {
             setUserProfile({
@@ -119,7 +145,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               updated_at: profileData.updated_at,
             });
           } else {
-            // Fallback to user data if profile not found
             setUserProfile({
               id: user.id,
               email: user.email || "user@mfu.ac.th",
@@ -132,7 +157,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           }
         }
       } catch (error) {
-        console.error("Error fetching user profile:", error);
+        // demo accounts have no Supabase session — the shell already falls back
       } finally {
         setIsLoadingProfile(false);
       }
@@ -141,135 +166,108 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     fetchUserProfile();
   }, [isOpen]);
 
-  // Update form values when user profile is loaded
   React.useEffect(() => {
     if (userProfile) {
       form.reset({
         language: form.getValues("language"),
-      theme: form.getValues("theme"),
-      emailNotifications: form.getValues("emailNotifications"),
-      lineNotification: form.getValues("lineNotification"),
-      twoFactorAuth: form.getValues("twoFactorAuth"),
-      fullName: userProfile.full_name || "",
-      email: userProfile.email || "",
+        theme: form.getValues("theme"),
+        emailNotifications: form.getValues("emailNotifications"),
+        lineNotification: form.getValues("lineNotification"),
+        twoFactorAuth: form.getValues("twoFactorAuth"),
+        fullName: userProfile.full_name || "",
+        email: userProfile.email || "",
       });
     }
   }, [userProfile, form]);
 
   function onSubmit(values: z.infer<typeof formSchema>) {
     console.log("Settings saved:", values);
-    // Here you would typically save to your backend
     onClose();
   }
 
   const handleOpenChange = (open: boolean) => {
-    console.log('SettingsModal handleOpenChange called', open);
     if (!open) {
-      // Immediately clean up body styles
-      document.body.style.pointerEvents = '';
-      document.body.style.overflow = '';
+      document.body.style.pointerEvents = "";
+      document.body.style.overflow = "";
       onClose();
     }
   };
 
-  // Reset form when modal closes
   React.useEffect(() => {
-    if (!isOpen) {
-      form.reset();
-    }
+    if (!isOpen) form.reset();
   }, [isOpen, form]);
 
-  // Force cleanup of body styles when modal closes
   React.useEffect(() => {
     if (!isOpen) {
-      // Force remove pointer-events from body
-      document.body.style.pointerEvents = '';
-      document.body.style.overflow = '';
+      document.body.style.pointerEvents = "";
+      document.body.style.overflow = "";
     }
   }, [isOpen]);
 
-  // Additional cleanup on every render when modal is closed
-  React.useEffect(() => {
-    if (!isOpen) {
-      const cleanup = () => {
-        document.body.style.pointerEvents = '';
-        document.body.style.overflow = '';
-      };
-      cleanup();
-      // Run cleanup multiple times to ensure it sticks
-      const timeout1 = setTimeout(cleanup, 0);
-      const timeout2 = setTimeout(cleanup, 10);
-      const timeout3 = setTimeout(cleanup, 50);
-      
-      return () => {
-        clearTimeout(timeout1);
-        clearTimeout(timeout2);
-        clearTimeout(timeout3);
-      };
-    }
-  }, [isOpen]);
-
-  // Cleanup on unmount
   React.useEffect(() => {
     return () => {
-      // Ensure cleanup when component unmounts
-      document.body.style.pointerEvents = '';
-      document.body.style.overflow = '';
+      document.body.style.pointerEvents = "";
+      document.body.style.overflow = "";
     };
   }, []);
 
+  const isDark = mounted ? theme === "dark" : false;
+  const roleLabel =
+    userProfile?.role === "teacher" ? "Teacher Mode" : userProfile?.role === "admin" ? "Admin Mode" : "Student Mode";
+  const showsSaveButton = activeTab !== "about";
+
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="w-[calc(100%-1rem)] h-[85vh] sm:w-[900px] sm:h-[600px] md:w-[960px] md:h-[640px] max-w-none overflow-hidden p-0">
-        <div className="grid grid-cols-1 sm:grid-cols-12 h-full">
-          {/* Left rail */}
-          <div className="col-span-12 sm:col-span-3 sm:border-r border-b sm:border-b-0 bg-muted/20 p-2 sm:p-3 h-auto sm:h-full overflow-x-auto sm:overflow-y-auto">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground px-2 pb-2 sm:block hidden">Settings</div>
-            <div className="flex sm:flex-col gap-2">
-              {[
-                { id: "profile", label: "Profile", icon: User },
-                { id: "notifications", label: "Notifications", icon: Bell },
-                { id: "personalization", label: "Personalization", icon: Palette },
-                { id: "security", label: "Security", icon: Shield },
-              ].map((i) => (
-                <button
-                  key={i.id}
-                  onClick={() => setActiveTab(i.id as typeof activeTab)}
-                  className={`${activeTab === i.id ? "bg-accent text-accent-foreground shadow-sm" : "hover:bg-muted"} w-full inline-flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors whitespace-nowrap`}
-                >
-                  <i.icon className="h-4 w-4 opacity-70 shrink-0" />
-                  <span className="flex-1 text-left">{i.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
+      <DialogContent
+        className="mf-set-dialog"
+        showCloseButton={false}
+        onOpenAutoFocus={(event) => event.preventDefault()}
+      >
+        <div className="mf-set-head">
+          <h2 className="mf-set-title">
+            {activeTab === "about" ? "Settings" : "Settings"}
+          </h2>
+          <button type="button" className="mf-set-close" onClick={onClose} aria-label="Close settings">
+            <X size={18} />
+          </button>
+        </div>
 
-          {/* Right content */}
-          <div className="col-span-12 sm:col-span-9 p-4 sm:p-6 overflow-y-auto h-full">
-            <DialogHeader className="mb-4">
-              <DialogTitle className="text-xl capitalize">{activeTab}</DialogTitle>
-            </DialogHeader>
+        <div className="mf-set-body">
+          <nav className="mf-set-rail" aria-label="Settings sections">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className="mf-set-tab"
+                data-active={activeTab === tab.id ? "true" : "false"}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
 
+          <div className="mf-set-pane">
             <Form {...form}>
-              <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
+              <form onSubmit={form.handleSubmit(onSubmit)}>
                 {activeTab === "profile" && (
-                  <div className="rounded-lg border bg-background divide-y">
+                  <>
+                    <p className="mf-set-section">Account</p>
                     <FormField
                       control={form.control}
                       name="fullName"
                       render={({ field }) => (
-                        <FormItem className="m-0 flex flex-row items-center justify-between px-4 py-3">
-                          <div className="space-y-0.5 flex-1 mr-4">
-                            <FormLabel className="text-base">Full Name</FormLabel>
-                          </div>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              className="min-w-[200px]"
-                              placeholder="Enter your name"
-                              disabled={isLoadingProfile}
-                            />
-                          </FormControl>
+                        <FormItem>
+                          <Row icon={<User size={18} />} label="Full name">
+                            <FormControl>
+                              <input
+                                {...field}
+                                className="mf-set-input"
+                                placeholder="Enter your name"
+                                disabled={isLoadingProfile}
+                              />
+                            </FormControl>
+                          </Row>
                         </FormItem>
                       )}
                     />
@@ -277,88 +275,43 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       control={form.control}
                       name="email"
                       render={({ field }) => (
-                        <FormItem className="m-0 flex flex-row items-center justify-between px-4 py-3">
-                          <div className="space-y-0.5 flex-1 mr-4">
-                            <FormLabel className="text-base">Email</FormLabel>
-                          </div>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              type="email"
-                              className="min-w-[200px]"
-                              placeholder="Enter your email"
-                              disabled={isLoadingProfile}
-                            />
-                          </FormControl>
+                        <FormItem>
+                          <Row icon={<Mail size={18} />} label="Email">
+                            <FormControl>
+                              <input
+                                {...field}
+                                type="email"
+                                className="mf-set-input"
+                                placeholder="Enter your email"
+                                disabled={isLoadingProfile}
+                              />
+                            </FormControl>
+                          </Row>
                         </FormItem>
                       )}
                     />
-                    {/* Mode Display */}
-                    <div className="m-0 px-4 py-3">
-                      <div className="text-base font-medium">
-                        {isLoadingProfile ? (
-                          <span className="text-muted-foreground">Loading...</span>
-                        ) : (
-                          userProfile?.role === "student" ? "Student Mode" : 
-                          userProfile?.role === "teacher" ? "Teacher Mode" : 
-                          "Student Mode"
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {activeTab === "personalization" && (
-                  <div className="rounded-lg border bg-background divide-y">
-                    <div className="flex items-center justify-between px-4 py-3">
-                      <div>
-                        <div className="text-sm font-medium">Theme</div>
-                        <div className="text-muted-foreground text-sm">Light, Dark, or System</div>
-                      </div>
-                      <FormField
-                        control={form.control}
-                        name="theme"
-                        render={({ field }) => (
-                          <FormItem className="min-w-[160px]">
-                            <Select 
-                              value={mounted ? (theme || "system") : "system"} 
-                              onValueChange={(value) => {
-                                field.onChange(value);
-                                setTheme(value);
-                              }}
-                            >
-                              <FormControl>
-                                <SelectTrigger className="bg-background">
-                                  <SelectValue />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="light">Light</SelectItem>
-                                <SelectItem value="dark">Dark</SelectItem>
-                                <SelectItem value="system">System</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  </div>
+                    <Row icon={<Shield size={18} />} label="Role">
+                      <span className="mf-set-value">
+                        {isLoadingProfile ? "Loading…" : roleLabel}
+                        <ChevronRight size={16} className="mf-set-chevron" />
+                      </span>
+                    </Row>
+                  </>
                 )}
 
                 {activeTab === "notifications" && (
-                  <div className="rounded-lg border bg-background divide-y">
+                  <>
+                    <p className="mf-set-section">Notifications</p>
                     <FormField
                       control={form.control}
                       name="emailNotifications"
                       render={({ field }) => (
-                        <FormItem className="m-0 flex flex-row items-center justify-between px-4 py-3">
-                          <div className="space-y-0.5">
-                            <FormLabel className="text-base">Email Notifications</FormLabel>
-                            <FormDescription>Receive notifications via email</FormDescription>
-                          </div>
-                          <FormControl>
-                            <Switch checked={field.value} onCheckedChange={field.onChange} />
-                          </FormControl>
+                        <FormItem>
+                          <Row icon={<Bell size={18} />} label="Email notifications" hint="Receive updates by email">
+                            <FormControl>
+                              <Switch checked={field.value} onCheckedChange={field.onChange} />
+                            </FormControl>
+                          </Row>
                         </FormItem>
                       )}
                     />
@@ -366,46 +319,122 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       control={form.control}
                       name="lineNotification"
                       render={({ field }) => (
-                        <FormItem className="m-0 flex flex-row items-center justify-between px-4 py-3">
-                          <div className="space-y-0.5">
-                            <FormLabel className="text-base">Line notification</FormLabel>
-                            <FormDescription>Receive notifications via Line</FormDescription>
-                          </div>
-                          <FormControl>
-                            <Switch checked={field.value} onCheckedChange={field.onChange} />
-                          </FormControl>
+                        <FormItem>
+                          <Row icon={<MessageCircle size={18} />} label="LINE notifications" hint="Receive updates in LINE">
+                            <FormControl>
+                              <Switch checked={field.value} onCheckedChange={field.onChange} />
+                            </FormControl>
+                          </Row>
                         </FormItem>
                       )}
                     />
-                  </div>
+                  </>
+                )}
+
+                {activeTab === "appearance" && (
+                  <>
+                    <p className="mf-set-section">General</p>
+                    <FormField
+                      control={form.control}
+                      name="language"
+                      render={({ field }) => (
+                        <FormItem>
+                          <Row icon={<Globe size={18} />} label="Language">
+                            <FormControl>
+                              <Select value={field.value} onValueChange={field.onChange}>
+                                <SelectTrigger className="mf-set-value" style={{ border: 0, background: "transparent", height: 32, padding: 0, gap: 6 }}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="en">English</SelectItem>
+                                  <SelectItem value="th">ไทย</SelectItem>
+                                  <SelectItem value="zh">中文</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </FormControl>
+                            <ChevronRight size={16} className="mf-set-chevron" />
+                          </Row>
+                        </FormItem>
+                      )}
+                    />
+                    <Row icon={<Moon size={18} />} label="Dark mode">
+                      <Switch
+                        checked={isDark}
+                        onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
+                      />
+                    </Row>
+                  </>
                 )}
 
                 {activeTab === "security" && (
-                  <div className="rounded-lg border bg-background divide-y">
+                  <>
+                    <p className="mf-set-section">Security</p>
                     <FormField
                       control={form.control}
                       name="twoFactorAuth"
                       render={({ field }) => (
-                        <FormItem className="m-0 flex flex-row items-center justify-between px-4 py-3">
-                          <div className="space-y-0.5">
-                            <FormLabel className="text-base">Two-Factor Authentication</FormLabel>
-                          </div>
-                          <FormControl>
-                            <Switch checked={field.value} onCheckedChange={field.onChange} />
-                          </FormControl>
+                        <FormItem>
+                          <Row icon={<Shield size={18} />} label="Two-factor authentication" hint="Extra step when signing in">
+                            <FormControl>
+                              <Switch checked={field.value} onCheckedChange={field.onChange} />
+                            </FormControl>
+                          </Row>
                         </FormItem>
                       )}
                     />
-                  </div>
+                    <Row icon={<Lock size={18} />} label="Change password">
+                      <Link href="/reset-password" className="mf-set-value" style={{ textDecoration: "none" }}>
+                        <ChevronRight size={16} className="mf-set-chevron" />
+                      </Link>
+                    </Row>
+                  </>
                 )}
 
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-                  <Button type="submit">Save Settings</Button>
-                </div>
+                {activeTab === "about" && (
+                  <>
+                    <p className="mf-set-section">Terms and policies</p>
+                    <Row icon={<FileText size={18} />} label="Terms of service">
+                      <Link href="/terms" className="mf-set-value" style={{ textDecoration: "none" }}>
+                        <ChevronRight size={16} className="mf-set-chevron" />
+                      </Link>
+                    </Row>
+                    <Row icon={<FileText size={18} />} label="Privacy policy">
+                      <Link href="/terms" className="mf-set-value" style={{ textDecoration: "none" }}>
+                        <ChevronRight size={16} className="mf-set-chevron" />
+                      </Link>
+                    </Row>
+                    <Row icon={<Mail size={18} />} label="Contact us">
+                      <Link href="/contact" className="mf-set-value" style={{ textDecoration: "none" }}>
+                        <ChevronRight size={16} className="mf-set-chevron" />
+                      </Link>
+                    </Row>
+                  </>
+                )}
+
+                {showsSaveButton && (
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 18 }}>
+                    <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" size="sm">
+                      Save changes
+                    </Button>
+                  </div>
+                )}
               </form>
             </Form>
           </div>
+        </div>
+
+        <div className="mf-set-foot">
+          <p className="mf-set-company">
+            Mae Fah Luang University · 333 Moo 1, Thasud, Muang, Chiang Rai 57100, Thailand
+            <br />
+            AI Teaching Assistant · internal learning platform. Verify important information with the university.
+          </p>
+          <span className="mf-set-wordmark">
+            MFU<span>AI</span>
+          </span>
         </div>
       </DialogContent>
     </Dialog>
