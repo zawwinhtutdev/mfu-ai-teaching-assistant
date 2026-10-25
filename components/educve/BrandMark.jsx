@@ -30,8 +30,8 @@ export const BrandMark = ({ tone = "dark", compact = false }) => {
         size={iconSize}
         tone={tone}
         style={{
-          width: iconSize,
           height: iconSize,
+          width: "auto",
           display: "block",
           flexShrink: 0,
         }}
