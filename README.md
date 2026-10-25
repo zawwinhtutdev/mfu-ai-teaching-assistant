@@ -1,5 +1,11 @@
 # MFU AI Teaching Assistant
 
+<p align="center">
+  <img src="docs/assets/banner.webp"
+       alt="MFU AI Teaching Assistant — course-grounded learning intelligence: role-aware scope, retrieval over course materials, verified citations"
+       width="100%">
+</p>
+
 A course-scoped RAG assistant for university teaching: teachers upload PDFs into
 the courses they own, students ask questions about the courses they are enrolled
 in, and every answer is cited or refused.
