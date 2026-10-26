@@ -1,6 +1,6 @@
 ---
 title: AI chat and conversations
-description: Start a conversation, choose an AI model, attach context, revisit earlier chats, and rate an answer.
+description: Start a conversation, see which model answers, attach context, revisit earlier chats, and rate an answer.
 ---
 
 Open [AI Chat](/chat) when you want general assistance or need to work with a document outside a course workspace. Course-specific chat is also available from each enrolled course.
@@ -16,9 +16,11 @@ The first message creates a conversation. The address changes to include the con
 
 ## Choose a model
 
-The model selector lists only models enabled by the platform. Choose **Gemini 3 Flash** for most routine questions. Use the more advanced option when the task genuinely needs deeper analysis.
+The platform runs **local models by default** (`qwen2.5:7b` for chat, `nomic-embed-text` for embeddings), so conversations stay on the machine. If the deployment is configured with a cloud provider, the enabled cloud model appears instead.
 
-> Model names and availability can change as the platform configuration changes. If a model disappears, continue with one of the enabled options.
+For most course questions, the default local model is enough. Deeper reasoning is usually won by better retrieval — the right passages, from the right course — than by a larger model.
+
+> Model names and availability are configuration, not product features. See [Local AI models](/docs/core/local-ai-models) for how the default is chosen.
 
 ## Attach supporting files
 

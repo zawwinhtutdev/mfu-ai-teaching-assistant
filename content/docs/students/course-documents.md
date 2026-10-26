@@ -1,26 +1,55 @@
 ---
-title: Course documents
-description: Understand how available course materials support document-grounded questions and answers.
+title: Ask questions about course documents
+description: Read the material your teachers uploaded and get answers that cite the page they came from.
 ---
 
-Open **Documents RAG** from the student portal to work with the documents available to your account. RAG means retrieval-augmented generation: the platform retrieves relevant document content before producing an answer.
+Your courses have documents attached by the teacher. You can read the material and ask questions about it, but you cannot add or remove files.
 
-## Use document-grounded chat
+## What you can see
 
-1. Open the documents area.
-2. Choose the relevant course or document when a selector is available.
-3. Ask a question that refers to the document’s topic or section.
-4. Compare the response with the original material.
+Open **Student Portal → Documents RAG**. The **Course** selector lists the courses you are enrolled in, and only those.
 
-Questions work best when they identify the information you want rather than asking the assistant to “explain everything.”
+If a course is missing, you are not enrolled in it yet. Enrollment is checked on the server, so it cannot be worked around from the page.
 
-## Supported material
+## Ask a question
 
-Teachers control which course documents are available. Common course material includes lecture notes, reading documents, reference files, and other teaching resources in supported formats.
+1. Select the course.
+2. Check that the document you need is **ready**.
+3. Ask one focused question.
 
-## When no answer is found
+```text
+According to this course's material, when is the midterm and how long is it?
+```
 
-The requested information may not be present in the selected material, the document may still be processing, or the question may use different terminology. Try the exact term from the document or ask the teacher to confirm that the correct material is available.
+## Read the citation
 
-> A document-grounded answer can still be incomplete. Use the source document as the authoritative reference.
+Every grounded sentence carries a numbered marker that matches a source under the answer:
 
+```text
+The midterm is on Saturday, 19 September 2026 [1].
+
+[1] Midterm Brief Memo.pdf, p. 1
+```
+
+Use the citation to check the original page before you rely on a date, a mark, or a deadline.
+
+## When it refuses
+
+```text
+The course materials do not cover this.
+```
+
+This means nothing relevant was found in this course's documents. Try rephrasing with the words the document is likely to use, or ask your teacher to upload the material.
+
+A refusal is more useful than a confident guess.
+
+## Switching courses
+
+Changing the course resets the conversation. Answers are scoped to one course at a time so that material from CSB321 is never mixed into a CSD322 answer.
+
+## Limits worth knowing
+
+- Scanned PDFs without a text layer cannot be read.
+- A document that is still processing will not answer yet.
+- Very broad questions ("summarise everything") retrieve weaker passages; narrow them.
+- The PDF is authoritative. If it is outdated, the answer is outdated too.
