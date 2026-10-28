@@ -170,12 +170,12 @@ export function AgentBuilderPage({ profile, courses }: AgentBuilderPageProps) {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="google/gemini-3.8-flash">Gemini 3.8 Flash (Fast & Efficient)</SelectItem>
-                            <SelectItem value="google/gemini-3.1-pro-preview">Gemini 3.1 Pro (Advanced)</SelectItem>
+                            <SelectItem value="qwen2.5:7b">qwen2.5:7b — local, private (default)</SelectItem>
+                            <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash — cloud, if enabled</SelectItem>
                           </SelectContent>
                         </Select>
                         <p className="text-sm text-muted-foreground">
-                          Gemini 3.8 Flash is recommended for most use cases - fast and cost-effective
+                          The local 7B model is the default: answers stay on the machine and no content leaves the campus network.
                         </p>
                       </div>
 
