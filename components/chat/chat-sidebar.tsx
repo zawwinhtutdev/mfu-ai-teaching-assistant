@@ -2,24 +2,37 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
-import { MessageSquarePlus, User, BookOpen, MessageSquare, X, Building, MapPin, ChevronDown, Sparkles, Files } from "lucide-react"
+import {
+  ChevronDown,
+  Compass,
+  Files,
+  Lightbulb,
+  PanelLeft,
+  PanelLeftClose,
+  Plus,
+  Settings as SettingsIcon,
+  Sparkles,
+  User,
+  BookOpen,
+  Building,
+  MessageSquare,
+  X,
+} from "lucide-react"
 import { useState, useEffect } from "react"
 import { ProfileButton } from "@/components/animate-ui/components/profile/profile-button"
 import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
-import { BrandIcon } from "@/components/brand-icon"
 
 interface ChatSidebarProps {
   isOpen?: boolean
   onClose?: () => void
   isMobile?: boolean
+  onOpenSettings?: () => void
 }
 
-export function ChatSidebar({ isOpen = true, onClose, isMobile = false }: ChatSidebarProps) {
+/** Socra-style sidebar: inset card, icon rail collapse, recent list, footer profile. */
+export function ChatSidebar({ isOpen = true, onClose, isMobile = false, onOpenSettings }: ChatSidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [authRole, setAuthRole] = useState<"student" | "teacher" | "admin" | null>(null)
@@ -28,37 +41,46 @@ export function ChatSidebar({ isOpen = true, onClose, isMobile = false }: ChatSi
   const [userProfile, setUserProfile] = useState({
     name: "Student",
     email: "student@mfu.ac.th",
-    role: "Student Mode"
+    role: "Student Mode",
   })
   const [mfuCampusOpen, setMfuCampusOpen] = useState(false)
+  const [isRail, setIsRail] = useState(false)
 
   useEffect(() => {
-    // Fetch conversations
+    try {
+      setIsRail(localStorage.getItem("mf-chat-rail") === "1")
+    } catch {}
+  }, [])
+
+  const toggleRail = () => {
+    setIsRail((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem("mf-chat-rail", next ? "1" : "0")
+      } catch {}
+      return next
+    })
+  }
+
+  useEffect(() => {
     fetch("/api/conversations")
       .then(async (res) => {
-        // Handle both successful and error responses
         const data = await res.json()
-        if (data.conversations) {
-          setConversations(data.conversations)
-        } else {
-          setConversations([])
-        }
+        setConversations(Array.isArray(data.conversations) ? data.conversations : [])
         setIsLoading(false)
       })
       .catch((error) => {
-        console.error("[v0] Error loading conversations:", error)
+        console.error("[chat] error loading conversations:", error)
         setConversations([])
         setIsLoading(false)
       })
 
-    // Fetch user profile data
     const fetchUserProfile = async () => {
       try {
         const supabase = createClient()
         const { data: { user } } = await supabase.auth.getUser()
-        
+
         if (user) {
-          // Fetch profile data from profiles table
           const { data: profile } = await supabase
             .from("profiles")
             .select("full_name, role")
@@ -80,7 +102,6 @@ export function ChatSidebar({ isOpen = true, onClose, isMobile = false }: ChatSi
                     : "Student Mode",
             })
           } else {
-            // Fallback to user data if profile not found
             const metadataRole =
               user.user_metadata?.role === "teacher" || user.user_metadata?.role === "admin"
                 ? user.user_metadata.role
@@ -109,18 +130,12 @@ export function ChatSidebar({ isOpen = true, onClose, isMobile = false }: ChatSi
               role: demoSession.account.role === "teacher" ? "Teacher Mode" : "Student Mode",
             })
           } else {
-            // Default values for unauthenticated users
             setAuthRole(null)
-            setUserProfile({
-              name: "Guest",
-              email: "guest@mfu.ac.th",
-              role: "Student Mode"
-            })
+            setUserProfile({ name: "Guest", email: "guest@mfu.ac.th", role: "Student Mode" })
           }
         }
       } catch (error) {
-        console.error("[v0] Error fetching user profile:", error)
-        // Keep default values on error
+        console.error("[chat] error fetching profile:", error)
       }
     }
 
@@ -130,191 +145,212 @@ export function ChatSidebar({ isOpen = true, onClose, isMobile = false }: ChatSi
   const showStudentPortal = authRole !== "teacher"
   const showTeacherPortal = authRole !== "student"
 
+  const go = (href: string, externalTarget?: boolean) => {
+    if (externalTarget) {
+      window.open(href, "_blank", "noopener,noreferrer")
+    } else {
+      router.push(href)
+    }
+    if (isMobile && onClose) onClose()
+  }
+
+  const iconSize = 19
+
   const sidebarContent = (
-    <div className="flex h-full w-64 sm:w-72 lg:w-64 flex-col border-r bg-card">
-      {/* Header */}
-      <div className="flex h-16 items-center gap-2 border-b px-3 sm:px-4">
-        <BrandIcon size={24} className="shrink-0 rounded-full" />
-        <span className="text-base sm:text-lg font-semibold truncate">MFU AI Assistant</span>
-        {isMobile && onClose && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            className="ml-auto h-8 w-8"
+    <aside
+      className="mf-sidebar"
+      data-rail={!isMobile && isRail ? "true" : "false"}
+      data-mobileopen={isMobile && isOpen ? "true" : "false"}
+      aria-label="Chat navigation"
+    >
+      <div className="mf-sidebar-head">
+        <button
+          type="button"
+          onClick={() => go("/chat")}
+          className="mf-wordmark"
+          style={{ background: "transparent", border: 0, cursor: "pointer", padding: 0 }}
+          aria-label="MFU AI Assistant home"
+        >
+          MFU<span className="mf-wordmark-thin">AI</span>
+        </button>
+        {isMobile ? (
+          <button type="button" className="mf-railbtn" onClick={onClose} aria-label="Close navigation">
+            <X size={iconSize} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="mf-railbtn"
+            onClick={toggleRail}
+            aria-label={isRail ? "Expand history panel" : "Collapse history panel"}
+            title={isRail ? "Expand" : "Collapse"}
           >
-            <X className="h-4 w-4" />
-          </Button>
+            {isRail ? <PanelLeft size={iconSize} /> : <PanelLeftClose size={iconSize} />}
+          </button>
         )}
       </div>
 
-      {/* New Chat Button */}
-      <div className="p-3 sm:p-4">
-        <Button 
-          className="w-full" 
-          size="sm"
-          onClick={() => {
-            // Navigate to new chat - just use router.push, no need for reload
-            router.push('/chat')
-            // Close mobile sidebar if open
-            if (isMobile && onClose) {
-              onClose()
-            }
-          }}
-        >
-          <MessageSquarePlus className="mr-2 h-4 w-4" />
-          New Chat
-        </Button>
-      </div>
+      <nav className="mf-nav">
+        <button type="button" className="mf-navitem" onClick={() => go("/chat")} title="New chat">
+          <Plus size={iconSize} />
+          <span className="mf-grow">New chat</span>
+        </button>
 
-      <Separator />
-
-      {/* Navigation Links */}
-      <div className="space-y-1 p-3 sm:p-4">
         {showStudentPortal && (
-          <Button
-            asChild
-            variant={pathname.startsWith("/studentportal") ? "secondary" : "ghost"}
-            className="w-full justify-start"
-            size="sm"
+          <button
+            type="button"
+            className="mf-navitem"
+            data-active={pathname.startsWith("/studentportal") ? "true" : "false"}
+            onClick={() => go("/studentportal", true)}
+            title="Student Portal"
           >
-            <Link href="/studentportal" target="_blank" rel="noopener noreferrer">
-              <User className="mr-2 h-4 w-4 text-[#A81D24]" />
-              Student Portal
-            </Link>
-          </Button>
+            <User size={iconSize} />
+            <span className="mf-grow">Student Portal</span>
+          </button>
         )}
         {showTeacherPortal && (
-          <Button
-            asChild
-            variant={pathname.startsWith("/teacherportal") ? "secondary" : "ghost"}
-            className="w-full justify-start"
-            size="sm"
+          <button
+            type="button"
+            className="mf-navitem"
+            data-active={pathname.startsWith("/teacherportal") ? "true" : "false"}
+            onClick={() => go("/teacherportal", true)}
+            title="Teacher Portal"
           >
-            <Link href="/teacherportal" target="_blank" rel="noopener noreferrer">
-              <BookOpen className="mr-2 h-4 w-4 text-[#A81D24]" />
-              Teacher Portal
-            </Link>
-          </Button>
+            <BookOpen size={iconSize} />
+            <span className="mf-grow">Teacher Portal</span>
+          </button>
         )}
-        <Button
-          asChild
-          variant={pathname.startsWith("/ai-agents") ? "secondary" : "ghost"}
-          className="w-full justify-start"
-          size="sm"
+
+        <button
+          type="button"
+          className="mf-navitem"
+          data-active={pathname.startsWith("/ai-agents") ? "true" : "false"}
+          onClick={() => go("/ai-agents")}
+          title="AI Agents"
         >
-          <Link href="/ai-agents">
-            <Sparkles className="mr-2 h-4 w-4 text-[#A81D24]" />{/* If Sparkles is not imported, use MessageSquarePlus */}
-            AI Agents
-          </Link>
-        </Button>
-        <Button
-          asChild
-          variant={pathname.startsWith("/chat/documents") ? "secondary" : "ghost"}
-          className="w-full justify-start"
-          size="sm"
+          <Sparkles size={iconSize} />
+          <span className="mf-grow">AI Agents</span>
+        </button>
+
+        <button
+          type="button"
+          className="mf-navitem"
+          data-active={pathname.startsWith("/chat/documents") ? "true" : "false"}
+          onClick={() => go("/chat/documents")}
+          title="Documents RAG"
         >
-          <Link href="/chat/documents">
-            <Files className="mr-2 h-4 w-4 text-[#A81D24]" />
-            Documents RAG
-          </Link>
-        </Button>
-        <Button
-          variant="ghost"
-          className="w-full justify-start"
-          size="sm"
+          <Files size={iconSize} />
+          <span className="mf-grow">Documents RAG</span>
+        </button>
+
+        <button
+          type="button"
+          className="mf-navitem"
           onClick={() => setMfuCampusOpen((v) => !v)}
           aria-expanded={mfuCampusOpen}
+          title="MFU Daily"
         >
-          <Building className="mr-2 h-4 w-4 text-[#A81D24]" />
-          MFU Daily
-          <ChevronDown className={`ml-auto h-4 w-4 transition-transform ${mfuCampusOpen ? "rotate-180" : "rotate-0"}`} />
-        </Button>
+          <Building size={iconSize} />
+          <span className="mf-grow">MFU Daily</span>
+          <ChevronDown
+            size={16}
+            className="mf-chevron"
+            style={{ transform: mfuCampusOpen ? "rotate(180deg)" : "none", transition: "transform .2s" }}
+          />
+        </button>
         {mfuCampusOpen && (
-          <div className="pl-8 py-1 flex flex-col gap-1">
-            <a href="https://teams.microsoft.com/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded px-1.5 py-1 text-sm hover:underline">
-              Microsoft Teams
-            </a>
-            <a href="https://meet.google.com/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded px-1.5 py-1 text-sm hover:underline">
-              Google Meet
-            </a>
-            <a href="https://classroom.google.com/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded px-1.5 py-1 text-sm hover:underline">
-              Google Classroom
-            </a>
-            <a href="https://en.mfu.ac.th/home.html" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded px-1.5 py-1 text-sm hover:underline">
-              MFU Main Website
-            </a>
-            <a href="https://reg.mfu.ac.th/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded px-1.5 py-1 text-sm hover:underline">
-              MFU Reg
-            </a>
+          <div style={{ paddingLeft: 34, display: "flex", flexDirection: "column", gap: 2 }}>
+            {[
+              { href: "https://teams.microsoft.com/", label: "Microsoft Teams" },
+              { href: "https://meet.google.com/", label: "Google Meet" },
+              { href: "https://classroom.google.com/", label: "Google Classroom" },
+              { href: "https://en.mfu.ac.th/home.html", label: "MFU Main Website" },
+              { href: "https://reg.mfu.ac.th/", label: "MFU Reg" },
+            ].map((item) => (
+              <a
+                key={item.href}
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mf-navitem"
+                style={{ height: 34, fontSize: 13.5 }}
+              >
+                <span className="mf-grow">{item.label}</span>
+              </a>
+            ))}
           </div>
         )}
-      </div>
+      </nav>
 
-      <Separator />
+      <div className="mf-divider" />
 
-      {/* Conversation History */}
-      <div className="flex-1 overflow-hidden">
-        <div className="p-3 sm:p-4 pb-2">
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Conversation History</h3>
+      <div className="mf-recent">
+        <div className="mf-recent-label">Recent</div>
+        <div className="mf-recent-list">
+          {isLoading ? (
+            <div className="mf-recent-empty">Loading…</div>
+          ) : conversations.length === 0 ? (
+            <div className="mf-recent-empty">Start a new conversation</div>
+          ) : (
+            conversations.map((conv) => (
+              <Link
+                key={conv.id}
+                href={`/chat/${conv.id}`}
+                className="mf-recent-item"
+                data-active={pathname === `/chat/${conv.id}` ? "true" : "false"}
+                onClick={() => {
+                  if (isMobile && onClose) onClose()
+                }}
+              >
+                <span className="mf-recent-title">{conv.title}</span>
+                <span className="mf-recent-meta">
+                  {conv.updated_at ? new Date(conv.updated_at).toLocaleDateString() : ""}
+                </span>
+              </Link>
+            ))
+          )}
         </div>
-        <ScrollArea className="h-[calc(100%-3rem)] px-3 sm:px-4">
-          <div className="space-y-1 pb-4">
-            {isLoading ? (
-              <div className="p-4 text-center text-sm text-gray-600 dark:text-gray-400">Loading...</div>
-            ) : conversations.length === 0 ? (
-              <div className="p-4 text-center text-sm text-gray-600 dark:text-gray-400">No conversations yet</div>
-            ) : (
-              conversations.map((conv) => (
-                <Button
-                  key={conv.id}
-                  asChild
-                  variant={pathname === `/chat/${conv.id}` ? "secondary" : "ghost"}
-                  className="w-full justify-start text-left"
-                  size="sm"
-                >
-                  <Link href={`/chat/${conv.id}`}>
-                    <MessageSquare className="mr-2 h-4 w-4 shrink-0" />
-                    <div className="flex-1 truncate">
-                      <div className="truncate text-sm font-medium">{conv.title}</div>
-                      <div className="truncate text-xs text-gray-600 dark:text-gray-400">
-                        {new Date(conv.updated_at).toLocaleDateString()}
-                      </div>
-                    </div>
-                  </Link>
-                </Button>
-              ))
-            )}
-          </div>
-        </ScrollArea>
       </div>
 
-      {/* Profile Button - Bottom of Sidebar */}
-      <div className="border-t p-3 sm:p-4">
-        <ProfileButton
-          userName={userProfile.email.split('@')[0]}
-          userEmail={userProfile.email}
-          userRole={userProfile.role}
-          onProfileClick={() => console.log("Profile clicked")}
-          onSettingsClick={() => console.log("Settings clicked")}
-          onLogoutClick={async () => {
-            // Handle logout
-            const supabase = createClient()
-            await fetch("/api/demo-auth/logout", { method: "POST" })
-            await supabase.auth.signOut()
-            router.push("/")
-            router.refresh()
+      <div className="mf-sidebar-foot">
+        <button
+          type="button"
+          className="mf-navitem"
+          onClick={() => {
+            onOpenSettings?.()
+            if (isMobile && onClose) onClose()
           }}
-          onTokenUsageClick={() => {
-            // Do nothing - Token Usage is disabled
-          }}
-          onFeedbackClick={() => {
-            // Feedback is now handled by the modal in ProfileButton
-            console.log("Feedback clicked")
-          }}
-        />
+          title="Settings"
+        >
+          <SettingsIcon size={iconSize} />
+          <span className="mf-grow">Settings</span>
+        </button>
+
+        <div className="mf-profile-slot">
+          <ProfileButton
+            className="mf-profilecard"
+            userName={userProfile.email.split("@")[0]}
+            userEmail={userProfile.email}
+            userRole={userProfile.role}
+            onProfileClick={() => go("/dashboard")}
+            onSettingsClick={() => {
+              onOpenSettings?.()
+              if (isMobile && onClose) onClose()
+            }}
+            onLogoutClick={async () => {
+              const supabase = createClient()
+              await fetch("/api/demo-auth/logout", { method: "POST" })
+              await supabase.auth.signOut()
+              router.push("/")
+              router.refresh()
+            }}
+            onTokenUsageClick={() => {}}
+            onFeedbackClick={() => {}}
+          />
+        </div>
       </div>
-    </div>
+
+    </aside>
   )
 
   if (isMobile) {
@@ -322,23 +358,21 @@ export function ChatSidebar({ isOpen = true, onClose, isMobile = false }: ChatSi
       <AnimatePresence>
         {isOpen && (
           <>
-            {/* Mobile Overlay */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+              className="mf-backdrop"
               onClick={onClose}
             />
-            {/* Mobile Sidebar */}
             <motion.div
-              initial={{ x: -280 }}
+              initial={{ x: "-110%" }}
               animate={{ x: 0 }}
-              exit={{ x: -280 }}
-              transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="fixed left-0 top-0 z-50 h-full w-72 sm:w-80 lg:hidden"
+              exit={{ x: "-110%" }}
+              transition={{ type: "spring", damping: 32, stiffness: 320 }}
+              style={{ position: "fixed", inset: 0, zIndex: 60, pointerEvents: "none" }}
             >
-              {sidebarContent}
+              <div style={{ pointerEvents: "auto" }}>{sidebarContent}</div>
             </motion.div>
           </>
         )}
@@ -346,12 +380,5 @@ export function ChatSidebar({ isOpen = true, onClose, isMobile = false }: ChatSi
     )
   }
 
-  return (
-    <div className={cn(
-      "hidden lg:flex",
-      isOpen ? "flex" : "hidden"
-    )}>
-      {sidebarContent}
-    </div>
-  )
+  return <div className={cn("hidden lg:flex", isOpen ? "flex" : "hidden")}>{sidebarContent}</div>
 }
