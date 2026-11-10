@@ -12,11 +12,11 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   icons: {
     icon: [
-      { url: "/icons/crest-32.png", sizes: "32x32", type: "image/png" },
-      { url: "/icons/crest-16.png", sizes: "16x16", type: "image/png" },
-      { url: "/icons/crest-48.png", sizes: "48x48", type: "image/png" },
+      { url: "/icons/crest-tab-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icons/crest-tab-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/icons/crest-tab-48.png", sizes: "48x48", type: "image/png" },
     ],
-    shortcut: "/icons/crest-32.png",
+    shortcut: "/icons/crest-tab-32.png",
     apple: [
       {
         url: "/icons/crest-180.png",
