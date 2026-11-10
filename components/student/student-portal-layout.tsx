@@ -1,18 +1,24 @@
 "use client"
 
 import { useState } from "react"
-import { Menu, ChevronRight } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import type { Profile, Course } from "@/lib/types"
-import { ThemeToggle } from "@/components/theme-toggle"
 import { UserNav } from "@/components/user-nav"
-import { PushNotificationToggle } from "@/components/push-notification-toggle"
-import { ClassroomSidebar } from "./classroom-sidebar"
-import { Button } from "@/components/ui/button"
-import { Calendar, Bell, Brain, Search, Building, Settings, Home, Users, FileText } from "lucide-react"
-import { cn, slugify } from "@/lib/utils"
-import { BrandIcon } from "@/components/brand-icon"
+import { PortalShell, type PortalNavGroup, type PortalRailItem } from "@/components/portal/portal-shell"
+import {
+  Calendar,
+  Bell,
+  Brain,
+  Settings,
+  LayoutGrid,
+  Users,
+  FileText,
+  Search,
+  ChevronDown,
+  House,
+} from "lucide-react"
+import { slugify } from "@/lib/utils"
 
 interface StudentPortalLayoutProps {
   profile: Profile
@@ -20,122 +26,122 @@ interface StudentPortalLayoutProps {
   children: React.ReactNode
 }
 
-// Page configuration for breadcrumbs and titles
-const pageConfig: Record<string, { title: string; icon: React.ComponentType<{ className?: string }>; breadcrumb: string }> = {
-  "/studentportal/mycourses": { title: "My Courses", icon: Home, breadcrumb: "My Courses" },
-  "/studentportal/calendar": { title: "Calendar & Notifications", icon: Calendar, breadcrumb: "Calendar" },
-  "/studentportal/reminders": { title: "Study Reminders", icon: Bell, breadcrumb: "Reminders" },
-  "/studentportal/aistudytools": { title: "AI Study Tools", icon: Brain, breadcrumb: "AI Study Tools" },
-  "/studentportal/documents": { title: "Documents RAG", icon: FileText, breadcrumb: "Documents RAG" },
-  "/studentportal/analytics": { title: "Analytics", icon: Search, breadcrumb: "Analytics" },
-  "/studentportal/agentbuilder": { title: "Agent Builder", icon: Brain, breadcrumb: "Agent Builder" },
-  "/studentportal/mfucampusresources": { title: "MFU Campus Guide", icon: Building, breadcrumb: "MFU Campus Guide" },
-  "/studentportal/mfuclubs": { title: "MFU Social", icon: Users, breadcrumb: "MFU Social" },
-  "/studentportal/settings": { title: "Settings", icon: Settings, breadcrumb: "Settings" },
+const pageTitles: Record<string, { title: string; crumbs: string[] }> = {
+  "/studentportal/mycourses": { title: "My Courses", crumbs: ["Student Portal", "My Courses"] },
+  "/studentportal/calendar": { title: "Calendar & Notifications", crumbs: ["Student Portal", "Calendar"] },
+  "/studentportal/reminders": { title: "Study Reminders", crumbs: ["Student Portal", "Reminders"] },
+  "/studentportal/aistudytools": { title: "AI Study Tools", crumbs: ["Student Portal", "AI Study Tools"] },
+  "/studentportal/documents": { title: "Documents", crumbs: ["Student Portal", "Documents"] },
+  "/studentportal/analytics": { title: "Analytics", crumbs: ["Student Portal", "Analytics"] },
+  "/studentportal/agentbuilder": { title: "Agent Builder", crumbs: ["Student Portal", "Agent Builder"] },
+  "/studentportal/mfucampusresources": { title: "MFU Campus Guide", crumbs: ["Student Portal", "Campus Guide"] },
+  "/studentportal/mfuclubs": { title: "MFU Social", crumbs: ["Student Portal", "MFU Social"] },
+  "/studentportal/settings": { title: "Settings", crumbs: ["Student Portal", "Settings"] },
 }
 
 export function StudentPortalLayout({ profile, courses, children }: StudentPortalLayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(true) // Default to open on desktop
-  const pathname = usePathname()
-  
-  // Get current page config - check for course pages first
-  let currentPage: string | undefined
-  let currentCourse: Course | undefined
-  
-  if (pathname.startsWith("/studentportal/mycourses/") && pathname !== "/studentportal/mycourses") {
-    // Course detail page - extract courseName and find course
-    const courseName = pathname.split("/studentportal/mycourses/")[1]?.split("/")[0]
-    if (courseName) {
-      currentCourse = courses.find(c => {
-        const courseSlug = slugify(c.title)
-        return courseSlug === courseName
-      })
-      currentPage = "/studentportal/mycourses"
-    }
-  } else {
-    currentPage = Object.keys(pageConfig).find(path => 
-      pathname === path || (pathname.startsWith(path + "/") && path !== "/studentportal/mycourses")
-    )
-  }
-  
-  const pageInfo = currentPage && pageConfig[currentPage] 
-    ? pageConfig[currentPage] 
-    : { title: "Student Portal", icon: Home, breadcrumb: "My Courses" }
-  
-  // Use course title if on a course page, otherwise use pageInfo breadcrumb
-  const breadcrumbText = currentCourse ? currentCourse.title : pageInfo.breadcrumb
+  const pathname = usePathname() || ""
+  const [coursesOpen, setCoursesOpen] = useState(true)
+
+  const nav: PortalNavGroup[] = [
+    {
+      label: "Learning",
+      items: [
+        { href: "/studentportal/mycourses", label: "My Courses", icon: LayoutGrid },
+        { href: "/studentportal/calendar", label: "Calendar", icon: Calendar },
+        { href: "/studentportal/reminders", label: "Reminders", icon: Bell },
+        { href: "/studentportal/aistudytools", label: "AI Study Tools", icon: Brain },
+      ],
+    },
+    {
+      label: "Study",
+      items: [
+        { href: "/studentportal/documents", label: "Documents", icon: FileText },
+        { href: "/studentportal/analytics", label: "Analytics", icon: Search },
+        { href: "/studentportal/agentbuilder", label: "Agent Builder", icon: Brain },
+      ],
+    },
+    {
+      label: "Account",
+      items: [{ href: "/studentportal/settings", label: "Settings", icon: Settings }],
+    },
+  ]
+
+  const railItems: PortalRailItem[] = [
+    { href: "/studentportal/mycourses", label: "Courses", icon: LayoutGrid },
+    { href: "/studentportal/calendar", label: "Calendar", icon: Calendar },
+    { href: "/studentportal/aistudytools", label: "Study", icon: Brain },
+    { href: "/studentportal/mfuclubs", label: "Social", icon: Users },
+    { href: "/studentportal/settings", label: "Settings", icon: Settings },
+  ]
+
+  const courseMatch = pathname.match(/^\/studentportal\/mycourses\/([^/]+)/)
+  const activeCourse = courseMatch
+    ? courses.find((c) => slugify(c.title) === courseMatch[1])
+    : undefined
+
+  const base = Object.keys(pageTitles).find(
+    (p) => pathname === p || (pathname.startsWith(p + "/") && p !== "/studentportal/mycourses"),
+  )
+  const page = activeCourse
+    ? { title: activeCourse.title, crumbs: ["Student Portal", "My Courses", activeCourse.title] }
+    : pageTitles[base || "/studentportal/mycourses"] || { title: "Student Portal", crumbs: ["Student Portal"] }
+
+  const coursePicker =
+    courses.length > 0 ? (
+      <div className="mfp-course-picker">
+        <button
+          type="button"
+          className="mfp-course-toggle"
+          aria-expanded={coursesOpen}
+          aria-controls="mfp-course-list"
+          onClick={() => setCoursesOpen((open) => !open)}
+        >
+          <House size={17} />
+          <span>My courses</span>
+          <ChevronDown
+            size={16}
+            className="mfp-course-chev"
+            data-open={coursesOpen}
+            aria-hidden
+          />
+        </button>
+
+        {coursesOpen ? (
+          <div id="mfp-course-list" className="mfp-course-list">
+            {courses.slice(0, 8).map((course) => {
+              const slug = slugify(course.title)
+              return (
+                <Link
+                  key={course.id}
+                  href={`/studentportal/mycourses/${slug}`}
+                  className="mfp-course-item"
+                  data-active={slug === courseMatch?.[1]}
+                  title={course.title}
+                >
+                  {course.code ? <span className="mfp-course-code">[{course.code}]</span> : null}
+                  <span className="truncate">{course.title}</span>
+                </Link>
+              )
+            })}
+          </div>
+        ) : null}
+      </div>
+    ) : null
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-gray-100 via-gray-50 to-gray-100 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900">
-      {/* Sidebar */}
-      <ClassroomSidebar 
-        courses={courses} 
-        isOpen={sidebarOpen}
-        onToggle={() => setSidebarOpen(!sidebarOpen)}
-      />
-
-      {/* Main Content */}
-      <div className={cn(
-        "flex-1 flex flex-col transition-all duration-300",
-        sidebarOpen ? "lg:ml-64" : "lg:ml-0"
-      )}>
-        {/* Header with University Theme Color */}
-        <header className="sticky top-0 z-30 border-b bg-[#A81D24] text-white backdrop-blur-sm dark:bg-[#A81D24]">
-          <div className="flex h-16 items-center justify-between px-6">
-            {/* Left side - Hamburger, Logo, and Breadcrumb */}
-            <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="h-10 w-10 rounded-xl text-white hover:bg-white/20 transition-all"
-              >
-                <Menu className="h-5 w-5" />
-              </Button>
-              
-              {/* Logo */}
-              <BrandIcon size={40} tone="light" className="shrink-0" />
-              
-              {/* Breadcrumb Navigation */}
-              <div className="flex items-center gap-2 text-sm">
-                <Link 
-                  href="/studentportal/mycourses"
-                  className="text-white hover:text-white/80 transition-colors font-medium"
-                >
-                  Student Portal
-                </Link>
-                <ChevronRight className="h-4 w-4 text-white/70" />
-                {currentCourse ? (
-                  <>
-                    <Link 
-                      href="/studentportal/mycourses"
-                      className="text-white hover:text-white/80 transition-colors font-medium"
-                    >
-                      My Courses
-                    </Link>
-                    <ChevronRight className="h-4 w-4 text-white/70" />
-                    <span className="text-white/90">{currentCourse.title}</span>
-                  </>
-                ) : (
-                  <span className="text-white/90">{breadcrumbText}</span>
-                )}
-              </div>
-            </div>
-
-            {/* Right side - Utility Icons */}
-            <div className="flex items-center gap-2">
-              <PushNotificationToggle />
-              <ThemeToggle />
-              <UserNav profile={profile} />
-            </div>
-          </div>
-        </header>
-
-        {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto bg-gradient-to-br from-gray-100 via-gray-50 to-gray-100 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900">
-          {children}
-        </main>
-      </div>
-    </div>
+    <PortalShell
+      variant="student"
+      chrome="rail"
+      productName="Student Portal"
+      title={page.title}
+      crumbs={page.crumbs}
+      nav={nav}
+      railItems={railItems}
+      extraTop={coursePicker}
+      actions={<UserNav profile={profile} />}
+    >
+      {children}
+    </PortalShell>
   )
 }

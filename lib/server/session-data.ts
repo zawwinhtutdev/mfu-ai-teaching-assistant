@@ -21,6 +21,7 @@ import {
 } from "@/lib/mock-data"
 import type { ChatbotSettings, Course, CourseEnrollmentFeedback, CourseMaterial, Profile, UserRole } from "@/lib/types"
 import { slugify } from "@/lib/utils"
+import { toUserRole } from "@/lib/auth/roles"
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>
 
@@ -106,8 +107,9 @@ const getSessionContext = cache(async (): Promise<SessionContext> => {
 
   const user = session.user
   const { data: profileRow } = await supabase.from("profiles").select("*").eq("id", user.id).single()
-  const roleMetadata = profileRow?.role || user.user_metadata?.role
-  const role: UserRole = roleMetadata === "admin" ? "admin" : roleMetadata === "teacher" ? "teacher" : "student"
+  // Role comes from public.profiles only. user_metadata is user-writable, so
+  // reading it here would let an account promote itself client-side.
+  const role: UserRole = toUserRole(profileRow?.role)
 
   return {
     isDemo: false,

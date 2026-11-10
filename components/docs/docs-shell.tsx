@@ -51,7 +51,6 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react"
-import { ThemeToggle } from "@/components/theme-toggle"
 import { BrandIcon } from "@/components/brand-icon"
 import {
   docsNavigation,
@@ -671,7 +670,6 @@ export function DocsShell({
               <Home className="size-4" />
               <span className="hidden 2xl:inline">Back to platform</span>
             </Link>
-            <ThemeToggle />
           </div>
         </div>
         <div className="absolute inset-x-0 bottom-0 h-px bg-transparent">

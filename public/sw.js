@@ -1,19 +1,24 @@
-const CACHE_NAME = "mfu-ai-ta-v9";
+const CACHE_NAME = "mfu-ai-ta-v8";
 const OFFLINE_URL = "/";
+const IS_LOCALHOST =
+  self.location.hostname === "localhost" || self.location.hostname === "127.0.0.1";
 
-// Assets to cache on install
+// Assets to cache on install. The document itself is intentionally NOT
+// precached: caching "/" pins the first-seen HTML for every navigation, which
+// hides new deployments behind a stale page. Navigations are network-first
+// and fall back to whatever document was last cached successfully.
 const PRECACHE_ASSETS = [
-  "/",
   "/manifest.json",
-  "/brand/mfu-crest.png",
-  "/icons/crest-tab-16.png",
-  "/icons/crest-tab-32.png",
-  "/icons/crest-tab-48.png",
-  "/icons/crest-180.png",
-  "/icons/crest-192.png",
-  "/icons/crest-512.png",
-  "/icons/crest-maskable-192.png",
-  "/icons/crest-maskable-512.png",
+  "/brand/mfu-ai-mark-dark.svg",
+  "/brand/mfu-ai-mark-light.svg",
+  "/brand/mfu-ai-favicon-circle-large.svg",
+  "/icons/favicon-circle-large-16.png",
+  "/icons/favicon-circle-large-32.png",
+  "/icons/apple-touch-icon-mono.png",
+  "/icons/icon-mono-192.png",
+  "/icons/icon-mono-512.png",
+  "/icons/icon-maskable-mono-192.png",
+  "/icons/icon-maskable-mono-512.png",
 ];
 
 // Install: cache critical assets
@@ -48,15 +53,41 @@ self.addEventListener("fetch", (event) => {
   // Skip non-GET requests
   if (request.method !== "GET") return;
 
-  // Skip API routes — always go to network
+  // Skip API routes and localhost dev bundles — always go to network
   if (url.pathname.startsWith("/api/")) return;
+  if (IS_LOCALHOST && url.pathname.startsWith("/_next/")) return;
 
-  // For navigation requests: network first, fall back to cached page
+  // For navigation requests: network first, fall back to the last document
+  // that was cached successfully. Successful responses ARE cached here (not at
+  // install) so the offline copy tracks deployments instead of pinning the
+  // first-seen HTML forever.
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request).catch(() => {
-        return caches.match(OFFLINE_URL);
-      })
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(OFFLINE_URL, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(OFFLINE_URL).then((cached) => cached || Response.error()))
+    );
+    return;
+  }
+
+  // CSS chunks can share paths across builds/dev edits — always prefer network.
+  if (url.pathname.endsWith(".css")) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request))
     );
     return;
   }
@@ -78,23 +109,6 @@ self.addEventListener("fetch", (event) => {
           return response;
         });
       })
-    );
-    return;
-  }
-
-  // Theme CSS uses stable URLs and changes between deployments. Prefer the
-  // network so stale cached CSS is never paired with newer page markup.
-  if (url.pathname.endsWith(".css")) {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-          }
-          return response;
-        })
-        .catch(() => caches.match(request))
     );
     return;
   }
@@ -122,8 +136,8 @@ self.addEventListener("push", (event) => {
     event.waitUntil(
       self.registration.showNotification(data.title || "MFU AI TA", {
         body: data.body || "",
-        icon: "/icons/crest-192.png",
-        badge: "/icons/crest-192.png",
+        icon: "/icons/icon-mono-192.png",
+        badge: "/icons/icon-mono-192.png",
         data: { url: data.url || "/" },
       })
     );
@@ -132,7 +146,7 @@ self.addEventListener("push", (event) => {
     event.waitUntil(
       self.registration.showNotification("MFU AI TA", {
         body: event.data.text(),
-        icon: "/icons/crest-192.png",
+        icon: "/icons/icon-mono-192.png",
       })
     );
   }

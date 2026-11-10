@@ -1,11 +1,5 @@
 # MFU AI Teaching Assistant
 
-<p align="center">
-  <img src="docs/assets/banner.webp"
-       alt="MFU AI Teaching Assistant — course-grounded learning intelligence: role-aware scope, retrieval over course materials, verified citations"
-       width="100%">
-</p>
-
 A course-scoped RAG assistant for university teaching: teachers upload PDFs into
 the courses they own, students ask questions about the courses they are enrolled
 in, and every answer is cited or refused.
@@ -45,6 +39,10 @@ Behaviour worth highlighting:
   citations all follow the selected course; switching clears the conversation.
 - **Enrollment is a database row, not a UI filter.** Requesting another course's
   documents or chat returns `403` even if the URL is edited by hand.
+- **Retrieval is scoped by the caller, not by the request.** Omitting `course_id`
+  does not widen the search to every course: the service resolves the caller's
+  own courses from `enrollments` (or `courses.teacher_id`) and searches only
+  those. A caller with no courses retrieves nothing and gets a refusal.
 - **Refusal over guessing.** If retrieval finds nothing relevant, the assistant
   replies *"The course materials do not cover this."*
 - **Citations are repaired.** When a small local model attaches a claim to the
@@ -120,6 +118,122 @@ model — the single highest-impact fix in the project.
 
 ## Quickstart
 
+### Authentication (real RBAC)
+
+Signup and login run against a local Supabase stack. Roles are stored in
+`public.profiles.role` and enforced by RLS plus a route guard in middleware.
+
+```bash
+supabase start          # API :54321, DB :54322, Studio :54323, Mail :54324
+supabase db reset       # re-apply migrations + seed demo content
+```
+
+`.env.local` already points at the stack. Seeded accounts all use password
+`demo1234`:
+
+| Role | Email |
+| --- | --- |
+| Admin | `admin@mfu.ac.th` |
+| Teacher | `anan.suwan@mfu.ac.th`, `malee.chaiyaporn@mfu.ac.th`, `somchai.prasert@mfu.ac.th` |
+| Student | `kanya.wong@mfu.ac.th`, `niran.chai@mfu.ac.th`, and four more |
+
+New signups get a real `profiles` row via the `on_auth_user_created` trigger and
+land in a portal populated with the same demo courses, enrollments, and
+materials the old mock data showed.
+
+**Role is derived from the email address, never chosen by the user.**
+
+MFU issues distinct address patterns per population, and both domains are
+controlled by the university's Google Workspace, so the address a person
+authenticates with is proof of who they are:
+
+| Address pattern | Role |
+| --- | --- |
+| `<studentID>@lamduan.mfu.ac.th` | `student` |
+| `<firstname.last>@mfu.ac.th` | `teacher` |
+| anything in `ADMIN_EMAILS` (default `admin@mfu.ac.th`) | `admin` |
+| any other domain | **rejected** at insert |
+
+The rule lives in `public.role_for_email()`
+(`supabase/migrations/20261231000100_role_from_email.sql`) and is applied by the
+signup trigger. This holds for **both** password signup and Google sign-in, so
+teachers can self-provision with no admin step.
+
+Admin is checked first because `admin@mfu.ac.th` sits on the teacher domain.
+Because a fallback is exactly how the previous version let anyone claim
+"teacher", an unrecognised address is rejected rather than defaulted.
+
+The signup form previews the outcome live as the user types (`lib/auth/role-from-email.ts`)
+but never sends a role — the database decides. An admin can still change a role
+in the Admin Console, and the change is audited.
+
+### Email confirmation
+
+Email confirmation is **enabled**, matching production behaviour. After signing
+up, the user sees "Check Your Email" and must open the link before they can log
+in. Locally, no real email is sent — Supabase captures every message in Mailpit:
+
+- Mailpit inbox: <http://localhost:54324>
+- Open the message, click the confirmation link, and you are signed in and
+  redirected to the portal for your role.
+
+The link redirects through `/auth/callback`, which exchanges the PKCE code,
+creates the session, and routes by role from `public.profiles`. Because the flow
+uses PKCE, **the link must be opened in the same browser that signed up** — the
+code verifier lives in that browser's storage. Opening it elsewhere returns
+`?error=oauth_failed`.
+
+Seeded accounts (below) are pre-confirmed, so they skip this step.
+
+On Vercel, add the deployment URL to the hosted project's redirect allow-list
+and configure a real SMTP provider under Authentication → Emails.
+
+### Google sign-in
+
+The login page offers "Google SSO" whenever two conditions hold: Supabase has
+Google credentials configured, and the admin policy `allow_google_sso` is on.
+Otherwise the button is disabled with an explanatory tooltip — it never fails
+after a click.
+
+**1. Create a Google OAuth client.** At
+[console.cloud.google.com](https://console.cloud.google.com) → APIs & Services →
+Credentials → *Create OAuth client ID* → **Web application**. Register the
+**Supabase** callback as the redirect URI, not the app:
+
+```
+http://127.0.0.1:54321/auth/v1/callback          # local
+https://<project-ref>.supabase.co/auth/v1/callback   # hosted
+```
+
+**2. Export the credentials** before starting Supabase (see
+`.envrc.private.example`):
+
+```bash
+export SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID="...apps.googleusercontent.com"
+export SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET="..."
+supabase stop && supabase start
+```
+
+`supabase/config.toml` substitutes these into `[auth.external.google]`. Without
+them the provider still reports as enabled but Google returns
+`invalid_client`, so the button is the only thing that tells you they are
+missing — check `/api/auth/google/status`.
+
+**3. On Vercel**, set the same pair in the hosted Supabase project under
+Authentication → Providers → Google.
+
+Behaviour worth knowing:
+
+- Only `@mfu.ac.th` addresses are accepted. A database trigger enforces this on
+  insert, and `/auth/callback` re-checks before creating a session.
+- Google sign-in always creates a **student**. A teacher must be promoted to
+  `teacher` in the Admin Console — Google never conveys a role.
+- If someone already registered with a password, signing in with Google using
+  the same address is rejected with an `account_exists` message rather than
+  silently merging, because Supabase automatic linking is off.
+- The display name falls back through `full_name` → `name` → the email local
+  part, since Google sends a different metadata key than the signup form.
+
 ### Docker
 
 ```bash
@@ -141,6 +255,7 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/alembic upgrade head
 PYTHONPATH=. .venv/bin/python scripts/seed_academic.py
+PYTHONPATH=. .venv/bin/python scripts/seed_documents.py
 ALLOW_INSECURE_DEV_AUTH=true ENVIRONMENT=local \
   DATABASE_URL="postgresql+asyncpg://ata:ata-local-dev@127.0.0.1:5432/ata" \
   AI_PROVIDER=ollama OLLAMA_MODEL=qwen2.5:7b \
@@ -155,6 +270,7 @@ Or the shortcut that starts both and prints the links:
 
 ```bash
 ./scripts/dev.sh start     # start | stop | restart | status
+./scripts/dev.sh seed      # academic rows + demo course PDFs (idempotent)
 ```
 
 ### Local models
@@ -216,8 +332,8 @@ services/api/            FastAPI service
   app/rag/               ingest, chunking, retrieval, fusion, citations, pipeline
   app/academic.py        people / courses / enrollments + access checks
   migrations/            Alembic
-  scripts/               seed_academic.py
-  tests/                 78 tests
+  scripts/               seed_academic.py, seed_documents.py
+  tests/                 87 tests
 scripts/                 dev.sh, smoke checks, latency baseline
 docs/                    assets, archive
 ```
@@ -229,10 +345,10 @@ docs/                    assets, archive
 | `POST` | `/v1/chat` | SSE answer (`sources → start → delta → done`); requires course access |
 | `GET` | `/v1/me` , `/v1/me/courses` | Caller identity and visible courses |
 | `GET` | `/v1/courses/{id}` | Course detail, access checked |
-| `GET` | `/v1/documents?course_id=` | Course documents |
-| `POST` | `/v1/documents` | Teacher-only upload, 25 MB PDF |
-| `DELETE` | `/v1/documents/{id}` | Remove a document and its chunks |
-| `POST` | `/v1/search` | Hybrid search over one course |
+| `GET` | `/v1/documents?course_id=` | Course documents, scoped to the caller |
+| `POST` | `/v1/documents` | Teacher-only upload into a course they teach, 25 MB PDF |
+| `DELETE` | `/v1/documents/{id}` | Teacher of that course only; removes document and chunks |
+| `POST` | `/v1/search` | Hybrid search inside the caller's course scope |
 | `GET` | `/v1/stats` | Platform counters |
 | `GET` | `/health`, `/ready` | Liveness, readiness |
 
@@ -260,7 +376,7 @@ so the default stays `top_k=5` + citation repair.
 ## Testing
 
 ```bash
-cd services/api && .venv/bin/python -m pytest -q     # 78 tests
+cd services/api && .venv/bin/python -m pytest -q     # 87 tests
 cd services/api && .venv/bin/ruff check . && .venv/bin/mypy app
 npm run type-check && npm run lint
 ```

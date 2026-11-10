@@ -1,6 +1,7 @@
 import { cookies } from "next/headers"
 
 import { createClient } from "@/lib/supabase/server"
+import { toUserRole } from "@/lib/auth/roles"
 
 export const API_URL = process.env.API_SERVICE_URL?.replace(/\/+$/, "")
 
@@ -41,8 +42,9 @@ export type Role = "student" | "teacher" | "admin"
 /**
  * Resolve the caller's role.
  *
- * Local demo mode carries the role in a cookie; a real Supabase session carries
- * it in user metadata. Order matters: a live session wins over the demo cookie.
+ * A live Supabase session wins over a demo cookie. The role itself comes from
+ * public.profiles — never user_metadata, which the signed-in user can rewrite
+ * and would therefore allow client-side self-promotion to admin.
  */
 export async function resolveRole(): Promise<Role | null> {
   const supabase = await createClient()
@@ -50,11 +52,10 @@ export async function resolveRole(): Promise<Role | null> {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const metadataRole =
-    (user?.user_metadata?.role as string | undefined) ??
-    (user?.app_metadata?.role as string | undefined)
-  if (metadataRole === "student" || metadataRole === "teacher" || metadataRole === "admin") {
-    return metadataRole
+  if (user?.id) {
+    const { data: profileRow } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle()
+    const role = toUserRole(profileRow?.role)
+    return role
   }
 
   const jar = await cookies()

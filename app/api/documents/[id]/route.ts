@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { deleteObjectFromSpaces } from "@/lib/storage/spaces"
 import { deleteGeminiFileSearchDocument } from "@/lib/ai/gemini-file-search"
 import { trackApiError } from "@/lib/server/observability"
+import { isHttpsRequest } from "@/lib/server/request-security"
 import { DEMO_EMAIL_COOKIE, DEMO_ROLE_COOKIE, getDemoAccountByRole } from "@/lib/demo-auth"
 import {
   DEMO_COOKIE_MAX_AGE_SECONDS,
@@ -43,7 +44,7 @@ export async function DELETE(
       const response = NextResponse.json({ success: true })
       response.cookies.set(DEMO_DOCUMENTS_COOKIE, writeDemoDocumentsCookie(demoAccount.email, nextDocs), {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: await isHttpsRequest(),
         sameSite: "lax",
         path: "/",
         maxAge: DEMO_COOKIE_MAX_AGE_SECONDS,

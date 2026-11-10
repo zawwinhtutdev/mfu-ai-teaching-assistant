@@ -10,7 +10,6 @@ import { Label } from "@/components/ui/label"
 import { ArrowLeft, User, Mail } from "lucide-react"
 import Link from "next/link"
 import type { Profile } from "@/lib/types"
-import { ThemeToggle } from "@/components/theme-toggle"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { Switch } from "@/components/ui/switch"
@@ -146,22 +145,9 @@ export function SettingsPage({ profile }: SettingsPageProps) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
-      <header className="sticky top-0 z-50 border-b bg-[#A81D24] text-white backdrop-blur-sm dark:bg-[#A81D24]">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" asChild className="text-white hover:bg-white/20">
-              <Link href="/studentportal/mycourses">
-                <ArrowLeft className="h-5 w-5" />
-              </Link>
-            </Button>
-            <h1 className="text-lg font-bold">Settings</h1>
-          </div>
-          <ThemeToggle />
-        </div>
-      </header>
+    <div className="space-y-6">
 
-      <main className="container mx-auto flex-1 px-4 py-8">
+      <div>
         <div className="mx-auto max-w-2xl space-y-6">
           <div>
             <h2 className="text-2xl font-bold">Account Settings</h2>
@@ -211,22 +197,6 @@ export function SettingsPage({ profile }: SettingsPageProps) {
 
           <Card>
             <CardHeader>
-              <CardTitle>Appearance</CardTitle>
-              <CardDescription>Customize how the app looks</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">Theme</p>
-                  <p className="text-sm text-muted-foreground">Toggle between light and dark mode</p>
-                </div>
-                <ThemeToggle />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
               <CardTitle>Account Type</CardTitle>
               <CardDescription>Your current role in the platform</CardDescription>
             </CardHeader>
@@ -267,7 +237,7 @@ export function SettingsPage({ profile }: SettingsPageProps) {
             </CardContent>
           </Card>
         </div>
-      </main>
+      </div>
     </div>
   )
 }

@@ -13,6 +13,8 @@ export interface ApiCourse {
   teacher_id: string
   teacher_name: string | null
   enrolled_students: number
+  documents?: number
+  documents_ready?: number
   created_at: string
 }
 

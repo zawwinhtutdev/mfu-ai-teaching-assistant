@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { User, Mail } from "lucide-react"
 import type { Profile } from "@/lib/types"
-import { ThemeToggle } from "@/components/theme-toggle"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 
@@ -97,22 +96,6 @@ export function SettingsPage({ profile }: SettingsPageProps) {
                   {isLoading ? "Saving..." : "Save Changes"}
                 </Button>
               </form>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Appearance</CardTitle>
-              <CardDescription>Customize how the app looks</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">Theme</p>
-                  <p className="text-sm text-muted-foreground">Toggle between light and dark mode</p>
-                </div>
-                <ThemeToggle />
-              </div>
             </CardContent>
           </Card>
 

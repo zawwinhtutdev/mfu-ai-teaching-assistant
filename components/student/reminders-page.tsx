@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { ArrowLeft, Plus, Calendar, CheckCircle2, Trash2 } from "lucide-react"
 import Link from "next/link"
 import type { Course } from "@/lib/types"
-import { ThemeToggle } from "@/components/theme-toggle"
 import { CreateReminderDialog } from "./create-reminder-dialog"
 import { useRouter } from "next/navigation"
 
@@ -52,22 +51,9 @@ export function RemindersPage({ studentId, courses, reminders: initialReminders 
   const completedReminders = reminders.filter((r) => r.is_completed)
 
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
-      <header className="sticky top-0 z-50 border-b bg-[#A81D24] text-white backdrop-blur-sm dark:bg-[#A81D24]">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" asChild className="text-white hover:bg-white/20">
-              <Link href="/studentportal/mycourses">
-                <ArrowLeft className="h-5 w-5" />
-              </Link>
-            </Button>
-            <h1 className="text-lg font-bold">Study Reminders</h1>
-          </div>
-          <ThemeToggle />
-        </div>
-      </header>
+    <div className="space-y-6">
 
-      <main className="container mx-auto flex-1 px-4 py-8">
+      <div>
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-bold">Manage Your Study Schedule</h2>
@@ -147,7 +133,7 @@ export function RemindersPage({ studentId, courses, reminders: initialReminders 
             </div>
           )}
         </div>
-      </main>
+      </div>
 
       <CreateReminderDialog
         open={showCreateDialog}
