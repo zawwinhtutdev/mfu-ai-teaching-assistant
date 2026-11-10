@@ -1,4 +1,4 @@
-const CACHE_NAME = "mfu-ai-ta-v6";
+const CACHE_NAME = "mfu-ai-ta-v9";
 const OFFLINE_URL = "/";
 
 // Assets to cache on install
@@ -6,9 +6,9 @@ const PRECACHE_ASSETS = [
   "/",
   "/manifest.json",
   "/brand/mfu-crest.png",
-  "/icons/crest-16.png",
-  "/icons/crest-32.png",
-  "/icons/crest-48.png",
+  "/icons/crest-tab-16.png",
+  "/icons/crest-tab-32.png",
+  "/icons/crest-tab-48.png",
   "/icons/crest-180.png",
   "/icons/crest-192.png",
   "/icons/crest-512.png",
