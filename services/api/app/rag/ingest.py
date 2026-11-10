@@ -128,7 +128,8 @@ async def extract_pages_with_vision(
         # Count image xrefs across pages so repeated header/footer logos are skipped.
         xref_counts: Counter[int] = Counter()
         if page_count >= 3:
-            for page in doc:
+            for page_index in range(page_count):
+                page = doc[page_index]
                 seen_on_page: set[int] = set()
                 for img in page.get_images(full=True):
                     xref = int(img[0])

@@ -196,7 +196,7 @@ async def stream_grounded_reply(
                         query=query,
                         vector=vector,
                         course_ids=course_ids,
-                        **({"document_ids": document_ids} if document_ids is not None else {}),
+                        document_ids=document_ids,
                         limit=top_k * 2,
                         mode=retrieval_mode,
                     )
