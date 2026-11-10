@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.config import Settings, get_settings
 from app.db import get_session
 from app.main import app
+from tests.conftest import FakeSession
 
 client = TestClient(app)
 
@@ -26,7 +27,11 @@ def _settings(**overrides: object) -> Settings:
 
 @pytest.fixture(autouse=True)
 def _clear_overrides() -> None:
-    app.dependency_overrides[get_session] = lambda: None
+    # The chat route resolves identity and scope before streaming, so a session
+    # double is required even for a dev-auth smoke test.
+    app.dependency_overrides[get_session] = lambda: FakeSession(
+        email="demo@mfu.ac.th", courses=("course-csd322",)
+    )
     yield
     app.dependency_overrides.clear()
 
@@ -67,9 +72,11 @@ def test_bearer_token_still_wins_over_dev_header() -> None:
 
 def test_dev_chat_stream_uses_stub() -> None:
     app.dependency_overrides[get_settings] = lambda: _settings(gemini_api_key="")
+    # Retrieval is covered elsewhere; this asserts the dev-auth path reaches a
+    # real provider, so keep the corpus out of it.
     response = client.post(
         "/v1/chat",
-        json={"messages": [{"role": "user", "content": "hello"}]},
+        json={"messages": [{"role": "user", "content": "hello"}], "use_retrieval": False},
         headers={"X-Dev-Principal": "demo@mfu.ac.th"},
     )
     assert response.status_code == 200

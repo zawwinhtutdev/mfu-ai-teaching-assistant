@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { isHttpsRequest } from "@/lib/server/request-security"
 import { DEMO_EMAIL_COOKIE, DEMO_ROLE_COOKIE, getDemoAccountByRole, isDemoRole } from "@/lib/demo-auth"
 import {
   DEMO_CONVERSATIONS_COOKIE,
@@ -106,7 +107,7 @@ export async function POST(req: Request) {
       )
       response.cookies.set(DEMO_CONVERSATIONS_COOKIE, writeDemoConversationsCookie(demoAccount.email, [conversation, ...current]), {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: await isHttpsRequest(),
         sameSite: "lax",
         path: "/",
         maxAge: DEMO_CONVERSATIONS_COOKIE_MAX_AGE_SECONDS,

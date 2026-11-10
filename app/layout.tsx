@@ -1,6 +1,5 @@
 import type React from "react"
 import type { Metadata, Viewport } from "next"
-import { ThemeProvider } from "@/components/theme-provider"
 import { ServiceWorkerRegister } from "@/components/sw-register"
 import "./globals.css"
 
@@ -42,11 +41,9 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className="light" style={{ colorScheme: "light" }}>
       <body className={`font-sans antialiased`}>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={true} disableTransitionOnChange>
-          {children}
-        </ThemeProvider>
+        {children}
         <ServiceWorkerRegister />
       </body>
     </html>

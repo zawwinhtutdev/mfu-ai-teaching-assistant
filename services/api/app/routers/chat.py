@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.academic import assert_course_access, get_person
+from app.academic import assert_course_access, course_scope_for, get_person
 from app.auth import CurrentPrincipal
 from app.config import Settings, get_settings
 from app.db import get_session
@@ -54,10 +54,14 @@ async def chat(
     settings: SettingsDep,
     session: SessionDep,
 ) -> StreamingResponse:
-    # A course id in the request is a request, not a permission.
+    # Retrieval scope is resolved from the database, never from the request.
+    # A course id narrows the caller's own scope; omitting one must not widen it.
+    person = await get_person(session, principal)
     if request.course_id is not None:
-        person = await get_person(session, principal)
         await assert_course_access(session, person, request.course_id)
+        course_ids: list[str] | None = [request.course_id]
+    else:
+        course_ids = await course_scope_for(session, person)
 
     provider = get_provider(settings, request.model)
 
@@ -67,7 +71,8 @@ async def chat(
             settings=settings,
             provider=provider,
             session=session,
-            course_id=request.course_id,
+            course_ids=course_ids,
+            document_ids=request.document_ids,
             use_retrieval=request.use_retrieval,
             retrieval_mode=request.retrieval_mode,
             top_k=request.top_k,

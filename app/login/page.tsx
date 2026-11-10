@@ -5,6 +5,7 @@ import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { getEmailDomainError, isUniversityEmail } from "@/lib/email-validation"
 import { getDefaultRouteForRole } from "@/lib/demo-auth"
+import { toUserRole } from "@/lib/auth/roles"
 import { EducveStyleLinks } from "@/components/educve/EducveStyleLinks"
 import { InnerPageLayout } from "@/components/educve/InnerPageLayout"
 
@@ -30,6 +31,11 @@ const noticeStyle: React.CSSProperties = {
 const oauthErrorMessages: Record<string, string> = {
   oauth_failed: "Google sign-in could not be completed. Please try again.",
   university_email_required: getEmailDomainError(),
+  account_exists:
+    "An account with this email already exists. Sign in with your email and password, then link Google from Settings.",
+  oauth_cancelled: "Google sign-in was cancelled.",
+  profile_missing:
+    "Your account is missing a profile. Please contact the site administrator.",
 }
 
 export default function LoginPage() {
@@ -40,6 +46,8 @@ export default function LoginPage() {
   const [demoLoginEmail, setDemoLoginEmail] = useState<string | null>(null)
   const [acceptTerms, setAcceptTerms] = useState(false)
   const [resetSuccess, setResetSuccess] = useState(false)
+  // null = still checking, so the button does not flash "unavailable" on load.
+  const [googleEnabled, setGoogleEnabled] = useState<boolean | null>(null)
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search)
@@ -49,21 +57,31 @@ export default function LoginPage() {
     if (oauthError) {
       setError(oauthErrorMessages[oauthError] || "Google sign-in could not be completed. Please try again.")
     }
+
+    // Ask the server whether Google is actually configured, so the button can
+    // be hidden rather than failing after a click.
+    let cancelled = false
+    fetch("/api/auth/google/status", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => {
+        if (!cancelled) setGoogleEnabled(payload?.enabled === true)
+      })
+      .catch(() => {
+        if (!cancelled) setGoogleEnabled(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const handleSsoLogin = async () => {
-    if (!acceptTerms) {
-      setError("Please accept the terms and conditions to continue")
-      return
-    }
-
+    // Google SSO goes straight to the Google account chooser. Terms acceptance
+    // is collected on the provider side, so it must not block this button.
     setError(null)
     setIsLoading(true)
     try {
-      const statusResponse = await fetch("/api/auth/google/status", { cache: "no-store" })
-      const statusPayload = await statusResponse.json().catch(() => null)
-
-      if (!statusResponse.ok || !statusPayload?.enabled) {
+      if (!googleEnabled) {
         throw new Error("Google SSO is not configured yet. Please use email login for now.")
       }
 
@@ -105,7 +123,10 @@ export default function LoginPage() {
         throw new Error(payload?.error || "Demo login failed")
       }
 
-      window.location.assign(getDefaultRouteForRole(role))
+      // Always follow the role the server actually authenticated, not the one
+      // the clicked button was labelled with.
+      const payload = await response.json().catch(() => null)
+      window.location.assign(getDefaultRouteForRole(payload?.account?.role ?? role))
     } catch (loginError: unknown) {
       setError(loginError instanceof Error ? loginError.message : "Demo login failed")
     } finally {
@@ -154,11 +175,13 @@ export default function LoginPage() {
         throw signInError
       }
 
-      let role: string | null | undefined = data.user?.user_metadata?.role
+      // Role is read from public.profiles — the authoritative source. Falling
+      // back to user_metadata would let a user rewrite their own role.
+      let role: string = "student"
 
       if (data.user?.id) {
         const { data: profileData } = await supabase.from("profiles").select("role").eq("id", data.user.id).single()
-        role = profileData?.role ?? role
+        role = toUserRole(profileData?.role)
       }
 
       window.location.assign(getDefaultRouteForRole(role))
@@ -260,7 +283,12 @@ export default function LoginPage() {
                         <button
                           type="button"
                           onClick={handleSsoLogin}
-                          disabled={isLoading || !!demoLoginEmail}
+                          disabled={isLoading || !!demoLoginEmail || googleEnabled !== true}
+                          title={
+                            googleEnabled === true
+                              ? undefined
+                              : "Google sign-in is not configured on this environment"
+                          }
                           className="td_btn td_style_1 td_radius_10 td_medium"
                         >
                           <span className="td_btn_in td_heading_color td_white_bg">
@@ -294,6 +322,10 @@ export default function LoginPage() {
                         ))}
                       </div>
                     </div>
+
+                    <p className="td_form_card_text td_fs_20 td_medium td_heading_color td_mb_20">
+                      University IT staff: <a href="/admin/login">sign in to the Admin Console</a>
+                    </p>
 
                     <p className="td_form_card_text td_fs_20 td_medium td_heading_color mb-0">
                       {"Don't have an account? "} <a href="/signup">Sign up</a>

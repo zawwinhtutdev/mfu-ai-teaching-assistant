@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
+import { isHttpsRequest } from "@/lib/server/request-security"
 import { DEMO_EMAIL_COOKIE, DEMO_ROLE_COOKIE, findDemoAccount } from "@/lib/demo-auth"
 
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const email = typeof body?.email === "string" ? body.email : ""
@@ -27,9 +28,21 @@ export async function POST(req: Request) {
       },
     })
 
+    // A demo sign-in must replace any real Supabase session. Otherwise the
+    // middleware/session helpers (which accept a Supabase user) would keep the
+    // old role and silently bounce the user to their previous portal.
+    for (const cookie of req.cookies.getAll()) {
+      if (cookie.name.startsWith("sb-")) {
+        response.cookies.set(cookie.name, "", {
+          path: "/",
+          maxAge: 0,
+        })
+      }
+    }
+
     response.cookies.set(DEMO_ROLE_COOKIE, account.role, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: await isHttpsRequest(),
       sameSite: "lax",
       path: "/",
       maxAge: COOKIE_MAX_AGE_SECONDS,
@@ -37,7 +50,7 @@ export async function POST(req: Request) {
 
     response.cookies.set(DEMO_EMAIL_COOKIE, account.email, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: await isHttpsRequest(),
       sameSite: "lax",
       path: "/",
       maxAge: COOKIE_MAX_AGE_SECONDS,

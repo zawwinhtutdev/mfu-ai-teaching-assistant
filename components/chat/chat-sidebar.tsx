@@ -102,20 +102,14 @@ export function ChatSidebar({ isOpen = true, onClose, isMobile = false, onOpenSe
                     : "Student Mode",
             })
           } else {
-            const metadataRole =
-              user.user_metadata?.role === "teacher" || user.user_metadata?.role === "admin"
-                ? user.user_metadata.role
-                : "student"
-            setAuthRole(metadataRole)
+            // No profiles row: fall back to the lowest role. Never read the role
+            // from user_metadata, which the user can rewrite client-side.
+            const fallbackRole = "student"
+            setAuthRole(fallbackRole)
             setUserProfile({
               name: user.user_metadata?.full_name || "User",
               email: user.email || "user@mfu.ac.th",
-              role:
-                metadataRole === "teacher"
-                  ? "Teacher Mode"
-                  : metadataRole === "admin"
-                    ? "Admin Mode"
-                    : "Student Mode",
+              role: "Student Mode",
             })
           }
         } else {

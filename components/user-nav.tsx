@@ -77,7 +77,8 @@ export function UserNav({ profile: propProfile }: UserNavProps) {
               id: user.id,
               email: user.email || "user@mfu.ac.th",
               full_name: user.user_metadata?.full_name || null,
-              role: (user.user_metadata?.role as "student" | "teacher") || "student",
+              // Never take the role from metadata; lowest privilege on fallback.
+              role: "student",
               avatar_url: user.user_metadata?.avatar_url || null,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),

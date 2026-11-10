@@ -1,4 +1,9 @@
-"""Chat endpoint tests — run entirely offline via the stub provider."""
+"""Chat endpoint tests — run entirely offline via the stub provider.
+
+The route resolves the caller's retrieval scope from the database before it
+streams, so these use a fake session that answers only the identity and
+enrollment lookups ``course_scope_for`` issues. No Postgres required.
+"""
 
 from __future__ import annotations
 
@@ -14,6 +19,7 @@ from app.main import app
 from app.providers.factory import get_provider
 from app.providers.gemini import GeminiProvider
 from app.providers.stub import StubProvider
+from tests.conftest import FakeSession
 
 client = TestClient(app)
 
@@ -53,9 +59,12 @@ def _events(body: str) -> list[dict[str, object]]:
 
 @pytest.fixture(autouse=True)
 def _clear_overrides() -> None:
+    # Pin the provider so no test can reach a real model, and answer identity
+    # lookups so nothing reaches Postgres.
     app.dependency_overrides[get_settings] = _override
-    # Retrieval is covered by the DB integration tests; keep these hermetic.
-    app.dependency_overrides[get_session] = lambda: None
+    app.dependency_overrides[get_session] = lambda: FakeSession(
+        email="s@mfu.ac.th", courses=("course-csd322",)
+    )
     yield
     app.dependency_overrides.clear()
 
@@ -68,9 +77,49 @@ def _post(payload: dict[str, object]) -> object:
     )
 
 
+def _post_unretrieved(content: str) -> object:
+    """A stream request with retrieval off: these tests cover SSE mechanics."""
+    return _post({"messages": [{"role": "user", "content": content}], "use_retrieval": False})
+
+
 def test_chat_requires_authentication() -> None:
     response = client.post("/v1/chat", json={"messages": [{"role": "user", "content": "hi"}]})
     assert response.status_code == 401
+
+
+def test_chat_refuses_unknown_caller() -> None:
+    app.dependency_overrides[get_session] = lambda: FakeSession(
+        email="someone-else@mfu.ac.th", known=False
+    )
+    response = _post({"messages": [{"role": "user", "content": "hi"}]})
+    # A verified token for a person with no platform account is not a caller.
+    assert response.status_code == 403
+
+
+def test_chat_refuses_course_the_caller_cannot_read() -> None:
+    app.dependency_overrides[get_session] = lambda: FakeSession(
+        email="s@mfu.ac.th", courses=("course-csd322",)
+    )
+    response = _post(
+        {
+            "messages": [{"role": "user", "content": "what is the exam memo?"}],
+            "course_id": "course-csb321",
+        }
+    )
+    assert response.status_code == 403
+
+
+def test_caller_with_no_courses_is_refused_not_widened() -> None:
+    """An omitted course_id must not become "search everything"."""
+    app.dependency_overrides[get_session] = lambda: FakeSession(email="s@mfu.ac.th", courses=())
+    response = _post({"messages": [{"role": "user", "content": "what is the exam memo?"}]})
+    assert response.status_code == 200
+
+    events = _events(response.text)
+    sources = [e for e in events if e["type"] == "sources"][0]
+    assert sources["sources"] == []
+    done = [e for e in events if e["type"] == "done"][-1]
+    assert done["refusal"] is True
 
 
 def test_empty_messages_rejected() -> None:
@@ -79,7 +128,7 @@ def test_empty_messages_rejected() -> None:
 
 
 def test_stream_is_sse_and_ordered() -> None:
-    response = _post({"messages": [{"role": "user", "content": "What is the late policy?"}]})
+    response = _post_unretrieved("What is the late policy?")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
 
@@ -92,7 +141,7 @@ def test_stream_is_sse_and_ordered() -> None:
 
 
 def test_stub_stream_contains_echoed_question() -> None:
-    response = _post({"messages": [{"role": "user", "content": "What is the late policy?"}]})
+    response = _post_unretrieved("What is the late policy?")
     text = "".join(str(e["text"]) for e in _events(response.text) if e["type"] == "delta")
     assert "[stub]" in text
     assert "What is the late policy?" in text
@@ -106,7 +155,8 @@ def test_ai_sdk_parts_are_normalized() -> None:
                     "role": "user",
                     "parts": [{"type": "text", "text": "hello from parts"}],
                 }
-            ]
+            ],
+            "use_retrieval": False,
         }
     )
     assert response.status_code == 200
@@ -115,7 +165,7 @@ def test_ai_sdk_parts_are_normalized() -> None:
 
 
 def test_stream_terminates_with_done_sentinel() -> None:
-    response = _post({"messages": [{"role": "user", "content": "hi"}]})
+    response = _post_unretrieved("hi")
     assert response.text.rstrip().endswith("data: [DONE]")
 
 

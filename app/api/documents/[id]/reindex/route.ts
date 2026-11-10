@@ -5,6 +5,7 @@ import { getDocumentReadUrl } from "@/lib/storage/spaces"
 import { getUserGeminiFileSearchStoreName, indexDocumentToGeminiFileSearch } from "@/lib/ai/gemini-file-search"
 import { resolveDocumentMimeType } from "@/lib/documents/supported-formats"
 import { trackApiError } from "@/lib/server/observability"
+import { isHttpsRequest } from "@/lib/server/request-security"
 import { DEMO_EMAIL_COOKIE, DEMO_ROLE_COOKIE, getDemoAccountByRole } from "@/lib/demo-auth"
 import {
   DEMO_COOKIE_MAX_AGE_SECONDS,
@@ -92,7 +93,7 @@ export async function POST(
       })
       response.cookies.set(DEMO_DOCUMENTS_COOKIE, writeDemoDocumentsCookie(demoAccount.email, nextDocs), {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: await isHttpsRequest(),
         sameSite: "lax",
         path: "/",
         maxAge: DEMO_COOKIE_MAX_AGE_SECONDS,

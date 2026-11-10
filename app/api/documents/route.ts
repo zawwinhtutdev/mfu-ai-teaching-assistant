@@ -10,6 +10,7 @@ import {
   resolveDocumentMimeType,
 } from "@/lib/documents/supported-formats"
 import { trackApiError } from "@/lib/server/observability"
+import { isHttpsRequest } from "@/lib/server/request-security"
 import { DEMO_EMAIL_COOKIE, DEMO_ROLE_COOKIE, getDemoAccountByRole } from "@/lib/demo-auth"
 import {
   DEMO_COOKIE_MAX_AGE_SECONDS,
@@ -189,7 +190,7 @@ export async function POST(req: Request) {
       const response = NextResponse.json({ documents: responseDocs })
       response.cookies.set(DEMO_DOCUMENTS_COOKIE, writeDemoDocumentsCookie(demoAccount.email, merged), {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: await isHttpsRequest(),
         sameSite: "lax",
         path: "/",
         maxAge: DEMO_COOKIE_MAX_AGE_SECONDS,

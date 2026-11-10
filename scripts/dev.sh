@@ -12,9 +12,20 @@ API_PID=.local-api.pid
 stop_one() {
   local pidfile=$1
   if [ -f "$pidfile" ]; then
-    kill "$(cat "$pidfile")" 2>/dev/null
+    kill "$(cat "$pidfile" 2>/dev/null)" 2>/dev/null
     rm -f "$pidfile"
   fi
+}
+
+# `npm start` spawns a next-server child that outlives the npm parent, so a pid
+# file alone is not enough to stop the web app. The listening port is the one
+# authoritative handle on both servers.
+kill_port() {
+  local port=$1 pids
+  pids=$(lsof -nP -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null)
+  # shellcheck disable=SC2086 # deliberate word splitting: kill each pid
+  [ -n "$pids" ] && kill $pids 2>/dev/null
+  return 0
 }
 
 detach() {
@@ -23,38 +34,77 @@ detach() {
   python3 -c 'import os, sys; os.setsid(); os.execvp(sys.argv[1], sys.argv[1:])' "$@"
 }
 
+# Record whoever actually listened once the service reported ready, so the pid
+# files never point at a short-lived wrapper shell.
+record_pid() {
+  local port=$1 pidfile=$2 pid
+  pid=$(lsof -nP -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null | head -1)
+  [ -n "$pid" ] && echo "$pid" >"$pidfile"
+  return 0
+}
+
 start_api() {
   ( cd services/api && \
     ALLOW_INSECURE_DEV_AUTH=true ENVIRONMENT=local \
     DATABASE_URL="postgresql+asyncpg://ata:ata-local-dev@127.0.0.1:5432/ata" \
     AI_PROVIDER=ollama OLLAMA_MODEL=qwen2.5:7b \
     nohup bash -c "$(declare -f detach); detach .venv/bin/python -m uvicorn \
-      app.main:app --host 127.0.0.1 --port 8000 --log-level warning" >"$API_LOG" 2>&1 &
-    echo $! > "../../$API_PID" )
+      app.main:app --host 127.0.0.1 --port 8000 --log-level warning" >"$API_LOG" 2>&1 & )
   echo "api  started (log: $API_LOG)"
 }
 
 start_web() {
-  if [ -d .next ]; then
+  if [ -f .next/BUILD_ID ]; then
     WEB_CMD="run start"; echo "web  using the production build (.next present)"
   else
     WEB_CMD="run dev"
   fi
   nohup bash -c "$(declare -f detach); detach $(command -v npm) $WEB_CMD" >"$WEB_LOG" 2>&1 &
-  echo $! > "$WEB_PID"
   echo "web  started (log: $WEB_LOG)"
+}
+
+# The whole workspace may live in iCloud Drive, where the first import of every
+# module can block for tens of seconds while the file is materialised. Poll
+# instead of sleeping a fixed amount so a slow cold start is not reported down.
+wait_for() {
+  local url=$1 label=$2 tries=${3:-90} i=1
+  while [ "$i" -le "$tries" ]; do
+    if curl -s -o /dev/null --max-time 5 "$url"; then
+      echo "  $label ready after ${i}s"
+      return 0
+    fi
+    sleep 1
+    i=$((i + 1))
+  done
+  echo "  $label not ready after ${tries}s"
+  return 1
 }
 
 case "${1:-status}" in
   start)
     start_api
     start_web
-    sleep 12
+    wait_for http://127.0.0.1:8000/health api
+    wait_for http://localhost:3000/login web
+    record_pid 8000 "$API_PID"
+    record_pid 3000 "$WEB_PID"
+    ;;
+  seed)
+    ( cd services/api && \
+      PYTHONPATH=. DATABASE_URL="postgresql+asyncpg://ata:ata-local-dev@127.0.0.1:5432/ata" \
+      AI_PROVIDER=ollama OLLAMA_MODEL=qwen2.5:7b \
+      .venv/bin/python scripts/seed_academic.py && \
+      PYTHONPATH=. DATABASE_URL="postgresql+asyncpg://ata:ata-local-dev@127.0.0.1:5432/ata" \
+      AI_PROVIDER=ollama OLLAMA_MODEL=qwen2.5:7b \
+      .venv/bin/python scripts/seed_documents.py )
     ;;
   stop)
     stop_one "$WEB_PID"; stop_one "$API_PID"
+    kill_port 3000; kill_port 8000
     pkill -f "uvicorn app.main:app" 2>/dev/null
     pkill -f "next dev" 2>/dev/null
+    pkill -f "next start" 2>/dev/null
+    pkill -f "next-server" 2>/dev/null
     echo "stopped"
     ;;
   restart)
@@ -74,8 +124,11 @@ if [ "${1:-status}" = "start" ] || [ "${1:-status}" = "restart" ]; then
   Documentation  http://localhost:3000/docs
   API reference  http://127.0.0.1:8000/docs
 
-  anan.suwan@mfu.ac.th / teacher1234
-  kanya.wong@mfu.ac.th / student1234
-  admin@mfu.ac.th      / admin1234
+  Seeded accounts — password: demo1234
+  admin@mfu.ac.th              admin
+  anan.suwan@mfu.ac.th         teacher
+  malee.chaiyaporn@mfu.ac.th   teacher
+  somchai.prasert@mfu.ac.th    teacher
+  6631503078@lamduan.mfu.ac.th student (+5 more)
 LINKS
 fi

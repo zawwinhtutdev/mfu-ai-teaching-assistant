@@ -78,6 +78,38 @@ async def assert_course_access(session: AsyncSession, person: Person, course_id:
         )
 
 
+async def course_scope_for(session: AsyncSession, person: Person) -> list[str] | None:
+    """The retrieval scope for a caller.
+
+    ``None`` means unrestricted and is reserved for admins. Everything else is a
+    concrete list, and an empty list is a real answer ("no courses"), not "all" —
+    a caller with no enrollments must retrieve nothing rather than everything.
+    """
+    return await course_ids_for(session, person)
+
+
+def require_course_manager(person: Person) -> None:
+    """403 unless this person may add or remove course materials."""
+    if person.role not in ("teacher", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only teachers can manage course materials",
+        )
+
+
+def course_is_readable(scope: list[str] | None, course_id: str | None) -> bool:
+    """Whether a course id falls inside a caller's scope.
+
+    A document with no course belongs to no scope, so only an unrestricted
+    caller (admin) may see it — it can never be exposed by an omitted filter.
+    """
+    if scope is None:
+        return True
+    if course_id is None:
+        return False
+    return course_id in scope
+
+
 router = APIRouter(tags=["academic"])
 
 

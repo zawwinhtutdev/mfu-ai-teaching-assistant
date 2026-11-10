@@ -4,6 +4,7 @@ import type React from "react"
 import { useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { getEmailDomainError, isUniversityEmail } from "@/lib/email-validation"
+import { describeRoleForEmail, roleForEmail } from "@/lib/auth/role-from-email"
 import { EducveStyleLinks } from "@/components/educve/EducveStyleLinks"
 import { InnerPageLayout } from "@/components/educve/InnerPageLayout"
 
@@ -22,7 +23,8 @@ export default function SignUpPage() {
   const [password, setPassword] = useState("")
   const [repeatPassword, setRepeatPassword] = useState("")
   const [fullName, setFullName] = useState("")
-  const [role, setRole] = useState<"student" | "teacher">("student")
+  // Role is not selected by the user: the database derives it from the email
+  // domain (lamduan.mfu.ac.th = student, mfu.ac.th = teacher, admin allowlist).
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
@@ -44,19 +46,36 @@ export default function SignUpPage() {
     setError(null)
 
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${window.location.origin}/chat`,
+          // Send the user through /auth/callback so the profile row is created
+          // and the role is assigned from public.profiles before the redirect.
+          // Built from window.location.origin so it resolves correctly on both
+          // localhost and the deployed domain.
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
           data: {
             full_name: fullName,
-            role,
+            // The role is NOT sent from here. The database derives it from the
+            // email domain in handle_new_user(), which also refuses addresses
+            // outside the university patterns.
           },
         },
       })
       if (error) throw error
-      window.location.assign("/signup-success")
+
+      // With email confirmation enabled, signUp returns a user but no session:
+      // the account is inactive until the emailed link is opened. Send the user
+      // to the "check your email" screen and show which address to look for.
+      if (!data.session) {
+        window.location.assign(`/signup-success?email=${encodeURIComponent(email)}`)
+        return
+      }
+
+      // Confirmation disabled (e.g. a stack configured with autoconfirm) returns
+      // a live session immediately, so skip straight to the portal.
+      window.location.assign("/auth/callback")
     } catch (signUpError: unknown) {
       setError(signUpError instanceof Error ? signUpError.message : "An error occurred")
     } finally {
@@ -90,14 +109,6 @@ export default function SignUpPage() {
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
                       />
-                      <select
-                        className="td_form_field td_mb_30 td_medium td_white_bg"
-                        value={role}
-                        onChange={(e) => setRole(e.target.value as "student" | "teacher")}
-                      >
-                        <option value="student">Student</option>
-                        <option value="teacher">Teacher</option>
-                      </select>
                       <input
                         type="email"
                         className="td_form_field td_mb_30 td_medium td_white_bg"
@@ -106,6 +117,18 @@ export default function SignUpPage() {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                       />
+
+                      {email.includes("@") ? (
+                        <p
+                          className="td_fs_16 td_mb_20"
+                          style={{
+                            color: roleForEmail(email) ? "#3f6600" : "#890C25",
+                            marginTop: -14,
+                          }}
+                        >
+                          {describeRoleForEmail(email)}
+                        </p>
+                      ) : null}
                       <input
                         type="password"
                         className="td_form_field td_mb_30 td_medium td_white_bg"
