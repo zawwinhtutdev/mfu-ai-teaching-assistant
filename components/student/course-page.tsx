@@ -1,7 +1,7 @@
 "use client"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { MessageSquare, BookOpen, Brain, FileText, Bell, Bot, MoreVertical, Clipboard, Calendar } from "lucide-react"
+import { MessageSquare, BookOpen, Brain, FileText, Bell, Bot, MoreVertical, Clipboard, Calendar, CalendarClock } from "lucide-react"
 import type { Course, CourseMaterial, ChatbotSettings } from "@/lib/types"
 import { AIChatbot } from "./ai-chatbot"
 import { MaterialCard } from "./material-card"
@@ -9,6 +9,7 @@ import { FlashcardsView } from "./flashcards-view"
 import { QuizzesView } from "./quizzes-view"
 import { StudyPlannerView } from "./study-planner-view"
 import { SurveyWidget } from "./survey-widget"
+import { AssignmentsPanel } from "@/components/shared/assignments-panel"
 import { useEffect, useState } from "react"
 
 interface CoursePageProps {
@@ -486,13 +487,20 @@ Please prepare accordingly and bring your student ID.`
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
       <main className="container mx-auto flex-1 px-4 py-8">
         <Tabs defaultValue="announcements" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 shadow-[4px_4px_8px_rgba(0,0,0,0.08),-4px_-4px_8px_rgba(255,255,255,0.8)] dark:shadow-[4px_4px_8px_rgba(0,0,0,0.2),-4px_-4px_8px_rgba(255,255,255,0.05)] rounded-xl p-1">
+          <TabsList className="grid w-full grid-cols-3 bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 shadow-[4px_4px_8px_rgba(0,0,0,0.08),-4px_-4px_8px_rgba(255,255,255,0.8)] dark:shadow-[4px_4px_8px_rgba(0,0,0,0.2),-4px_-4px_8px_rgba(255,255,255,0.05)] rounded-xl p-1">
             <TabsTrigger 
               value="announcements"
               className="rounded-lg data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-200 data-[state=active]:to-blue-300 dark:data-[state=active]:from-blue-800 dark:data-[state=active]:to-blue-900 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-200 data-[state=active]:font-semibold data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)] dark:data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.05)]"
             >
               <Bell className="mr-2 h-4 w-4" />
               Announcements
+            </TabsTrigger>
+            <TabsTrigger 
+              value="assignments"
+              className="rounded-lg data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-200 data-[state=active]:to-blue-300 dark:data-[state=active]:from-blue-800 dark:data-[state=active]:to-blue-900 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-200 data-[state=active]:font-semibold data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)] dark:data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.05)]"
+            >
+              <CalendarClock className="mr-2 h-4 w-4" />
+              Assignments
             </TabsTrigger>
             <TabsTrigger 
               value="ai-assistant"
@@ -653,6 +661,10 @@ Please prepare accordingly and bring your student ID.`
 
             {/* Survey Widget */}
             <SurveyWidget courseId={course.id} />
+          </TabsContent>
+
+          <TabsContent value="assignments" className="mt-6">
+            <AssignmentsPanel courseId={course.id} canManage={false} />
           </TabsContent>
 
           <TabsContent value="ai-assistant" className="mt-6">

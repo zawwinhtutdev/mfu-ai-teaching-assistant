@@ -16,8 +16,12 @@ import { createLocalChatResponse, shouldUseLocalChatService } from "@/lib/ai/loc
 import { DEMO_EMAIL_COOKIE, DEMO_ROLE_COOKIE, getDemoAccountByRole } from "@/lib/demo-auth"
 import { getLatestReadyDemoStoreName, readDemoDocumentsCookie, type DemoDocumentRecord, DEMO_DOCUMENTS_COOKIE } from "@/lib/demo-documents"
 import { isPdfDocument } from "@/lib/documents/supported-formats"
+import { hasAiProcessingConsent } from "@/lib/server/consent"
+import { assertCourseAccess, clientForPrincipal, resolvePrincipal } from "@/lib/server/principal"
 
-export const maxDuration = 30
+// A local 7B model on a laptop can exceed 30s on a long grounded answer, and
+// the previous limit cut streams off mid-sentence.
+export const maxDuration = 120
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const PDF_TEXT_FALLBACK_CHAR_LIMIT = 20000
@@ -118,26 +122,18 @@ export async function POST(req: Request) {
         ? readDemoDocumentsCookie(cookieStore.get(DEMO_DOCUMENTS_COOKIE)?.value, demoAccount.email)
         : []
 
-    const supabase = await createClient()
+    // One identity for both demo cookies and real Supabase sessions. Course
+    // access is checked by `assertCourseAccess`, which knows the demo seed's
+    // enrollment data as well as the RLS-backed tables.
+    const principal = await resolvePrincipal()
+    const supabase = (await clientForPrincipal(
+      principal ?? { privilegedClient: null } as any,
+    )) as Awaited<ReturnType<typeof createClient>>
 
-    let userId = studentId || "mock-student-1"
-    let userRole = "student"
+    const userId = principal?.userId || studentId || ""
+    const userRole = principal?.role || "student"
 
-    // Try to get authenticated user (for production)
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (user) {
-      userId = user.id
-      // Get user profile for role
-      const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
-      if (profile) {
-        userRole = profile.role
-      }
-    }
-
-    console.log("[v0] Using userId:", userId, "role:", userRole)
+    console.log("[v0] Using userId:", userId, "role:", userRole, "demo:", principal?.isDemo)
 
     // Create or get conversation
     let currentConversationId = conversationId
@@ -231,109 +227,107 @@ Guidelines:
     let courseRetrievalNote = ""
     let coursePromptOverride: string | null = null
     let analyticsCourseId: string | null = null
+    // The UUID of the course the caller is actually authorized for. Retrieval
+    // must use this rather than the requested value, which may be a code.
+    let authorizedCourseId: string | null = null
 
     const shouldUsePdfRag = isTruthy(pdfRagEnabled)
 
     if (!shouldUsePdfRag && requestedCourseId) {
-      if (hasUserDocumentAccess) {
-        let hasCourseAccess = false
+      // Authorization is one call, and it understands both Supabase UUIDs and
+      // course codes so demo sessions and real sessions behave identically.
+      const authorizedCourse = principal
+        ? await assertCourseAccess(principal, requestedCourseId)
+        : null
 
-        if (userRole === "teacher") {
-          const { data: teacherCourse } = await supabase
-            .from("courses")
-            .select("id")
-            .eq("id", requestedCourseId)
-            .eq("teacher_id", userId)
-            .maybeSingle()
-          hasCourseAccess = !!teacherCourse
-        } else {
-          const { data: enrolledCourse } = await supabase
-            .from("course_enrollments")
-            .select("course_id")
-            .eq("course_id", requestedCourseId)
-            .eq("student_id", userId)
-            .maybeSingle()
-          hasCourseAccess = !!enrolledCourse
-        }
+      // A requested course the caller may not read is refused outright. It must
+      // never fall through to retrieval: doing so would search a course the
+      // caller has no right to and leak its contents through citations.
+      if (!authorizedCourse) {
+        return Response.json({ error: "You do not have access to this course" }, { status: 403 })
+      }
 
-        if (hasCourseAccess) {
-          analyticsCourseId = requestedCourseId
+      analyticsCourseId = authorizedCourse.id
+      authorizedCourseId = authorizedCourse.id
 
-          const { data: chatbotSettings } = await supabase
-            .from("chatbot_settings")
-            .select("tone, system_prompt, grading_policy, course_rules")
-            .eq("course_id", requestedCourseId)
-            .maybeSingle()
+      const { data: chatbotSettings } = await supabase
+        .from("chatbot_settings")
+        .select("tone, system_prompt, grading_policy, course_rules")
+        .eq("course_id", requestedCourseId)
+        .maybeSingle()
 
-          if (chatbotSettings?.system_prompt) {
-            coursePromptOverride = chatbotSettings.system_prompt
+      if (chatbotSettings?.system_prompt) {
+        coursePromptOverride = chatbotSettings.system_prompt
+      }
+
+      const effectiveTone = (chatbotSettings?.tone || requestedTone || "").toLowerCase()
+      const toneInstruction =
+        effectiveTone === "friendly"
+          ? "Use a warm and encouraging tone."
+          : effectiveTone === "casual"
+            ? "Use a casual and approachable tone while staying accurate."
+            : effectiveTone === "formal"
+              ? "Use a formal, academic tone."
+              : "Use a professional and clear teaching tone."
+
+      courseSettingsNote = [
+        "Course-specific assistant settings are active.",
+        toneInstruction,
+        chatbotSettings?.grading_policy
+          ? `Course grading policy:\n${chatbotSettings.grading_policy}`
+          : "",
+        chatbotSettings?.course_rules
+          ? `Course-specific rules:\n${chatbotSettings.course_rules}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n")
+
+      if (userMessageText.trim()) {
+        try {
+          const retrieval = await retrieveCourseRagContext({
+            supabase: supabase as any,
+            courseId: authorizedCourse.id,
+            query: userMessageText,
+            topK: 6,
+          })
+
+          if (retrieval.context) {
+            const sourceTitles = Array.from(
+              new Set(
+                retrieval.chunks
+                  .map((chunk) => chunk.material_title || "Material")
+                  .filter(Boolean),
+              ),
+            )
+            courseRetrievalNote = [
+              "Use the following retrieved course-material context for grounding.",
+              sourceTitles.length ? `Material sources: ${sourceTitles.join(", ")}` : "",
+              retrieval.context,
+              "If the answer is not present in this context, explicitly say it is not found in uploaded course materials.",
+              "Cite the most relevant material title in your response.",
+            ]
+              .filter(Boolean)
+              .join("\n\n")
+          } else {
+            courseRetrievalNote = [
+              "No relevant course-material chunks were retrieved for this question.",
+              "Answer only if you are confident from existing context; otherwise clearly say this is not found in uploaded course materials.",
+            ].join("\n")
           }
-
-          const effectiveTone = (chatbotSettings?.tone || requestedTone || "").toLowerCase()
-          const toneInstruction =
-            effectiveTone === "friendly"
-              ? "Use a warm and encouraging tone."
-              : effectiveTone === "casual"
-                ? "Use a casual and approachable tone while staying accurate."
-                : effectiveTone === "formal"
-                  ? "Use a formal, academic tone."
-                  : "Use a professional and clear teaching tone."
-
-          courseSettingsNote = [
-            "Course-specific assistant settings are active.",
-            toneInstruction,
-            chatbotSettings?.grading_policy
-              ? `Course grading policy:\n${chatbotSettings.grading_policy}`
-              : "",
-            chatbotSettings?.course_rules
-              ? `Course-specific rules:\n${chatbotSettings.course_rules}`
-              : "",
-          ]
-            .filter(Boolean)
-            .join("\n\n")
-
-          if (userMessageText.trim()) {
-            try {
-              const retrieval = await retrieveCourseRagContext({
-                supabase: supabase as any,
-                courseId: requestedCourseId,
-                query: userMessageText,
-                topK: 6,
-              })
-
-              if (retrieval.context) {
-                const sourceTitles = Array.from(
-                  new Set(
-                    retrieval.chunks
-                      .map((chunk) => chunk.material_title || "Material")
-                      .filter(Boolean),
-                  ),
-                )
-                courseRetrievalNote = [
-                  "Use the following retrieved course-material context for grounding.",
-                  sourceTitles.length ? `Material sources: ${sourceTitles.join(", ")}` : "",
-                  retrieval.context,
-                  "If the answer is not present in this context, explicitly say it is not found in uploaded course materials.",
-                  "Cite the most relevant material title in your response.",
-                ]
-                  .filter(Boolean)
-                  .join("\n\n")
-              } else {
-                courseRetrievalNote = [
-                  "No relevant course-material chunks were retrieved for this question.",
-                  "Answer only if you are confident from existing context; otherwise clearly say this is not found in uploaded course materials.",
-                ].join("\n")
-              }
-            } catch (courseRetrievalError: any) {
-              console.error("[v0] Course RAG retrieval failed:", courseRetrievalError)
-              courseRetrievalNote = [
-                "Course retrieval encountered an internal error for this request.",
-                "If the answer depends on course uploads, say that retrieval is temporarily unavailable and ask to retry.",
-              ].join("\n")
-            }
-          }
+        } catch (courseRetrievalError: any) {
+          console.error("[v0] Course RAG retrieval failed:", courseRetrievalError)
+          courseRetrievalNote = [
+            "Course retrieval encountered an internal error for this request.",
+            "If the answer depends on course uploads, say that retrieval is temporarily unavailable and ask to retry.",
+          ].join("\n")
         }
-      } else if (Array.isArray(materials) && materials.length > 0) {
+      }
+
+      // Client-supplied context for sessions that carry materials but no course
+      // id. Course-scoped requests were already authorized above.
+      if (!authorizedCourseId && Array.isArray(materials) && materials.length > 0) {
+        // Client-supplied context for demo/non-persistent sessions.
         const materialContext = materials
           .slice(0, 5)
           .map((material: any) =>
@@ -640,15 +634,49 @@ Guidelines:
 
     console.log("[v0] Calling AI model with", messages.length, "messages")
 
-    // Local models are the default path: without a Gemini key we forward to the
-    // FastAPI/Ollama service and translate its SSE into the AI SDK stream shape.
+    // Local models are the default path: retrieval and generation both run
+    // in-process against Supabase, so there is no second database and no
+    // course-id translation between them.
     if (shouldUseLocalChatService()) {
-      console.log("[v0] Routing chat to the local AI service")
+      console.log("[v0] Routing chat to the local model with in-process retrieval")
       return await createLocalChatResponse({
         messages,
         model: requestedModel,
-        courseId: requestedCourseId || null,
+        // Use the authorized UUID, not the requested value: a demo caller may
+        // have sent a course code and retrieval needs the real id.
+        courseId: authorizedCourseId || null,
         pdfRagEnabled: shouldUsePdfRag,
+        toneInstruction: courseSettingsNote,
+        supabase,
+        onComplete: async ({ repaired, refused }) => {
+          // Persisting here — not inside the Gemini branch — is what keeps
+          // teacher analytics populated on the local-model path. Consent is
+          // checked first: a student who opted out of AI-processing logging
+          // still gets answers, their queries are just not stored.
+          if (!analyticsCourseId || userRole !== "student" || !UUID_REGEX.test(userId)) return
+          if (!userMessageText) return
+
+          if (!(await hasAiProcessingConsent(supabase, userId))) return
+
+          if (currentConversationId && canPersist) {
+            const { error: messageError } = await supabase.from("messages").insert([
+              { conversation_id: currentConversationId, role: "user", content: userMessageText },
+              { conversation_id: currentConversationId, role: "assistant", content: repaired },
+            ])
+            if (messageError) console.error("[v0] Error saving local messages:", messageError)
+          }
+
+          const { error: analyticsError } = await supabase.from("student_queries").insert({
+            student_id: userId,
+            course_id: analyticsCourseId,
+            query_text: userMessageText,
+            response_text: repaired,
+            was_refused: refused,
+          })
+          if (analyticsError) {
+            console.error("[v0] Failed to store student query analytics:", analyticsError)
+          }
+        },
       })
     }
 

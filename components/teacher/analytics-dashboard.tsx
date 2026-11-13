@@ -43,6 +43,8 @@ type AnalyticsQuery = {
   created_at: string
   query?: string
   query_text?: string
+  /** True when the assistant refused for lack of material coverage. */
+  was_refused?: boolean
 }
 
 type TopStudent = {
@@ -148,7 +150,22 @@ export function AnalyticsDashboard({ profile, courses, queries }: AnalyticsDashb
     const topStudents: TopStudent[] = Object.values(studentActivity)
       .sort((a, b) => b.queryCount - a.queryCount)
       .slice(0, 10)
-    
+
+    // Unanswered questions are the most actionable signal a teacher gets: each
+    // one is a topic a student asked about that the uploaded material did not
+    // cover. Spec §2.2 calls these "common misunderstandings".
+    const refusedQueries = limitedQueries.filter((q) => q.was_refused === true)
+    const unansweredQuestions = Object.entries(
+      refusedQueries.reduce((acc, query) => {
+        const question = String(query.query_text || query.query || "").toLowerCase().trim()
+        if (question) acc[question] = (acc[question] || 0) + 1
+        return acc
+      }, {} as Record<string, number>),
+    )
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 10)
+      .map(([question, count]) => ({ question, count }))
+
     return {
       totalQueries,
       totalCourses,
@@ -159,7 +176,9 @@ export function AnalyticsDashboard({ profile, courses, queries }: AnalyticsDashb
       recentQueries: recentQueries.length,
       dailyData,
       hourlyData,
-      topStudents
+      topStudents,
+      refusedCount: refusedQueries.length,
+      unansweredQuestions,
     }
   }, [courses, queries])
 
@@ -429,6 +448,49 @@ export function AnalyticsDashboard({ profile, courses, queries }: AnalyticsDashb
                 </TableBody>
               </Table>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Unanswered questions: each row is a topic the material did not cover,
+            which is the most actionable gap a teacher can act on. */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Unanswered Questions</CardTitle>
+            <CardDescription>
+              {stats.refusedCount > 0
+                ? `${stats.refusedCount} question${stats.refusedCount === 1 ? "" : "s"} could not be answered from the uploaded material. Adding these topics to your course documents would close the gap.`
+                : "Every question so far was answered from your uploaded material."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {stats.unansweredQuestions.length === 0 ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                No unanswered questions yet.
+              </p>
+            ) : (
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[50px]">#</TableHead>
+                      <TableHead>Question</TableHead>
+                      <TableHead className="text-right">Asked</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {stats.unansweredQuestions.map((item, index) => (
+                      <TableRow key={index}>
+                        <TableCell className="text-muted-foreground">{index + 1}</TableCell>
+                        <TableCell>
+                          <p className="line-clamp-2 max-w-md text-sm">{item.question}</p>
+                        </TableCell>
+                        <TableCell className="text-right font-semibold">{item.count}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

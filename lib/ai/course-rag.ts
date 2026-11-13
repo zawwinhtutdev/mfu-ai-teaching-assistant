@@ -1,4 +1,6 @@
 import { GoogleGenAI } from "@google/genai"
+import { buildContext, type Source } from "./grounding"
+import { embedTexts as embedWithOllama, toVectorLiteral, useOllama } from "./ollama"
 
 const DEFAULT_EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || "text-embedding-004"
 const EMBEDDING_DIMENSIONS = Number(process.env.GEMINI_EMBEDDING_DIMENSIONS || 768)
@@ -92,15 +94,58 @@ function splitIntoChunks(text: string, maxChars = MAX_CHUNK_CHARS, overlapChars 
   return chunks
 }
 
-function toVectorLiteral(values: number[]) {
-  return `[${values.join(",")}]`
-}
-
 async function extractPdfText(buffer: Buffer) {
   const pdfParseModule = await import("pdf-parse")
   const pdfParse = (pdfParseModule as any).default || (pdfParseModule as any)
   const parsed = await pdfParse(buffer)
   return typeof parsed?.text === "string" ? normalizeWhitespace(parsed.text) : ""
+}
+
+/**
+ * Text extraction for Office formats.
+ *
+ * The upload dialog advertises `.docx`/`.pptx`, but nothing extracted them, so
+ * a teacher could upload slides and get an empty material. Both formats are
+ * zip archives of XML; pulling `<a:t>` (PowerPoint) or `<w:t>` (Word) text runs
+ * is enough for retrieval without adding an Office parser dependency.
+ */
+async function extractOfficeText(buffer: Buffer, extension: "docx" | "pptx"): Promise<string> {
+  try {
+    const { default: JSZip } = await import("jszip")
+    const zip = await JSZip.loadAsync(buffer)
+    const runs: string[] = []
+
+    const files = Object.keys(zip.files)
+      .filter((name) => {
+        if (extension === "pptx") {
+          return /^ppt\/slides\/slide\d+\.xml$/.test(name)
+        }
+        return name === "word/document.xml"
+      })
+      // Slides must be read in numeric order, not lexicographic (slide10 < slide2).
+      .sort((a, b) => {
+        const numA = Number(a.match(/(\d+)/)?.[1] ?? 0)
+        const numB = Number(b.match(/(\d+)/)?.[1] ?? 0)
+        return numA - numB
+      })
+
+    for (const name of files) {
+      const xml = await zip.files[name].async("string")
+      const tag = extension === "pptx" ? "a:t" : "w:t"
+      const pattern = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "g")
+      for (const match of xml.matchAll(pattern)) {
+        const text = match[1].replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").trim()
+        if (text) runs.push(text)
+      }
+      // Separate slides/paragraph runs so chunking does not merge unrelated text.
+      runs.push("\n")
+    }
+
+    return normalizeWhitespace(runs.join(" "))
+  } catch (error: any) {
+    console.error(`[Docs] ${extension} text extraction failed:`, error?.message || error)
+    return ""
+  }
 }
 
 function isAudioFile(fileName: string, mimeType: string) {
@@ -178,10 +223,15 @@ export async function extractCourseMaterialFileTexts(files: UploadedCourseMateri
   for (const file of files) {
     const mimeType = (file.mimeType || "application/octet-stream").toLowerCase()
     const fileName = file.fileName || "attachment"
+    const lowerName = fileName.toLowerCase()
     let text = ""
 
     if (isPdfFile(fileName, mimeType)) {
       text = await extractPdfText(file.buffer)
+    } else if (lowerName.endsWith(".pptx")) {
+      text = await extractOfficeText(file.buffer, "pptx")
+    } else if (lowerName.endsWith(".docx")) {
+      text = await extractOfficeText(file.buffer, "docx")
     } else if (isAudioFile(fileName, mimeType)) {
       console.log(`[Audio] Transcribing audio file: ${fileName}`)
       text = await transcribeAudioWithGemini(file.buffer, fileName, mimeType)
@@ -194,6 +244,10 @@ export async function extractCourseMaterialFileTexts(files: UploadedCourseMateri
 
     if (text) {
       parts.push({ source: fileName, text })
+    } else {
+      // Silence here is how a teacher ends up with an "uploaded" material that
+      // answers nothing. Name the file so the cause is obvious.
+      console.warn(`[Docs] No extractable text in ${fileName} (${mimeType || "unknown type"})`)
     }
   }
 
@@ -217,10 +271,25 @@ function combineMaterialSourceText(params: {
   return normalizeWhitespace(sections.join("\n\n"))
 }
 
-async function embedTexts(texts: string[], taskType: "RETRIEVAL_QUERY" | "RETRIEVAL_DOCUMENT") {
+/**
+ * Embedding dispatch.
+ *
+ * Ollama is the default so the app works with no API key, and its
+ * `nomic-embed-text` also returns 768 dimensions — the same width the
+ * `course_material_chunks.embedding` column and the `match_*` RPCs expect.
+ * Gemini stays available for deployments that set a key.
+ */
+async function embedTexts(
+  texts: string[],
+  taskType: "RETRIEVAL_QUERY" | "RETRIEVAL_DOCUMENT",
+): Promise<number[][]> {
   if (texts.length === 0) return []
-  const ai = createGeminiClient()
 
+  if (useOllama()) {
+    return embedWithOllama(texts)
+  }
+
+  const ai = createGeminiClient()
   const vectors: number[][] = []
 
   for (let i = 0; i < texts.length; i += EMBED_BATCH_SIZE) {
@@ -344,12 +413,12 @@ export async function retrieveCourseRagContext(params: {
 }) {
   const queryText = params.query.trim()
   if (!queryText) {
-    return { context: "", chunks: [] as RetrievedChunk[] }
+    return { context: "", chunks: [] as RetrievedChunk[], sources: [] as Source[] }
   }
 
   const [queryVector] = await embedTexts([queryText], "RETRIEVAL_QUERY")
   if (!queryVector || queryVector.length === 0) {
-    return { context: "", chunks: [] as RetrievedChunk[] }
+    return { context: "", chunks: [] as RetrievedChunk[], sources: [] as Source[] }
   }
 
   // Search material chunks
@@ -367,8 +436,15 @@ export async function retrieveCourseRagContext(params: {
   const chunks = (Array.isArray(data) ? data : []) as RetrievedChunk[]
   const usable = chunks.filter((chunk) => (chunk?.similarity ?? 0) > 0.15)
 
-  // Also search dedicated FAQs table
-  let faqContext = ""
+  // Also search the dedicated FAQs table. FAQ answers are curated by the
+  // teacher and outrank material chunks, so they are placed first and become
+  // citable sources in their own right rather than anonymous context.
+  const faqHits: Array<{
+    material_id: string
+    material_title: string
+    chunk_index: number
+    chunk_text: string
+  }> = []
   try {
     const { data: faqData } = await params.supabase.rpc("match_faqs", {
       p_course_id: params.courseId,
@@ -376,31 +452,39 @@ export async function retrieveCourseRagContext(params: {
       p_match_count: 3,
     })
 
-    const matchedFaqs = (Array.isArray(faqData) ? faqData : [])
-      .filter((faq: any) => (faq?.similarity ?? 0) > 0.3)
+    const matchedFaqs = (Array.isArray(faqData) ? faqData : []).filter(
+      (faq: any) => (faq?.similarity ?? 0) > 0.3,
+    )
 
-    if (matchedFaqs.length > 0) {
-      faqContext = matchedFaqs
-        .map((faq: any) => `[FAQ]\nQ: ${faq.question}\nA: ${faq.answer}`)
-        .join("\n\n")
+    for (const faq of matchedFaqs) {
+      faqHits.push({
+        material_id: `faq-${faq.id}`,
+        material_title: "Course FAQ",
+        // Distinct index per FAQ so dedupe does not collapse them into one.
+        chunk_index: faqHits.length,
+        chunk_text: `Q: ${faq.question}\nA: ${faq.answer}`,
+      })
     }
   } catch (faqError: any) {
     // FAQ search is optional — don't fail the whole retrieval
     console.error("[RAG] FAQ search failed:", faqError?.message)
   }
 
-  const materialMerged = usable
-    .map(
-      (chunk) =>
-        `[${chunk.material_title || "Material"} / section ${Number(chunk.chunk_index) + 1}]\n${chunk.chunk_text}`,
-    )
-    .join("\n\n")
+  const orderedHits = [
+    ...faqHits,
+    ...usable.map((chunk) => ({
+      material_id: String(chunk.material_id),
+      material_title: chunk.material_title || "Material",
+      chunk_index: Number(chunk.chunk_index),
+      chunk_text: chunk.chunk_text,
+    })),
+  ]
 
-  // FAQ results go first (higher priority), then material chunks
-  const merged = [faqContext, materialMerged].filter(Boolean).join("\n\n")
+  const built = buildContext(orderedHits, MAX_CONTEXT_CHARS)
 
   return {
-    context: merged.slice(0, MAX_CONTEXT_CHARS),
+    context: built.text,
     chunks: usable,
+    sources: built.sources,
   }
 }
