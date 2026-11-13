@@ -19,7 +19,7 @@ import { MaterialsReviewPanel } from "./materials-review-panel"
 import { SurveyPanel } from "./survey-panel"
 import { AIChatbot } from "../student/ai-chatbot"
 import { FlashcardsView } from "../student/flashcards-view"
-import { QuizzesView } from "../student/quizzes-view"
+import { TeacherQuizzesPanel } from "./teacher-quizzes-panel"
 import { useState, useMemo, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
@@ -82,7 +82,6 @@ export function TeacherCoursePage({ course, materials, studentsCount, enrolledSt
   const [showAnnouncementDialog, setShowAnnouncementDialog] = useState(false)
   const [showEditCourseDialog, setShowEditCourseDialog] = useState(false)
   const [showManageStudentsDialog, setShowManageStudentsDialog] = useState(false)
-  const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false)
   const [liveAnnouncements, setLiveAnnouncements] = useState<AnnouncementFeedItem[]>([])
   const [isAnnouncementsLoading, setIsAnnouncementsLoading] = useState(false)
   const [faqs, setFaqs] = useState<Array<{ id: string; question: string; answer: string; created_at: string }>>([])
@@ -547,24 +546,6 @@ Please review these materials before the workshop to maximize your learning expe
     }
   }
 
-  const handleGenerateQuiz = async (materialId: string) => {
-    setIsGeneratingQuiz(true)
-    try {
-      const response = await fetch("/api/generate-quiz", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ materialId, courseId: course.id }),
-      })
-      const data = await response.json()
-      alert(`Quiz "${data.quiz.title}" generated successfully!`)
-    } catch (error) {
-      console.error("Failed to generate quiz:", error)
-      alert("Failed to generate quiz")
-    } finally {
-      setIsGeneratingQuiz(false)
-    }
-  }
-
   return (
     <div className="container mx-auto flex-1 px-4 py-8 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 min-h-screen">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -859,7 +840,7 @@ Please review these materials before the workshop to maximize your learning expe
               </TabsContent>
 
               <TabsContent value="quizzes" className="mt-6">
-                <QuizzesView courseId={course.id} studentId={course.teacher_id || "mock-teacher-1"} />
+                <TeacherQuizzesPanel courseId={course.id} materials={materials} />
               </TabsContent>
 
               <TabsContent value="faqs" className="mt-6">

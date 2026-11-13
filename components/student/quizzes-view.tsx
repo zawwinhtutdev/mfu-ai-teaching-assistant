@@ -5,10 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
-import { FileText, CheckCircle2, XCircle } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { FileText, CheckCircle2, XCircle, Loader2 } from "lucide-react"
 import { mockQuizzes } from "@/lib/mock-data"
-import type { Quiz } from "@/lib/types"
+import type { Quiz, QuizQuestion } from "@/lib/types"
 
 interface QuizzesViewProps {
   courseId: string
@@ -21,39 +20,40 @@ export function QuizzesView({ courseId, studentId }: QuizzesViewProps) {
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const [showResults, setShowResults] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  /**
+   * Answer keys only exist after grading. The list endpoint deliberately omits
+   * `correct_answer` so a student cannot read the answers out of the network
+   * response before submitting; the server scores the attempt instead.
+   */
+  const [answerKey, setAnswerKey] = useState<number[] | null>(null)
 
   useEffect(() => {
     loadQuizzes()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId])
 
   const loadQuizzes = async () => {
     const isDemoStudent = studentId.startsWith("mock-") || studentId.startsWith("student-")
 
     try {
-      const supabase = createClient()
-      // Course-wide quizzes plus this student's own practice quizzes. The RLS
-      // policy already limits both, but the explicit filter keeps the query
-      // narrow and makes the intent obvious.
-      const { data } = await supabase
-        .from("quizzes")
-        .select("*")
-        .eq("course_id", courseId)
-        .or(`student_id.is.null,student_id.eq.${studentId}`)
-        .order("created_at", { ascending: false })
+      const res = await fetch(`/api/courses/${courseId}/quizzes`, { cache: "no-store" })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || "Could not load quizzes")
 
-      if (data && data.length > 0) {
-        setQuizzes(data)
+      const rows: Quiz[] = Array.isArray(data?.quizzes) ? data.quizzes : []
+      if (rows.length > 0) {
+        setQuizzes(rows)
       } else if (isDemoStudent) {
-        const courseQuizzes = mockQuizzes.filter((q) => q.course_id === courseId)
-        setQuizzes(courseQuizzes)
+        setQuizzes(mockQuizzes.filter((quiz) => quiz.course_id === courseId))
       } else {
         setQuizzes([])
       }
-    } catch (error) {
+    } catch (cause: any) {
       if (isDemoStudent) {
-        const courseQuizzes = mockQuizzes.filter((q) => q.course_id === courseId)
-        setQuizzes(courseQuizzes)
+        setQuizzes(mockQuizzes.filter((quiz) => quiz.course_id === courseId))
       } else {
+        setError(cause?.message || "Could not load quizzes")
         setQuizzes([])
       }
     } finally {
@@ -65,19 +65,43 @@ export function QuizzesView({ courseId, studentId }: QuizzesViewProps) {
     setSelectedQuiz(quiz)
     setAnswers({})
     setShowResults(false)
+    setAnswerKey(null)
   }
 
-  const handleSubmit = () => {
-    setShowResults(true)
+  const handleSubmit = async () => {
+    if (!selectedQuiz) return
+    // Derive the key locally when the quiz carries one (mock data), otherwise
+    // ask the server, which is the only place that holds it.
+    const hasInlineKey = selectedQuiz.questions.every(
+      (question: QuizQuestion) => typeof question.correct_answer === "number",
+    )
+
+    if (hasInlineKey) {
+      setAnswerKey(selectedQuiz.questions.map((question) => Number(question.correct_answer)))
+      setShowResults(true)
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/quizzes/${selectedQuiz.id}/attempt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answers }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || "Could not submit the quiz")
+      setAnswerKey(Array.isArray(data?.answerKey) ? data.answerKey : null)
+      setShowResults(true)
+    } catch (cause: any) {
+      setError(cause?.message || "Could not submit the quiz")
+    }
   }
 
   const calculateScore = () => {
-    if (!selectedQuiz) return 0
+    if (!selectedQuiz || !answerKey) return 0
     let correct = 0
-    selectedQuiz.questions.forEach((q, index) => {
-      if (answers[index] === q.correct_answer) {
-        correct++
-      }
+    answerKey.forEach((correctAnswer, index) => {
+      if (answers[index] === correctAnswer) correct++
     })
     return Math.round((correct / selectedQuiz.questions.length) * 100)
   }
@@ -125,14 +149,16 @@ export function QuizzesView({ courseId, studentId }: QuizzesViewProps) {
         )}
 
         <div className="space-y-6">
-          {selectedQuiz.questions.map((question, qIndex) => (
+          {selectedQuiz.questions.map((question, qIndex) => {
+            const correctIndex = answerKey?.[qIndex]
+            return (
             <Card key={qIndex}>
               <CardHeader>
                 <CardTitle className="text-lg">
                   Question {qIndex + 1}
-                  {showResults && (
+                  {showResults && correctIndex !== undefined && (
                     <span className="ml-2">
-                      {answers[qIndex] === question.correct_answer ? (
+                      {answers[qIndex] === correctIndex ? (
                         <CheckCircle2 className="inline h-5 w-5 text-green-600" />
                       ) : (
                         <XCircle className="inline h-5 w-5 text-red-600" />
@@ -145,16 +171,21 @@ export function QuizzesView({ courseId, studentId }: QuizzesViewProps) {
               <CardContent>
                 <RadioGroup
                   value={answers[qIndex]?.toString()}
-                  onValueChange={(value) => setAnswers({ ...answers, [qIndex]: Number.parseInt(value) })}
+                  // Functional update: spreading the `answers` captured by this
+                  // render means two answers given before React re-renders
+                  // overwrite each other, and the last one silently wins.
+                  onValueChange={(value) =>
+                    setAnswers((previous) => ({ ...previous, [qIndex]: Number.parseInt(value) }))
+                  }
                   disabled={showResults}
                 >
                   {question.options.map((option, oIndex) => (
                     <div
                       key={oIndex}
                       className={`flex items-center space-x-2 rounded-lg p-3 ${
-                        showResults && oIndex === question.correct_answer
+                        showResults && oIndex === correctIndex
                           ? "bg-green-100 dark:bg-green-950"
-                          : showResults && answers[qIndex] === oIndex && oIndex !== question.correct_answer
+                          : showResults && answers[qIndex] === oIndex && oIndex !== correctIndex
                             ? "bg-red-100 dark:bg-red-950"
                             : ""
                       }`}
@@ -168,7 +199,8 @@ export function QuizzesView({ courseId, studentId }: QuizzesViewProps) {
                 </RadioGroup>
               </CardContent>
             </Card>
-          ))}
+            )
+          })}
         </div>
 
         {!showResults && (

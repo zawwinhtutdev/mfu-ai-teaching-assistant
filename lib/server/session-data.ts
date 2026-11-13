@@ -451,7 +451,16 @@ function demoStudentsForCourse(courseCode: string) {
 
 export async function getTeacherCourseById(courseId: string) {
   const data = await getTeacherPortalData()
-  const course = data.courses.find((item: { id: string }) => item.id === courseId)
+  // Course links in the sidebar and cards use the id, but a URL pasted or
+  // bookmarked from the student portal uses the title slug. Without the slug
+  // fallback the page found nothing and silently redirected to the course list.
+  const course =
+    data.courses.find((item: { id: string }) => item.id === courseId) ??
+    data.courses.find(
+      (item: { title: string; code?: string }) =>
+        slugify(item.title) === courseId.toLowerCase() ||
+        (item.code ? item.code.toLowerCase() === courseId.toLowerCase() : false),
+    )
 
   if (!course) {
     return null
