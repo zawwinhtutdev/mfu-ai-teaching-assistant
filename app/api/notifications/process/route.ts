@@ -117,6 +117,15 @@ async function runRetentionCleanup(supabase: ReturnType<typeof createServiceRole
   const retentionDays = Number(process.env.DATA_RETENTION_DAYS || 30)
   const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString()
 
+  // Anonymized rows are never attributable to a student, so no opt-out list can
+  // reach them: they age out on the retention window alone. Without this they
+  // would live forever, which is the opposite of data minimisation.
+  const { count: cleanedAnonymized } = await supabase
+    .from("student_queries")
+    .delete({ count: "exact" })
+    .eq("is_anonymized", true)
+    .lt("created_at", cutoff)
+
   const { data: optedOutRows, error: consentError } = await supabase
     .from("consents")
     .select("user_id")
@@ -124,12 +133,12 @@ async function runRetentionCleanup(supabase: ReturnType<typeof createServiceRole
     .eq("is_granted", true)
 
   if (consentError || !Array.isArray(optedOutRows) || optedOutRows.length === 0) {
-    return { cleanedQueries: 0, cleanedAuditLogs: 0 }
+    return { cleanedQueries: cleanedAnonymized || 0, cleanedAuditLogs: 0 }
   }
 
   const userIds = optedOutRows.map((row) => row.user_id).filter(Boolean)
   if (userIds.length === 0) {
-    return { cleanedQueries: 0, cleanedAuditLogs: 0 }
+    return { cleanedQueries: cleanedAnonymized || 0, cleanedAuditLogs: 0 }
   }
 
   const { count: cleanedQueries } = await supabase
@@ -145,7 +154,7 @@ async function runRetentionCleanup(supabase: ReturnType<typeof createServiceRole
     .lt("created_at", cutoff)
 
   return {
-    cleanedQueries: cleanedQueries || 0,
+    cleanedQueries: (cleanedQueries || 0) + (cleanedAnonymized || 0),
     cleanedAuditLogs: cleanedAuditLogs || 0,
   }
 }

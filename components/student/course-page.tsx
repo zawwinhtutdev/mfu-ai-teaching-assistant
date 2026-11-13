@@ -44,6 +44,24 @@ interface AnnouncementFeedItem {
 export function CoursePage({ course, materials, chatbotSettings, studentId }: CoursePageProps) {
   const [liveAnnouncements, setLiveAnnouncements] = useState<AnnouncementFeedItem[]>([])
   const [isAnnouncementsLoading, setIsAnnouncementsLoading] = useState(false)
+  // Summaries already stored for this student, so a reload does not lose them.
+  const [summaries, setSummaries] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/study-assets?courseId=${encodeURIComponent(course.id)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.summaries) setSummaries(data.summaries)
+      })
+      .catch(() => {
+        // A missing summary list only costs the "already generated" hint.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [course.id])
+
   // Mock announcement data for CSD323
   const csd323Announcements = [
     {
@@ -487,7 +505,7 @@ Please prepare accordingly and bring your student ID.`
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
       <main className="container mx-auto flex-1 px-4 py-8">
         <Tabs defaultValue="announcements" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 shadow-[4px_4px_8px_rgba(0,0,0,0.08),-4px_-4px_8px_rgba(255,255,255,0.8)] dark:shadow-[4px_4px_8px_rgba(0,0,0,0.2),-4px_-4px_8px_rgba(255,255,255,0.05)] rounded-xl p-1">
+          <TabsList className="grid w-full grid-cols-2 bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 shadow-[4px_4px_8px_rgba(0,0,0,0.08),-4px_-4px_8px_rgba(255,255,255,0.8)] dark:shadow-[4px_4px_8px_rgba(0,0,0,0.2),-4px_-4px_8px_rgba(255,255,255,0.05)] rounded-xl p-1 md:grid-cols-4">
             <TabsTrigger 
               value="announcements"
               className="rounded-lg data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-200 data-[state=active]:to-blue-300 dark:data-[state=active]:from-blue-800 dark:data-[state=active]:to-blue-900 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-200 data-[state=active]:font-semibold data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)] dark:data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.05)]"
@@ -508,6 +526,13 @@ Please prepare accordingly and bring your student ID.`
             >
               <Bot className="mr-2 h-4 w-4" />
               AI Assistant
+            </TabsTrigger>
+            <TabsTrigger 
+              value="materials"
+              className="rounded-lg data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-200 data-[state=active]:to-blue-300 dark:data-[state=active]:from-blue-800 dark:data-[state=active]:to-blue-900 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-200 data-[state=active]:font-semibold data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)] dark:data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.05)]"
+            >
+              <BookOpen className="mr-2 h-4 w-4" />
+              Materials
             </TabsTrigger>
           </TabsList>
 
@@ -665,6 +690,32 @@ Please prepare accordingly and bring your student ID.`
 
           <TabsContent value="assignments" className="mt-6">
             <AssignmentsPanel courseId={course.id} canManage={false} />
+          </TabsContent>
+
+          <TabsContent value="materials" className="mt-6">
+            <div className="space-y-4">
+              {materials.length === 0 ? (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <BookOpen className="mb-4 h-12 w-12 text-muted-foreground" />
+                    <h3 className="mb-2 text-lg font-semibold">No materials yet</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Your teacher has not published course materials for this course.
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                materials.map((material) => (
+                  <MaterialCard
+                    key={material.id}
+                    material={material}
+                    courseId={course.id}
+                    studentId={studentId}
+                    storedSummary={summaries[material.id] ?? null}
+                  />
+                ))
+              )}
+            </div>
           </TabsContent>
 
           <TabsContent value="ai-assistant" className="mt-6">

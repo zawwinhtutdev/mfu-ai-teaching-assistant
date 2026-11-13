@@ -77,6 +77,17 @@ export async function PATCH(req: Request) {
 
     return NextResponse.json({ user: data })
   } catch (error: any) {
+    // A rejected role change is an authorization outcome, not a server fault.
+    // The database raises insufficient_privilege (42501) from the role guard;
+    // surfacing that as 403 keeps it out of the 5xx error budget and gives the
+    // UI an actionable message.
+    const code = error?.code
+    if (code === "42501" || /Only administrators may change a user role/i.test(error?.message || "")) {
+      return NextResponse.json(
+        { error: error?.message || "Only administrators may change a user role" },
+        { status: 403 },
+      )
+    }
     return NextResponse.json({ error: error?.message || "Failed to update role" }, { status: 500 })
   }
 }

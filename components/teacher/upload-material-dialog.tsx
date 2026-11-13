@@ -16,9 +16,11 @@ interface UploadMaterialDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   courseId: string
+  /** Called after a successful upload so the caller can refresh its list. */
+  onUploaded?: () => void
 }
 
-export function UploadMaterialDialog({ open, onOpenChange, courseId }: UploadMaterialDialogProps) {
+export function UploadMaterialDialog({ open, onOpenChange, courseId, onUploaded }: UploadMaterialDialogProps) {
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
   const [materialType, setMaterialType] = useState<"lecture" | "document" | "video" | "other">("lecture")
@@ -69,6 +71,7 @@ export function UploadMaterialDialog({ open, onOpenChange, courseId }: UploadMat
       setContent("")
       setMaterialType("lecture")
       setSelectedFiles([])
+      onUploaded?.()
       router.refresh()
     } catch (error: any) {
       setError(error.message || "Failed to upload material")

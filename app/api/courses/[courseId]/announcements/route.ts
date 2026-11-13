@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { assertCourseAccess, clientForPrincipal, resolvePrincipal } from "@/lib/server/principal"
 
 type RouteParams = { params: Promise<{ courseId: string }> }
 
@@ -68,16 +68,18 @@ async function buildAnnouncementResponse(supabase: any, courseId: string) {
 export async function GET(_: Request, { params }: RouteParams) {
   try {
     const { courseId } = await params
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
+    const principal = await resolvePrincipal()
+    if (!principal) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const result = await buildAnnouncementResponse(supabase, courseId)
+    const course = await assertCourseAccess(principal, courseId)
+    if (!course) {
+      return NextResponse.json({ error: "You do not have access to this course" }, { status: 403 })
+    }
+
+    const supabase = await clientForPrincipal(principal)
+    const result = await buildAnnouncementResponse(supabase, course.id)
     if (result.error) {
       return NextResponse.json({ error: result.error }, { status: result.status })
     }
@@ -91,13 +93,18 @@ export async function GET(_: Request, { params }: RouteParams) {
 export async function POST(req: Request, { params }: RouteParams) {
   try {
     const { courseId } = await params
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
+    const principal = await resolvePrincipal()
+    if (!principal) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    if (principal.role !== "teacher" && principal.role !== "admin") {
+      return NextResponse.json({ error: "Only the course teacher may post announcements" }, { status: 403 })
+    }
+
+    const course = await assertCourseAccess(principal, courseId)
+    if (!course) {
+      return NextResponse.json({ error: "You do not have access to this course" }, { status: 403 })
     }
 
     const body = await req.json()
@@ -110,11 +117,15 @@ export async function POST(req: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Announcement content is required" }, { status: 400 })
     }
 
+    const supabase = await clientForPrincipal(principal)
+
     const { data: inserted, error: insertError } = await supabase
       .from("announcements")
       .insert({
-        course_id: courseId,
-        author_id: user.id,
+        course_id: course.id,
+        // A demo principal has a seed id, not a profile row; leaving the author
+        // null keeps the foreign key valid instead of rejecting the insert.
+        author_id: principal.isPersistable ? principal.userId : null,
         title,
         content,
       })
@@ -139,7 +150,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       }
     }
 
-    const result = await buildAnnouncementResponse(supabase, courseId)
+    const result = await buildAnnouncementResponse(supabase, course.id)
     if (result.error) {
       return NextResponse.json({ error: result.error }, { status: result.status })
     }

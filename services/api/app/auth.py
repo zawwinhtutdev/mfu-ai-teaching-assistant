@@ -70,6 +70,15 @@ def decode_token(token: str, settings: Settings) -> dict[str, Any]:
             )
             return claims
 
+        # Without a project URL there is no JWKS endpoint to fetch, and pyjwt
+        # fails with a generic "signing key could not be resolved". Say what is
+        # actually wrong instead of sending the caller hunting through logs.
+        if not settings.supabase_url:
+            raise _unauthorized(
+                "SUPABASE_URL is not configured on the API service, so access tokens "
+                "cannot be verified. Set SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL)."
+            )
+
         signing_key = _jwks_client(settings.jwks_url).get_signing_key_from_jwt(token)
         verified: dict[str, Any] = jwt.decode(
             token,

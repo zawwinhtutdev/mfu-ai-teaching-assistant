@@ -64,7 +64,18 @@ Return JSON exactly in this shape:
       { system: "You create study flashcards from course material. Be accurate and concise." },
     )
 
-    return Response.json({ flashcards: result.flashcards })
+    // Persist as the caller's own study set. Regenerating replaces the previous
+    // set for this material instead of appending, so the Flashcards tab shows
+    // one coherent deck rather than every run ever made.
+    const saved = await persistFlashcards({
+      supabase,
+      principal,
+      materialId,
+      courseId: material.course_id,
+      cards: result.flashcards,
+    })
+
+    return Response.json({ flashcards: result.flashcards, saved })
   } catch (error: any) {
     console.error("[flashcards] failed:", error?.message || error)
     return Response.json(
@@ -72,4 +83,48 @@ Return JSON exactly in this shape:
       { status: 502 },
     )
   }
+}
+
+async function persistFlashcards(params: {
+  supabase: any
+  principal: { userId: string; role: string; isPersistable: boolean }
+  materialId: string
+  courseId: string
+  cards: Array<{ question: string; answer: string }>
+}): Promise<boolean> {
+  const { supabase, principal, materialId, courseId, cards } = params
+
+  // Demo ids are not UUIDs, so writing them would violate the foreign key. The
+  // caller still gets the cards back for this session.
+  if (!principal.isPersistable) return false
+  if (cards.length === 0) return false
+
+  // Clear the old deck first: a partial replace would leave stale cards mixed
+  // with new ones, which is worse than either state on its own.
+  const { error: clearError } = await supabase
+    .from("flashcards")
+    .delete()
+    .eq("student_id", principal.userId)
+    .eq("material_id", materialId)
+
+  if (clearError) {
+    console.error("[flashcards] could not clear previous deck:", clearError.message)
+    return false
+  }
+
+  const rows = cards.map((card) => ({
+    student_id: principal.userId,
+    course_id: courseId,
+    material_id: materialId,
+    question: card.question,
+    answer: card.answer,
+  }))
+
+  const { error } = await supabase.from("flashcards").insert(rows)
+  if (error) {
+    console.error("[flashcards] could not store deck:", error.message)
+    return false
+  }
+
+  return true
 }

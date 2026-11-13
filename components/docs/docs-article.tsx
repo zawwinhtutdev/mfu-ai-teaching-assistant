@@ -1,10 +1,12 @@
+"use client"
+
 import type { ReactNode } from "react"
 import Link from "next/link"
 import ReactMarkdown, { type Components } from "react-markdown"
 import rehypeRaw from "rehype-raw"
 import remarkGfm from "remark-gfm"
 import { ArrowUpRight, BookOpenCheck, Info } from "lucide-react"
-import { slugifyHeading } from "@/lib/docs"
+import { slugifyHeading } from "@/lib/docs-slug"
 
 type DocsArticleProps = {
   title: string

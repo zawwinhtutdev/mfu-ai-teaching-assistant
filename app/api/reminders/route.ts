@@ -1,23 +1,37 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
 import { isNotificationsTableMissing, queueReminderNotificationJobs } from "@/lib/server/notification-jobs"
 import { logAuditEvent } from "@/lib/server/audit-log"
+import { assertCourseAccess, clientForPrincipal, resolvePrincipal } from "@/lib/server/principal"
+
+/**
+ * Study reminders.
+ *
+ * Authenticated with `supabase.auth.getUser()` only, so demo accounts saw an
+ * empty Reminders page even after the deadline scheduler had created reminders
+ * for them. Identity now comes from `resolvePrincipal`, which understands both
+ * a real Supabase session and a demo cookie.
+ */
 
 export async function GET() {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
+    const principal = await resolvePrincipal()
+    if (!principal) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const supabase = await clientForPrincipal(principal)
+
+    // Reminders are per-student. A teacher or admin asking has no personal
+    // reminder list, and returning an empty array is more useful than either a
+    // 403 or somebody else's rows.
+    if (!principal.isPersistable) {
+      return NextResponse.json({ reminders: [] })
     }
 
     const { data: reminders, error } = await supabase
       .from("study_reminders")
       .select("id, student_id, course_id, reminder_text, reminder_time, is_completed, created_at, courses(title, code)")
-      .eq("student_id", user.id)
+      .eq("student_id", principal.userId)
       .order("reminder_time", { ascending: true })
 
     if (error) {
@@ -32,18 +46,22 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
+    const principal = await resolvePrincipal()
+    if (!principal) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
-    if (!profile || profile.role !== "student") {
+    if (principal.role !== "student") {
       return NextResponse.json({ error: "Only students can create reminders" }, { status: 403 })
+    }
+
+    // A demo student has no profile row, so the reminder could not be stored.
+    // Say that plainly instead of letting a foreign-key error surface later.
+    if (!principal.isPersistable) {
+      return NextResponse.json(
+        { error: "Demo accounts cannot save reminders. Sign in with a real university account." },
+        { status: 403 },
+      )
     }
 
     const body = await req.json().catch(() => ({}))
@@ -69,24 +87,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Reminder time must be in the future" }, { status: 400 })
     }
 
-    const { data: enrollment } = await supabase
-      .from("course_enrollments")
-      .select("course_id")
-      .eq("course_id", courseId)
-      .eq("student_id", user.id)
-      .maybeSingle()
-
-    if (!enrollment) {
+    // Accepts a course code or uuid, then confirms this student is enrolled.
+    const course = await assertCourseAccess(principal, courseId)
+    if (!course) {
       return NextResponse.json({ error: "You are not enrolled in this course" }, { status: 403 })
     }
 
+    const supabase = await clientForPrincipal(principal)
     const reminderTime = reminderDate.toISOString()
 
     const { data: reminder, error: reminderError } = await supabase
       .from("study_reminders")
       .insert({
-        student_id: user.id,
-        course_id: courseId,
+        student_id: principal.userId,
+        course_id: course.id,
         reminder_text: reminderText,
         reminder_time: reminderTime,
       })
@@ -100,11 +114,11 @@ export async function POST(req: Request) {
     try {
       const queuedJobs = await queueReminderNotificationJobs({
         supabase: supabase as any,
-        userId: user.id,
+        userId: principal.userId,
         // Resolve the destination here, where the profile is already in scope.
         // The processor cannot look it up without a service-role client.
-        email: user.email,
-        courseId,
+        email: principal.email,
+        courseId: course.id,
         reminderId: reminder.id,
         reminderText,
         reminderTime,
@@ -132,12 +146,12 @@ export async function POST(req: Request) {
     } finally {
       await logAuditEvent({
         supabase: supabase as any,
-        actorId: user.id,
+        actorId: principal.userId,
         action: "reminder.created",
         resourceType: "study_reminder",
         resourceId: reminder.id,
         metadata: {
-          courseId,
+          courseId: course.id,
           lineEnabled,
           reminderTime,
         },
@@ -149,3 +163,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error?.message || "Failed to create reminder" }, { status: 500 })
   }
 }
+

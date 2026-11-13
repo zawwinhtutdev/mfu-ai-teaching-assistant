@@ -9,7 +9,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Bot, Settings, BookOpen, Sparkles, Save } from "lucide-react"
 import type { Profile, Course } from "@/lib/types"
-import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 
 interface AgentBuilderPageProps {
@@ -17,11 +16,28 @@ interface AgentBuilderPageProps {
   courses: Course[]
 }
 
+/** Mirrors the local model the chat route actually runs. */
+const DEFAULT_MODEL = process.env.NEXT_PUBLIC_DEFAULT_AI_MODEL || "qwen2.5:7b"
+
+/** Models the dropdown offers. Anything else would render as an empty select. */
+const MODELS = ["qwen2.5:7b", "gemini-2.5-flash"] as const
+
+function normalizeModel(stored: string | null | undefined): string {
+  if (!stored) return DEFAULT_MODEL
+  // Rows predate the local-model default and still hold values like
+  // "google/gemini-3.8-flash". Mapping them keeps the select populated
+  // instead of showing nothing while the value is silently non-empty.
+  const match = MODELS.find((model) => model === stored)
+  if (match) return match
+  if (/gemini/i.test(stored)) return "gemini-2.5-flash"
+  return DEFAULT_MODEL
+}
+
 export function AgentBuilderPage({ profile, courses }: AgentBuilderPageProps) {
   const router = useRouter()
   const [selectedCourse, setSelectedCourse] = useState<string>(courses[0]?.id || "")
   const [tone, setTone] = useState<"professional" | "friendly" | "casual" | "formal">("professional")
-  const [aiModel, setAiModel] = useState("google/gemini-3.8-flash")
+  const [aiModel, setAiModel] = useState(DEFAULT_MODEL)
   const [systemPrompt, setSystemPrompt] = useState("")
   const [gradingPolicy, setGradingPolicy] = useState("")
   const [courseRules, setCourseRules] = useState("")
@@ -36,23 +52,26 @@ export function AgentBuilderPage({ profile, courses }: AgentBuilderPageProps) {
     if (!selectedCourse) return
 
     let cancelled = false
-    const supabase = createClient()
 
     const loadSettings = async () => {
       setIsLoadingSettings(true)
       setError(null)
       try {
-        const { data, error: fetchError } = await supabase
-          .from("chatbot_settings")
-          .select("tone, ai_model, system_prompt, grading_policy, course_rules")
-          .eq("course_id", selectedCourse)
-          .maybeSingle()
-
-        if (fetchError) throw fetchError
+        // Server-side lookup: the demo portal hands out seed ids like
+        // "course-ai-edu", which Postgres rejects as a uuid. The route resolves
+        // either form to the real course row.
+        const response = await fetch(
+          `/api/courses/${encodeURIComponent(selectedCourse)}/chatbot-settings`,
+        )
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          throw new Error(payload?.error || "Failed to load existing chatbot settings")
+        }
         if (cancelled) return
 
+        const data = payload?.settings
         setTone((data?.tone as any) || "professional")
-        setAiModel(data?.ai_model || "google/gemini-3.8-flash")
+        setAiModel(normalizeModel(data?.ai_model))
         setSystemPrompt(data?.system_prompt || "")
         setGradingPolicy(data?.grading_policy || "")
         setCourseRules(data?.course_rules || "")
@@ -81,30 +100,25 @@ export function AgentBuilderPage({ profile, courses }: AgentBuilderPageProps) {
     setError(null)
     setSuccess(false)
 
-    const supabase = createClient()
-
     try {
-      // Update chatbot settings
-      const { error: settingsError } = await supabase
-        .from("chatbot_settings")
-        .upsert({
-          course_id: selectedCourse,
-          tone,
-          ai_model: aiModel,
-          system_prompt: systemPrompt || null,
-          grading_policy: gradingPolicy || null,
-          course_rules: courseRules || null,
-        }, {
-          onConflict: "course_id"
-        })
-
-      if (settingsError) throw settingsError
+      const response = await fetch(
+        `/api/courses/${encodeURIComponent(selectedCourse)}/chatbot-settings`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tone, aiModel, systemPrompt, gradingPolicy, courseRules }),
+        },
+      )
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to save settings")
+      }
 
       setSuccess(true)
       setTimeout(() => setSuccess(false), 3000)
       router.refresh()
-    } catch (error: any) {
-      setError(error.message || "Failed to save settings")
+    } catch (saveError: any) {
+      setError(saveError?.message || "Failed to save settings")
     } finally {
       setIsLoading(false)
     }
@@ -167,7 +181,7 @@ export function AgentBuilderPage({ profile, courses }: AgentBuilderPageProps) {
                         <Label htmlFor="aiModel">AI Model</Label>
                         <Select value={aiModel} onValueChange={setAiModel}>
                           <SelectTrigger>
-                            <SelectValue />
+                            <SelectValue placeholder="Select a model" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="qwen2.5:7b">qwen2.5:7b — local, private (default)</SelectItem>

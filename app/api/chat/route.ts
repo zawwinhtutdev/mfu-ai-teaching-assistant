@@ -17,6 +17,7 @@ import { DEMO_EMAIL_COOKIE, DEMO_ROLE_COOKIE, getDemoAccountByRole } from "@/lib
 import { getLatestReadyDemoStoreName, readDemoDocumentsCookie, type DemoDocumentRecord, DEMO_DOCUMENTS_COOKIE } from "@/lib/demo-documents"
 import { isPdfDocument } from "@/lib/documents/supported-formats"
 import { hasAiProcessingConsent } from "@/lib/server/consent"
+import { logStudentQuery } from "@/lib/server/query-logging"
 import { assertCourseAccess, clientForPrincipal, resolvePrincipal } from "@/lib/server/principal"
 
 // A local 7B model on a laptop can exceed 30s on a long grounded answer, and
@@ -651,12 +652,10 @@ Guidelines:
         onComplete: async ({ repaired, refused }) => {
           // Persisting here — not inside the Gemini branch — is what keeps
           // teacher analytics populated on the local-model path. Consent is
-          // checked first: a student who opted out of AI-processing logging
-          // still gets answers, their queries are just not stored.
+          // resolved inside logStudentQuery: a student who declined gets no
+          // row, one who has not answered gets an anonymized row.
           if (!analyticsCourseId || userRole !== "student" || !UUID_REGEX.test(userId)) return
           if (!userMessageText) return
-
-          if (!(await hasAiProcessingConsent(supabase, userId))) return
 
           if (currentConversationId && canPersist) {
             const { error: messageError } = await supabase.from("messages").insert([
@@ -666,15 +665,17 @@ Guidelines:
             if (messageError) console.error("[v0] Error saving local messages:", messageError)
           }
 
-          const { error: analyticsError } = await supabase.from("student_queries").insert({
-            student_id: userId,
-            course_id: analyticsCourseId,
-            query_text: userMessageText,
-            response_text: repaired,
-            was_refused: refused,
+          const outcome = await logStudentQuery({
+            supabase,
+            studentId: userId,
+            courseId: analyticsCourseId,
+            queryText: userMessageText,
+            responseText: repaired,
+            wasRefused: refused,
+            canAttribute: UUID_REGEX.test(userId),
           })
-          if (analyticsError) {
-            console.error("[v0] Failed to store student query analytics:", analyticsError)
+          if (outcome === "skipped") {
+            console.warn("[v0] Query analytics were not stored for this exchange")
           }
         },
       })
@@ -769,14 +770,16 @@ Guidelines:
           UUID_REGEX.test(userId) &&
           userMessageText
         ) {
-          const { error: analyticsError } = await supabase.from("student_queries").insert({
-            student_id: userId,
-            course_id: analyticsCourseId,
-            query_text: userMessageText,
-            response_text: assistantMessage,
+          const outcome = await logStudentQuery({
+            supabase,
+            studentId: userId,
+            courseId: analyticsCourseId,
+            queryText: userMessageText,
+            responseText: assistantMessage,
+            canAttribute: UUID_REGEX.test(userId),
           })
-          if (analyticsError) {
-            console.error("[v0] Failed to store student query analytics:", analyticsError)
+          if (outcome === "skipped") {
+            console.warn("[v0] Query analytics were not stored for this exchange")
           }
         }
       },

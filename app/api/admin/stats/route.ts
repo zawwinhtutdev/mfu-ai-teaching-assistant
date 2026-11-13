@@ -29,6 +29,9 @@ export async function GET() {
       notifJobsRes,
       consentsRes,
       auditLogsRes,
+      materialsRes,
+      chunksRes,
+      policiesRes,
     ] = await Promise.all([
       serviceClient.from("profiles").select("role", { count: "exact", head: false }),
       serviceClient.from("courses").select("id", { count: "exact", head: true }),
@@ -37,6 +40,11 @@ export async function GET() {
       serviceClient.from("notification_jobs").select("status", { count: "exact", head: false }),
       serviceClient.from("consents").select("consent_type, is_granted", { count: "exact", head: false }),
       serviceClient.from("audit_logs").select("id", { count: "exact", head: true }),
+      // Course materials drive the "Course documents" card. Previously absent,
+      // so the card rendered `undefined ready · undefined failed`.
+      serviceClient.from("course_materials").select("id", { count: "exact", head: true }),
+      serviceClient.from("course_material_chunks").select("material_id", { count: "exact", head: false }),
+      serviceClient.from("system_policies").select("policy_key", { count: "exact", head: false }),
     ])
 
     const profiles = profilesRes.data || []
@@ -60,6 +68,20 @@ export async function GET() {
       else consentStats.revoked++
     }
 
+    // A material counts as "ready" once it has at least one indexed chunk.
+    // "Failed" is materials with no chunks yet — indexing either has not run or
+    // did not produce anything, which is what an admin needs to notice.
+    const materialIds = new Set<string>()
+    const chunkRows = chunksRes.data || []
+    const indexedMaterialIds = new Set<string>()
+    for (const chunk of chunkRows) {
+      if ((chunk as any).material_id) indexedMaterialIds.add((chunk as any).material_id)
+    }
+
+    const totalDocuments = materialsRes.count ?? 0
+    const documentsReady = indexedMaterialIds.size
+    const documentsFailed = Math.max(totalDocuments - documentsReady, 0)
+
     return NextResponse.json({
       stats: {
         totalUsers: profiles.length,
@@ -68,6 +90,11 @@ export async function GET() {
         totalEnrollments: enrollmentsRes.count || 0,
         totalConversations: conversationsRes.count || 0,
         totalAuditLogs: auditLogsRes.count || 0,
+        totalDocuments,
+        totalChunks: chunkRows.length,
+        documentsReady,
+        documentsFailed,
+        totalPolicies: policiesRes.count ?? (policiesRes.data?.length ?? 0),
         notifications: notifCounts,
         consents: consentStats,
       },

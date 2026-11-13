@@ -9,17 +9,6 @@ import { toUserRole } from "@/lib/auth/roles"
 import { EducveStyleLinks } from "@/components/educve/EducveStyleLinks"
 import { InnerPageLayout } from "@/components/educve/InnerPageLayout"
 
-import { DEMO_ACCOUNTS } from "@/lib/demo-auth"
-
-const demoAccounts = DEMO_ACCOUNTS.filter((account) => account.role !== "admin").map(
-  (account) => ({
-    role: account.role as "student" | "teacher",
-    email: account.email,
-    password: account.password,
-    fullName: account.fullName,
-  }),
-)
-
 const noticeStyle: React.CSSProperties = {
   borderRadius: 10,
   padding: "14px 18px",
@@ -43,7 +32,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [demoLoginEmail, setDemoLoginEmail] = useState<string | null>(null)
   const [acceptTerms, setAcceptTerms] = useState(false)
   const [resetSuccess, setResetSuccess] = useState(false)
   // null = still checking, so the button does not flash "unavailable" on load.
@@ -104,36 +92,6 @@ export default function LoginPage() {
     }
   }
 
-  const handleDemoLogin = async (role: "student" | "teacher", demoEmail: string, demoPassword: string) => {
-    setError(null)
-    setEmail(demoEmail)
-    setPassword(demoPassword)
-    setAcceptTerms(true)
-    setDemoLoginEmail(demoEmail)
-
-    try {
-      const response = await fetch("/api/demo-auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: demoEmail, password: demoPassword }),
-      })
-
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}))
-        throw new Error(payload?.error || "Demo login failed")
-      }
-
-      // Always follow the role the server actually authenticated, not the one
-      // the clicked button was labelled with.
-      const payload = await response.json().catch(() => null)
-      window.location.assign(getDefaultRouteForRole(payload?.account?.role ?? role))
-    } catch (loginError: unknown) {
-      setError(loginError instanceof Error ? loginError.message : "Demo login failed")
-    } finally {
-      setDemoLoginEmail(null)
-    }
-  }
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -151,20 +109,11 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      const demoResponse = await fetch("/api/demo-auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      })
-
-      if (demoResponse.ok) {
-        const payload = await demoResponse.json()
-        window.location.assign(getDefaultRouteForRole(payload?.account?.role))
-        return
-      }
-
-      await fetch("/api/demo-auth/logout", { method: "POST" })
-
+      // One sign-in path: real Supabase credentials. The demo-cookie shortcut
+      // used to be tried first, which meant a seed account authenticated
+      // against a client-side list rather than against the database, and any
+      // account not in that list took a different code path. Every seeded
+      // account is a real auth user, so the shortcut is gone.
       const supabase = createClient()
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email,
@@ -272,7 +221,7 @@ export default function LoginPage() {
                       <div className="td_form_card_bottom td_mb_25">
                         <button
                           type="submit"
-                          disabled={isLoading || !acceptTerms || !!demoLoginEmail}
+                          disabled={isLoading || !acceptTerms}
                           className="td_btn td_style_1 td_radius_10 td_medium"
                         >
                           <span className="td_btn_in td_white_color td_accent_bg">
@@ -283,7 +232,7 @@ export default function LoginPage() {
                         <button
                           type="button"
                           onClick={handleSsoLogin}
-                          disabled={isLoading || !!demoLoginEmail || googleEnabled !== true}
+                          disabled={isLoading || googleEnabled !== true}
                           title={
                             googleEnabled === true
                               ? undefined
@@ -297,31 +246,6 @@ export default function LoginPage() {
                         </button>
                       </div>
                     </form>
-
-                    <div className="td_mb_30">
-                      <p className="td_form_card_text td_fs_20 td_medium td_heading_color td_mb_20">
-                        Demo accounts
-                      </p>
-                      <div className="d-flex flex-column gap-3">
-                        {demoAccounts.map((account) => (
-                          <button
-                            key={account.email}
-                            type="button"
-                            className="td_btn td_style_1 td_radius_10 td_medium"
-                            disabled={!!demoLoginEmail || isLoading}
-                            onClick={() => handleDemoLogin(account.role, account.email, account.password)}
-                          >
-                            <span className="td_btn_in td_heading_color td_white_bg">
-                              <span>
-                                {demoLoginEmail === account.email
-                                  ? `Logging in ${account.fullName}...`
-                                  : `${account.role} · ${account.fullName}`}
-                              </span>
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
 
                     <p className="td_form_card_text td_fs_20 td_medium td_heading_color td_mb_20">
                       University IT staff: <a href="/admin/login">sign in to the Admin Console</a>
