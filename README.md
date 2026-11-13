@@ -29,8 +29,8 @@ citations that are verified after generation.
 
 | Role | Can do |
 | --- | --- |
-| **Teacher** | See only their courses, upload PDFs into them, ask questions grounded in their material, manage course assistant settings |
-| **Student** | See only enrolled courses, read uploaded material, ask grounded questions with citations |
+| **Teacher** | See only their courses, upload material into them, post assignments with deadlines, read analytics, manage course assistant settings |
+| **Student** | See only enrolled courses, read uploaded material, ask grounded questions with citations, see assignment deadlines |
 | **Admin** | Platform overview: people, courses, enrollments, documents, indexed chunks |
 
 Behaviour worth highlighting:
@@ -38,20 +38,29 @@ Behaviour worth highlighting:
 - **Course selector drives everything.** The document list, the chat, and the
   citations all follow the selected course; switching clears the conversation.
 - **Enrollment is a database row, not a UI filter.** Requesting another course's
-  documents or chat returns `403` even if the URL is edited by hand.
-- **Retrieval is scoped by the caller, not by the request.** Omitting `course_id`
-  does not widen the search to every course: the service resolves the caller's
-  own courses from `enrollments` (or `courses.teacher_id`) and searches only
-  those. A caller with no courses retrieves nothing and gets a refusal.
+  chat or assignments returns `403` even if the URL is edited by hand.
+- **Retrieval is scoped by the caller, not by the request.** The course is
+  authorised before retrieval runs, and an unauthorised request is refused
+  outright rather than falling through to a wider search.
 - **Refusal over guessing.** If retrieval finds nothing relevant, the assistant
-  replies *"The course materials do not cover this."*
+  replies *"The course materials do not cover this."* — and the refusal is
+  recorded, so teachers can see which questions their material does not answer.
 - **Citations are repaired.** When a small local model attaches a claim to the
   wrong source number, the marker is rewritten to the passage that actually
   supports it, and the change is reported.
+- **Deadlines create reminders.** Releasing an assignment schedules one reminder
+  per enrolled student ahead of the due date. Re-running the scheduler is
+  idempotent, so the daily job cannot produce duplicates.
+- **Consent gates logging, not answers.** A student who withdraws AI-processing
+  consent still gets answers; their questions are simply not stored.
 - **Per-course dedupe.** The same PDF in two courses is two documents, so each
   course owns its copy.
 
 ## Architecture
+
+Retrieval and generation both run inside the Next.js server, against the same
+Supabase database the portal pages read. There is no second database, so a
+course id means exactly one thing.
 
 ```mermaid
 flowchart LR
@@ -60,57 +69,73 @@ flowchart LR
     end
 
     subgraph Web["Next.js server"]
-      R[Route handlers<br/>/api/chat/stream<br/>/api/rag/documents]
-    end
-
-    subgraph API["FastAPI service :8000"]
-      A[Auth + access checks]
-      P[RAG pipeline<br/>chunk → embed → retrieve → fuse → generate → repair]
-      D[Documents + ingestion]
+      R[Route handlers<br/>/api/chat · /api/courses/:id/assignments]
+      P[RAG pipeline<br/>chunk → embed → retrieve → build context → generate → repair]
+      S[Assignment reminder scheduler]
     end
 
     subgraph Data
-      PG[(PostgreSQL 16<br/>+ pgvector<br/>people · courses · enrollments<br/>documents · chunks)]
+      PG[(Supabase PostgreSQL<br/>+ pgvector<br/>profiles · courses · enrollments<br/>course_materials · course_material_chunks<br/>faqs · assignments · study_reminders)]
       O[Ollama<br/>qwen2.5:7b<br/>nomic-embed-text]
     end
 
     UI -->|fetch / SSE| R
-    R -->|identity header| A
-    A --> P
-    A --> D
+    R --> P
+    R --> S
     P --> PG
-    D --> PG
     P --> O
+    S --> PG
 ```
 
 The browser never talks to the database and never decides what it may read.
+Every course-scoped request is re-checked server-side by `assertCourseAccess`,
+which understands both course codes and UUIDs so demo sessions and real
+sessions take the same path.
+
+### Why there is no separate API service
+
+An earlier version had a FastAPI service with its own Postgres. Courses were
+UUIDs in Supabase and slugs (`course-csb321`) in that second database, so every
+course-scoped chat request was rejected with `403` before retrieval ran. The
+pipeline was ported into the web app instead: one process, one database, no id
+translation. `services/api` remains in the repository as the reference
+implementation and evaluation harness, but it is not on the request path.
 
 ## Tech stack
 
 | Layer | Choice |
 | --- | --- |
 | Web | Next.js 16 (App Router, Turbopack), React 19, TypeScript, Tailwind CSS 4, shadcn/Radix |
-| API | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2 (async), asyncpg, Alembic |
-| Data | PostgreSQL 16 + pgvector (HNSW + GIN on a generated `tsv`) |
+| Data | Supabase PostgreSQL + pgvector (`match_course_material_chunks`, `match_faqs`) |
 | Models | Ollama: `qwen2.5:7b` (chat) and `nomic-embed-text` (768-dim embeddings); Gemini optional |
-| Streaming | Server-sent events: `sources → start → delta → done → [DONE]` |
-| Packaging | Docker Compose (web, api, db, redis) or local processes |
+| Streaming | AI SDK UI message stream: `start → text-delta → text-end → finish` |
+| Packaging | Docker Compose, or local processes via `scripts/dev.sh` |
 
 ## How an answer is produced
 
-1. **Extract** — PDF text page by page; control characters are stripped so the
-   text can be stored safely (`0x00` in a pypdf dump is a real failure mode).
-2. **Chunk** — ~1,200 characters with 200 overlap, keeping page numbers and the
-   nearest section heading.
-3. **Embed** — one 768-dim vector per chunk.
-4. **Index** — the same chunk is also indexed for keyword search.
-5. **Retrieve** — cosine similarity and lexical match, scoped to one course.
-6. **Fuse** — reciprocal rank fusion (k=60) so exact terms and paraphrases both
-   survive.
-7. **Generate** — top passages go into the prompt with a strict grounding rule
-   and a fixed refusal sentence.
-8. **Check** — every cited sentence is compared against the supplied passages;
-   a better-matching source replaces a wrong marker.
+1. **Extract** — PDF text page by page, `.docx`/`.pptx` by reading the OOXML text
+   runs out of the zip, audio via transcription. Control characters are stripped
+   so the text can be stored safely (`0x00` in a parser dump is a real failure
+   mode).
+2. **Chunk** — ~1,400 characters with 220 overlap, split on paragraph or sentence
+   boundaries so a chunk does not end mid-sentence.
+3. **Embed** — one 768-dim vector per chunk via `nomic-embed-text`, unit
+   normalised. The width matches the `vector(768)` column, so no schema change is
+   needed when swapping between Ollama and Gemini embeddings.
+4. **Retrieve** — cosine similarity through `match_course_material_chunks`,
+   scoped to one course the caller is authorised for. FAQ answers are searched
+   too and rank ahead of material chunks, because a teacher wrote them on purpose.
+5. **Build context** — chunks are deduplicated (Jaccard ≥ 0.8), numbered `[1]…[n]`,
+   and capped by a character budget. The budget stops adding sources rather than
+   truncating one, because a half-supplied chunk produces citations that look
+   supported but are not.
+6. **Generate** — the passages go into a prompt with a strict grounding rule and a
+   fixed refusal sentence. No sources means the refusal is emitted without
+   spending a model call.
+7. **Repair** — streaming and citation checking pull in opposite directions, so
+   the user sees deltas as they are generated and the persisted text is corrected
+   afterwards: any marker another passage supports better is rewritten, and
+   duplicate markers collapse. Every change is reported, never silent.
 
 The context budget is 6,000 characters. It was 2,400 until an evaluation run
 showed ordinary questions refusing because only two chunks ever reached the
@@ -302,23 +327,29 @@ Sign in from the login page with the demo buttons.
 
 ## Configuration
 
-Set in `.env.local` (web) or the environment (api). The API reads these through
-`pydantic-settings`:
+Set in `.env.local` (web) or the environment. The web app reads these directly;
+`services/api` (the reference implementation) reads them through
+`pydantic-settings`.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `AI_PROVIDER` | `auto` | `ollama`, `gemini`, `stub`, or `auto` (Gemini when a key exists) |
+| `AI_PROVIDER` | `auto` | `ollama`, `gemini`, or `auto` (Ollama when no Gemini key exists) |
 | `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama endpoint |
-| `OLLAMA_MODEL` | `qwen2.5:7b` | Chat model |
+| `OLLAMA_MODEL` | `qwen2.5:7b` | Chat model, used for chat, summaries, quizzes and flashcards |
 | `OLLAMA_EMBEDDING_MODEL` | `nomic-embed-text` | Embedding model (must stay 768-dim for the schema) |
-| `DATABASE_URL` | — | `postgresql+asyncpg://…` |
-| `ALLOW_INSECURE_DEV_AUTH` | `false` | Enables the demo cookie/header principal |
-| `CHUNK_CHARS` / `CHUNK_OVERLAP` | `1200` / `200` | Chunking |
-| `TOP_K` | `5` | Passages per answer |
-| `CONTEXT_CHARS` | `6000` | Character budget sent to the model |
-| `REFUSAL_THRESHOLD` | `0.55` | Minimum relevance before answering |
-| `GEMINI_API_KEY` | — | Only for `AI_PROVIDER=gemini` |
-| `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_JWT_SECRET` | — | Optional hosted auth |
+| `ALLOW_INSECURE_DEV_AUTH` | `false` | Enables the demo cookie principal |
+| `COURSE_RAG_CHUNK_CHARS` / `..._OVERLAP_CHARS` | `1400` / `220` | Chunking |
+| `COURSE_RAG_MAX_CONTEXT_CHARS` | `22000` | Character budget sent to the model |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | — | Only for `AI_PROVIDER=gemini` |
+| `RESEND_API_KEY` | — | Email delivery for reminders |
+| `NOTIFICATION_FROM_EMAIL` | `MFU AI Assistant <no-reply@…>` | Sender address |
+| `NOTIFICATIONS_DRY_RUN` | `false` | Log instead of sending, without a provider key |
+| `LINE_CHANNEL_ACCESS_TOKEN` | — | LINE Messaging API delivery |
+| `REMINDER_LEAD_HOURS` | `24` | How far ahead of a deadline to remind |
+| `CRON_SECRET` | — | Bearer token for `/api/notifications/process` |
+| `DATA_RETENTION_DAYS` | `30` | Log retention window, also shown on `/privacy` |
+| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | — | Supabase project |
+| `SUPABASE_SERVICE_ROLE_KEY` | — | Server-side privileged reads (demo sessions, cron) |
 
 ## Project layout
 
@@ -362,27 +393,38 @@ Latest run on a laptop with `qwen2.5:7b`:
 
 | Metric | Result |
 | --- | --- |
-| Recall@5 | 100% |
-| Refusal accuracy | 96–100% |
-| Citation validity | 100% |
-| Citation support | 81% after repair (76% raw) |
-| Latency | p50 ≈ 2.4 s, p95 ≈ 6.2 s |
+| Answer accuracy | 100% (5/5, target ≥ 85%) |
+| Refusal accuracy | 100% (3/3) |
+| Citation validity | 100% (5/5 answered) |
+| Latency | p50 ≈ 0.7 s, p95 ≈ 2.1 s |
 
-Citation support is not 100% and is not reported as such: the remaining cases are
-claims spread across two passages that one citation cannot represent. Prompt
-variants (quote-first, two-step) were tried and did **not** beat the baseline,
-so the default stays `top_k=5` + citation repair.
+Answer accuracy is measured by `npm run eval:answers`, which checks the facts a
+correct answer must contain rather than scoring the prose. It is a small set (8
+cases on one course), so treat it as a regression guard rather than a claim about
+the system in general: recall, refusal and citation validity were the metrics
+that caught real bugs, and they are reported separately so a failure names the
+part that broke.
+
+Citation support (whether the cited passage actually supports the claim, as
+opposed to whether the marker is well-formed) sits around 80% after repair; the
+remaining cases are claims spread across two passages that one citation cannot
+represent. Prompt variants (quote-first, two-step) were tried and did **not** beat
+the baseline, so the default stays `top_k=5` + citation repair.
 
 ## Testing
 
 ```bash
-cd services/api && .venv/bin/python -m pytest -q     # 87 tests
-cd services/api && .venv/bin/ruff check . && .venv/bin/mypy app
-npm run type-check && npm run lint
+npm run type-check          # tsc --noEmit
+npm run test:roadmap        # structural smoke checks
+npm run eval:answers        # answer accuracy against the live pipeline
+npm run reindex             # rebuild chunk embeddings (idempotent)
+
+cd services/api && .venv/bin/python -m pytest -q   # reference pipeline, 87 tests
 ```
 
-The access-control tests are the important ones: they assert that a student not
-enrolled in a course gets `403` for both documents and chat.
+The access-control behaviour is verified through the API: a student not enrolled
+in a course receives `403` for chat and for assignments, and a student asking
+about a course they are enrolled in receives a cited answer.
 
 ## Documentation
 
@@ -398,24 +440,30 @@ The app ships its own documentation at `/docs` (sources in `content/docs/`):
 
 ## Known limitations
 
-- **Conversation history is not persisted** in this build; the admin counters for
-  conversations/audit/consents were removed rather than shown as zeros.
-- **Citations are text, not links.** They carry filename, page, and section, but
-  do not open the PDF at that page yet.
-- **No per-request membership check** on `/v1/me/courses` beyond the database
-  role; course-level checks happen on document and chat endpoints.
-- **Scanned PDFs are rejected** (no OCR).
+- **Citations are text, not links.** They carry filename and section, but do not
+  open the PDF at that page yet.
+- **No OCR.** Scanned PDFs produce no extractable text; `.docx` and `.pptx` are
+  parsed as XML, so text in embedded images is not seen.
+- **Email and LINE delivery need credentials.** Without `RESEND_API_KEY` (or
+  `NOTIFICATIONS_DRY_RUN=true`) queued email jobs fail with an explicit error
+  rather than pretending to send. LINE needs `LINE_CHANNEL_ACCESS_TOKEN` and a
+  linked LINE user id.
 - **Single-node ingestion.** Good for a course, not for a faculty.
+- **No LMS sync, SAML, or AES-256 at rest.** `/api/lms` is a stub; SSO is Google
+  OIDC only; encryption at rest is whatever the host provides.
 - Demo auth is intentionally insecure and must stay behind
   `ALLOW_INSECURE_DEV_AUTH`.
 
 ## Roadmap
 
-- [ ] Persist conversations and answers with feedback
+- [x] Persist questions and answers with feedback
+- [x] Instructor analytics on unanswered questions
+- [x] Deadline-driven assignment reminders
+- [x] Consent capture and a published privacy notice
 - [ ] Clickable citations that open the source page
 - [ ] Per-course unique constraints on document titles
-- [ ] OCR fallback for scanned material
-- [ ] Instructor analytics on unanswered questions
+- [ ] OCR fallback for scanned material and image-only slides
+- [ ] LMS (Moodle/Canvas) roster and assignment sync
 
 ## Credits
 

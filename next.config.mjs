@@ -5,6 +5,13 @@ const nextConfig = {
   // Allow the dev server on both loopback spellings; otherwise the client
   // bundle is blocked cross-origin and the page never hydrates.
   allowedDevOrigins: ["127.0.0.1", "localhost"],
+  experimental: {
+    // Keep this app on a version that is clear of published security
+    // advisories. Set during the 16.4.2 -> 16.4.6 upgrade so `next dev` and
+    // `next build` surface the reminder again when a future advisory lands,
+    // instead of only failing later in CI.
+    agentUpgrade: "security",
+  },
   images: {
     unoptimized: true,
   },
