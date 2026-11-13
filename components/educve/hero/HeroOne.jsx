@@ -1,5 +1,4 @@
 import React from "react";
-import { DocumentationLink } from "@/components/educve/DocumentationLink";
 
 const heroBg = "/home_1/hero_bg_1.jpg";
 
@@ -25,34 +24,6 @@ export const HeroOne = () => (
           flashcards, and reminders while teachers manage course content and
           insights in one platform.
         </p>
-        <DocumentationLink className="td_btn td_style_1 td_radius_10 td_medium">
-          <span className="td_btn_in td_white_color td_accent_bg">
-            <span>Read Documentation</span>
-            <svg
-              width="19"
-              height="20"
-              viewBox="0 0 19 20"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              aria-hidden="true"
-            >
-              <path
-                d="M15.1575 4.34302L3.84375 15.6567"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M15.157 11.4142C15.157 11.4142 16.0887 5.2748 15.157 4.34311C14.2253 3.41142 8.08594 4.34314 8.08594 4.34314"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </span>
-        </DocumentationLink>
       </div>
     </div>
     <div className="td_lines" aria-hidden="true">

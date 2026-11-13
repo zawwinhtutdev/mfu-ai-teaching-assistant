@@ -24,7 +24,7 @@ export function FlashcardsView({ courseId, studentId }: FlashcardsViewProps) {
   }, [courseId, studentId])
 
   const loadFlashcards = async () => {
-    const isDemoStudent = studentId.startsWith("mock-")
+    const isDemoStudent = studentId.startsWith("mock-") || studentId.startsWith("student-")
 
     try {
       const supabase = createClient()

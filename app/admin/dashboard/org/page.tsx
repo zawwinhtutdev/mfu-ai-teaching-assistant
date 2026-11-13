@@ -22,6 +22,7 @@ type DashboardStats = {
   totalChunks: number
   documentsReady: number
   documentsFailed: number
+  totalPolicies: number
 }
 
 function StatCard({
@@ -136,7 +137,13 @@ export default function OverviewPage() {
               subtitle="enrolled in at least one course"
               color="bg-teal-600"
             />
-            <StatCard icon={Activity} label="System Policies" value={3} subtitle="3 known flags" color="bg-indigo-600" />
+            <StatCard
+              icon={Activity}
+              label="System Policies"
+              value={stats.totalPolicies ?? 0}
+              subtitle="known flags"
+              color="bg-indigo-600"
+            />
           </div>
         </>
       ) : (

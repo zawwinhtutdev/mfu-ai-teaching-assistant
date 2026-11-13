@@ -146,6 +146,7 @@ begin
     ('CSD323', 'CSD323 Seminar Guide', 'CSD323 Seminar in Software Engineering. Each week one team presents a paper; discussants prepare questions. The term project is a literature review of 12-15 papers with a reproduction plan.', 'document'),
     ('CSD322', 'CSD322 Week 5 - Platform Architecture', 'Platform architecture layers: edge, application, data, and platform services. Cover stateless request handling, idempotent operations, and how authentication is enforced at the edge before requests reach application code.', 'lecture'),
     ('CSM324', 'CSM324 Formal English Guide', 'Formal English for academic writing: thesis statements, paragraph unity, hedging language, and citation conventions. Weekly writing tasks are submitted through the course workspace.', 'document'),
+    ('CSA411', 'CSA411 Course Overview', 'CSA411 Software Automation Testing with AI. The course focuses on automated test design and tooling, with emphasis on AI-assisted test generation and test maintenance. Topics include test case prioritisation, flaky test diagnosis, and evaluating the precision of generated tests.', 'document'),
     ('GEN311', 'GEN311 Global Citizenship Reader', 'Global citizenship covers intercultural communication, the sustainable development goals, and civic engagement. Assessment is a group presentation plus a reflective essay.', 'document')
   ) as m(code, title, content, material_type) on m.code = c.code
   where not exists (

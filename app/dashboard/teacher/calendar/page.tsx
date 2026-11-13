@@ -12,6 +12,7 @@ import {
   type TimelineTaskItem,
 } from "@/components/calendar/timeline-calendar"
 import { addDaysToLocalKey, toLocalDateKey } from "@/lib/academic-calendar"
+import { sessionsToMonthItems, type ScheduledSession, type Weekday } from "@/lib/course-schedule"
 import type { Course } from "@/lib/types"
 import { AlertCircle, Bell, BookOpen, Calendar as CalendarIcon, Clock, Filter, Info, X } from "lucide-react"
 
@@ -150,6 +151,66 @@ function buildTeacherDemoItems(): {
   return { timeline, notifications }
 }
 
+/**
+ * Expand every scheduled class into one calendar item per week.
+ *
+ * The calendar shows one month at a time but is not told which month up front,
+ * so a rolling window is generated: a few months back and ~14 forward. That
+ * covers browsing without needing to re-fetch on every month change, and the
+ * cost is small because it is pure date arithmetic.
+ */
+async function buildClassScheduleItems(): Promise<TimelineTaskItem[]> {
+  try {
+    const res = await fetch("/api/course-schedules", { cache: "no-store" })
+    if (!res.ok) return []
+    const payload = await res.json()
+    const sessions = Array.isArray(payload?.sessions) ? payload.sessions : []
+    if (sessions.length === 0) return []
+
+    const scheduled: ScheduledSession[] = sessions.map((row: any) => ({
+      courseId: row.courseId,
+      courseCode: row.courseCode,
+      courseTitle: row.courseTitle,
+      sectionNo: row.sectionNo,
+      sectionType: row.sectionType,
+      room: row.room ?? null,
+      schedule: {
+        weekday: row.weekday as Weekday,
+        startHour: row.startHour,
+        endHour: row.endHour,
+        raw: row.raw,
+      },
+    }))
+
+    const today = new Date()
+    const items: TimelineTaskItem[] = []
+
+    // Two months back through twelve ahead: enough for term browsing in either
+    // direction without generating years of events.
+    for (let offset = -2; offset <= 12; offset += 1) {
+      const cursor = new Date(today.getFullYear(), today.getMonth() + offset, 1)
+      const monthItems = sessionsToMonthItems(scheduled, cursor.getFullYear(), cursor.getMonth() + 1)
+      for (const item of monthItems) {
+        items.push({
+          id: item.id,
+          kind: "academic",
+          title: item.title,
+          metaLabel: item.metaLabel,
+          date: item.date,
+          time: item.time,
+          course: item.course,
+          location: item.location,
+        })
+      }
+    }
+
+    return items
+  } catch {
+    // A schedule failure must not blank the whole calendar.
+    return []
+  }
+}
+
 export default function TeacherCalendarPage() {
   const [isDemo, setIsDemo] = useState(false)
   const [courses, setCourses] = useState<Course[]>([])
@@ -277,7 +338,9 @@ export default function TeacherCalendarPage() {
           }
         })
 
-      const mergedTimeline = [...reminderItems, ...planItems, ...announcementItems].sort((a, b) =>
+      const classItems = await buildClassScheduleItems()
+
+      const mergedTimeline = [...classItems, ...reminderItems, ...planItems, ...announcementItems].sort((a, b) =>
         `${a.date}T${a.time || "00:00"}`.localeCompare(`${b.date}T${b.time || "00:00"}`),
       )
 

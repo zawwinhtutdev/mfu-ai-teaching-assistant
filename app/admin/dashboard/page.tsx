@@ -1,17 +1,80 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import type { ApiCourse } from "@/lib/server/academic"
+import { CourseDialog, type CourseFormValues } from "@/components/admin/course-dialog"
+import { CourseInfoDialog } from "@/components/admin/course-info-dialog"
+import { CourseScheduleDialog } from "@/components/admin/course-schedule-dialog"
+import { EnrollStudentsDialog } from "@/components/admin/enroll-students-dialog"
 
 const LINE = "#eff1f6"
 const TEXT = "#232334"
 const MUTED = "#666b80"
 const TERT = "#8d92a6"
 
+/**
+ * Table geometry, shared by the header and every row so they cannot drift apart.
+ *
+ * The selection column was removed: it toggled a checkbox that no action
+ * consumed, so it was purely decorative. The remaining fixed columns total
+ * 566px, so the grid needs a floor or the `1.6fr` course-name column collapses
+ * to nothing and the name renders with zero width.
+ */
+const COURSE_GRID = "minmax(190px, 1.5fr) 96px minmax(120px, 1fr) 80px 96px 112px 250px"
+const COURSE_TABLE_MIN_WIDTH = 1000
+
+/** Shape returned by GET /api/admin/courses. */
+interface ApiCourse {
+  id: string
+  code: string
+  title: string
+  description: string | null
+  semester: string | null
+  academic_year: string | null
+  school: string | null
+  credit_total: number | null
+  credit_lecture: number | null
+  credit_lab: number | null
+  credit_self_study: number | null
+  grading_type: string | null
+  further_information: string | null
+  teacher_id: string | null
+  teacher_name: string | null
+  teacher_email: string | null
+  enrolled_students: number
+  documents: number
+  documents_ready: number
+  sections: number
+  created_at: string
+}
+
+/** Map an API row to the dialog's string-based form values. */
+function toFormValues(course: ApiCourse): CourseFormValues {
+  return {
+    id: course.id,
+    code: course.code,
+    title: course.title,
+    description: course.description ?? "",
+    semester: course.semester ?? "",
+    academicYear: course.academic_year ?? "",
+    school: course.school ?? "",
+    furtherInformation: course.further_information ?? "",
+    teacherId: course.teacher_id,
+  }
+}
+
+/**
+ * Format an ISO timestamp as DD/MM/YYYY.
+ *
+ * Built from UTC parts rather than `toLocaleDateString`: the server and the
+ * browser can resolve different default locales/timezones, which produced
+ * different strings and a React hydration mismatch on this page.
+ */
 function fmtDate(value: string) {
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return "—"
-  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return "—"
+  const day = String(date.getUTCDate()).padStart(2, "0")
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0")
+  return `${day}/${month}/${date.getUTCFullYear()}`
 }
 
 function SkeletonTile() {
@@ -24,7 +87,12 @@ export default function ManageCoursesPage() {
   const [query, setQuery] = useState("")
   const [status, setStatus] = useState<"All" | "Active">("All")
   const [statusOpen, setStatusOpen] = useState(false)
-  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [createOpen, setCreateOpen] = useState(false)
+  const [editingCourse, setEditingCourse] = useState<CourseFormValues | null>(null)
+  const [enrollCourse, setEnrollCourse] = useState<{ id: string; label: string } | null>(null)
+  const [infoCourseId, setInfoCourseId] = useState<string | null>(null)
+  const [scheduleCourse, setScheduleCourse] = useState<{ id: string; label: string } | null>(null)
+  const [teachers, setTeachers] = useState<Array<{ id: string; full_name: string | null; email: string }>>([])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -38,32 +106,42 @@ export default function ManageCoursesPage() {
     setLoading(false)
   }, [])
 
+  // Teachers are needed by the create/edit dialogs. Loaded once, alongside the
+  // course list, so opening a dialog never waits on a second round-trip.
+  const loadTeachers = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/users", { cache: "no-store" })
+      const data = await res.json()
+      if (!res.ok) return
+      const list = Array.isArray(data?.users) ? data.users : []
+      setTeachers(
+        list
+          .filter((u: any) => u.role === "teacher")
+          .map((u: any) => ({ id: u.id, full_name: u.full_name, email: u.email })),
+      )
+    } catch {
+      /* the dialog still works, just without an assignee list */
+    }
+  }, [])
+
   useEffect(() => {
     void load()
-  }, [load])
+    void loadTeachers()
+  }, [load, loadTeachers])
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
     return courses.filter((c) => {
+      // Every course currently exists (there is no archived/disabled state), so
+      // "Active" matches everything. The filter is wired to the real field
+      // rather than left as a control that changes nothing.
+      if (status === "Active" && (c as any).status && (c as any).status !== "active") {
+        return false
+      }
       const hay = `${c.code} ${c.title} ${c.teacher_name ?? ""}`.toLowerCase()
       return !q || hay.includes(q)
     })
-  }, [courses, query])
-
-  const allSelected = rows.length > 0 && rows.every((c) => selected.has(c.id))
-
-  const toggleAll = () => {
-    setSelected(allSelected ? new Set() : new Set(rows.map((c) => c.id)))
-  }
-
-  const toggleOne = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
+  }, [courses, query, status])
 
   return (
     <div>
@@ -105,25 +183,49 @@ export default function ManageCoursesPage() {
           ⟳
         </button>
 
-        <div style={{ marginLeft: "auto", position: "relative", width: 240 }}>
-          <span style={{ position: "absolute", left: 14, top: 11, color: TERT, fontSize: 14 }}>⌕</span>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search"
-            aria-label="Search courses"
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ position: "relative", width: 240 }}>
+            <span style={{ position: "absolute", left: 14, top: 11, color: TERT, fontSize: 14 }}>⌕</span>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search"
+              aria-label="Search courses"
+              style={{
+                width: "100%",
+                height: 40,
+                padding: "0 14px 0 34px",
+                borderRadius: 999,
+                border: `1px solid ${LINE}`,
+                background: "#fff",
+                fontSize: 14,
+                color: TEXT,
+                outline: "none",
+              }}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setCreateOpen(true)}
             style={{
-              width: "100%",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 7,
               height: 40,
-              padding: "0 14px 0 34px",
+              padding: "0 16px",
               borderRadius: 999,
-              border: `1px solid ${LINE}`,
-              background: "#fff",
+              border: "none",
+              background: TEXT,
+              color: "#fff",
               fontSize: 14,
-              color: TEXT,
-              outline: "none",
+              fontWeight: 600,
+              whiteSpace: "nowrap",
+              cursor: "pointer",
             }}
-          />
+          >
+            <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
+            New course
+          </button>
         </div>
       </div>
 
@@ -193,11 +295,16 @@ export default function ManageCoursesPage() {
         </div>
 
         {/* table */}
-        <div style={{ border: `1px solid ${LINE}`, borderRadius: 12, overflow: "hidden", background: "#fff" }}>
+        <div style={{ border: `1px solid ${LINE}`, borderRadius: 12, background: "#fff", overflowX: "auto" }}>
+          {/* The grid must be at least as wide as its fixed columns or the
+              `1fr` course-name column collapses to zero and the name becomes
+              invisible. minWidth guarantees the columns fit; the parent scrolls
+              horizontally on narrow viewports instead of crushing the name. */}
+          <div style={{ minWidth: COURSE_TABLE_MIN_WIDTH }}>
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "44px 1.6fr 110px 1.1fr 120px 110px 130px 96px",
+              gridTemplateColumns: COURSE_GRID,
               alignItems: "center",
               height: 44,
               padding: "0 10px",
@@ -208,13 +315,6 @@ export default function ManageCoursesPage() {
               fontWeight: 600,
             }}
           >
-            <input
-              type="checkbox"
-              checked={allSelected}
-              onChange={toggleAll}
-              aria-label="Select all courses"
-              style={{ accentColor: TEXT }}
-            />
             <span>Course name ⇅</span>
             <span>Status ⇅</span>
             <span>Teacher ⇅</span>
@@ -243,29 +343,21 @@ export default function ManageCoursesPage() {
             </div>
           ) : (
             rows.map((course) => {
-              const isSel = selected.has(course.id)
               return (
                 <div
                   key={course.id}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "44px 1.6fr 110px 1.1fr 120px 110px 130px 96px",
+                    gridTemplateColumns: COURSE_GRID,
                     alignItems: "center",
                     height: 52,
                     padding: "0 10px",
                     borderTop: `1px solid ${LINE}`,
-                    background: isSel ? "#fafbff" : "#fff",
+                    background: "#fff",
                     fontSize: 13.5,
                     color: TEXT,
                   }}
                 >
-                  <input
-                    type="checkbox"
-                    checked={isSel}
-                    onChange={() => toggleOne(course.id)}
-                    aria-label={`Select ${course.code}`}
-                    style={{ accentColor: TEXT }}
-                  />
                   <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
                     <span
                       style={{
@@ -284,14 +376,54 @@ export default function ManageCoursesPage() {
                     >
                       {course.code.slice(0, 1)}
                     </span>
-                    <span style={{ minWidth: 0 }}>
-                      <span style={{ display: "block", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {/* The name is the entry point to the course's information.
+                        Styled as a link so it reads as interactive: the code is
+                        accent-coloured and always underlined, and the title
+                        darkens on hover. A button, not an anchor, because it
+                        opens a dialog rather than navigating. */}
+                    <button
+                      type="button"
+                      onClick={() => setInfoCourseId(course.id)}
+                      title={`Course information for ${course.code}`}
+                      className="mfp-course-link"
+                      style={{
+                        minWidth: 0,
+                        padding: 0,
+                        border: 0,
+                        background: "transparent",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        font: "inherit",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "block",
+                          fontWeight: 600,
+                          color: "#1f56b8",
+                          textDecoration: "underline",
+                          textUnderlineOffset: 2,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
                         {course.code}
                       </span>
-                      <span style={{ display: "block", color: TERT, fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      <span
+                        className="mfp-course-link-title"
+                        style={{
+                          display: "block",
+                          color: TERT,
+                          fontSize: 12,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
                         {course.title}
                       </span>
-                    </span>
+                    </button>
                   </div>
                   <span>
                     <span
@@ -309,7 +441,7 @@ export default function ManageCoursesPage() {
                     </span>
                   </span>
                   <span style={{ color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {course.teacher_name ?? "—"}
+                    {course.teacher_name ?? <span style={{ color: TERT }}>Unassigned</span>}
                   </span>
                   <span style={{ color: MUTED }}>{course.enrolled_students}</span>
                   <span style={{ color: MUTED }}>
@@ -322,40 +454,67 @@ export default function ManageCoursesPage() {
                   <span style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
                     <button
                       type="button"
-                      title={`Open ${course.code}`}
-                      onClick={() => window.open(`/teacherportal/mycourses/${course.id}`, "_blank")}
+                      title={`Manage students in ${course.code}`}
+                      onClick={() => {
+                        setEnrollCourse({ id: course.id, label: `${course.code} — ${course.title}` })
+                      }}
                       style={{
-                        width: 28,
                         height: 28,
+                        padding: "0 10px",
                         borderRadius: 8,
                         border: `1px solid ${LINE}`,
                         background: "#fff",
                         color: MUTED,
+                        fontSize: 12,
                         cursor: "pointer",
+                        whiteSpace: "nowrap",
                       }}
                     >
-                      ↗
+                      Students ({course.enrolled_students})
                     </button>
                     <button
                       type="button"
-                      title="More"
+                      title={`Weekly schedule for ${course.code}`}
+                      onClick={() =>
+                        setScheduleCourse({ id: course.id, label: `${course.code} — ${course.title}` })
+                      }
                       style={{
-                        width: 28,
                         height: 28,
+                        padding: "0 10px",
                         borderRadius: 8,
                         border: `1px solid ${LINE}`,
                         background: "#fff",
                         color: MUTED,
+                        fontSize: 12,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Schedule{course.sections > 0 ? ` (${course.sections})` : ""}
+                    </button>
+                    <button
+                      type="button"
+                      title={`Edit ${course.code}`}
+                      onClick={() => setEditingCourse(toFormValues(course))}
+                      style={{
+                        height: 28,
+                        padding: "0 10px",
+                        borderRadius: 8,
+                        border: `1px solid ${LINE}`,
+                        background: "#fff",
+                        color: MUTED,
+                        fontSize: 12,
                         cursor: "pointer",
                       }}
                     >
-                      ⋯
+                      Edit
                     </button>
                   </span>
                 </div>
               )
             })
           )}
+          </div>
         </div>
 
         {/* footer */}
@@ -418,6 +577,52 @@ export default function ManageCoursesPage() {
           </span>
         </div>
       </div>
+
+      <CourseDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        teachers={teachers}
+        course={null}
+        onSaved={() => void load()}
+      />
+
+      <CourseDialog
+        open={Boolean(editingCourse)}
+        onOpenChange={(open) => {
+          if (!open) setEditingCourse(null)
+        }}
+        teachers={teachers}
+        course={editingCourse}
+        onSaved={() => void load()}
+      />
+
+      <EnrollStudentsDialog
+        open={Boolean(enrollCourse)}
+        onOpenChange={(open) => {
+          if (!open) setEnrollCourse(null)
+        }}
+        courseId={enrollCourse?.id ?? null}
+        courseLabel={enrollCourse?.label ?? ""}
+        onChanged={() => void load()}
+      />
+
+      <CourseInfoDialog
+        open={Boolean(infoCourseId)}
+        onOpenChange={(open) => {
+          if (!open) setInfoCourseId(null)
+        }}
+        courseId={infoCourseId}
+      />
+
+      <CourseScheduleDialog
+        open={Boolean(scheduleCourse)}
+        onOpenChange={(open) => {
+          if (!open) setScheduleCourse(null)
+        }}
+        courseId={scheduleCourse?.id ?? null}
+        courseLabel={scheduleCourse?.label ?? ""}
+        onSaved={() => void load()}
+      />
     </div>
   )
 }

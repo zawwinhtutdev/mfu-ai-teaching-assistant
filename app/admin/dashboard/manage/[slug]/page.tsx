@@ -2,10 +2,6 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 
 const SECTIONS: Record<string, { title: string; description: string }> = {
-  "info-fields": {
-    title: "Course Info Fields",
-    description: "Choose which fields a teacher fills in when creating a course.",
-  },
   approval: {
     title: "Course Approval",
     description: "Decide whether new courses need an administrator to approve them before students can join.",

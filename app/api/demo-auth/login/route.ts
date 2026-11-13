@@ -1,10 +1,27 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { isHttpsRequest } from "@/lib/server/request-security"
-import { DEMO_EMAIL_COOKIE, DEMO_ROLE_COOKIE, findDemoAccount } from "@/lib/demo-auth"
+import { ALLOW_INSECURE_DEV_AUTH_ENV, DEMO_EMAIL_COOKIE, DEMO_ROLE_COOKIE, findDemoAccount } from "@/lib/demo-auth"
 
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
 
+/**
+ * Mint a demo identity cookie.
+ *
+ * This endpoint is a local-development convenience, not a login path — the
+ * login page authenticates through Supabase only. Both the cookie it sets and
+ * the middleware that honours it were previously ungated, so with no
+ * environment guard a request could grant itself the admin role. The
+ * `ALLOW_INSECURE_DEV_AUTH` check below (and the matching one in middleware.ts)
+ * is what makes the code comments in `lib/server/principal.ts` true.
+ */
 export async function POST(req: NextRequest) {
+  if (process.env[ALLOW_INSECURE_DEV_AUTH_ENV] !== "true") {
+    return NextResponse.json(
+      { error: "Demo sign-in is disabled. Sign in with a university account." },
+      { status: 403 },
+    )
+  }
+
   try {
     const body = await req.json()
     const email = typeof body?.email === "string" ? body.email : ""

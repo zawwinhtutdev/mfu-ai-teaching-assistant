@@ -27,14 +27,18 @@ export function QuizzesView({ courseId, studentId }: QuizzesViewProps) {
   }, [courseId])
 
   const loadQuizzes = async () => {
-    const isDemoStudent = studentId.startsWith("mock-")
+    const isDemoStudent = studentId.startsWith("mock-") || studentId.startsWith("student-")
 
     try {
       const supabase = createClient()
+      // Course-wide quizzes plus this student's own practice quizzes. The RLS
+      // policy already limits both, but the explicit filter keeps the query
+      // narrow and makes the intent obvious.
       const { data } = await supabase
         .from("quizzes")
         .select("*")
         .eq("course_id", courseId)
+        .or(`student_id.is.null,student_id.eq.${studentId}`)
         .order("created_at", { ascending: false })
 
       if (data && data.length > 0) {

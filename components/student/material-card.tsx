@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -11,11 +11,13 @@ interface MaterialCardProps {
   material: CourseMaterial
   courseId: string
   studentId: string
+  /** Summary already stored for this material, read server-side. */
+  storedSummary?: string | null
 }
 
-export function MaterialCard({ material, courseId, studentId }: MaterialCardProps) {
+export function MaterialCard({ material, courseId, studentId, storedSummary }: MaterialCardProps) {
   const [showContent, setShowContent] = useState(false)
-  const [summary, setSummary] = useState<string | null>(null)
+  const [summary, setSummary] = useState<string | null>(storedSummary ?? null)
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false)
   const [isGeneratingFlashcards, setIsGeneratingFlashcards] = useState(false)
 
@@ -28,7 +30,7 @@ export function MaterialCard({ material, courseId, studentId }: MaterialCardProp
         body: JSON.stringify({ materialId: material.id, courseId, studentId }),
       })
       const data = await response.json()
-      setSummary(data.summary)
+      if (data?.summary) setSummary(data.summary)
     } catch (error) {
       console.error("Failed to generate summary:", error)
     } finally {
@@ -45,7 +47,16 @@ export function MaterialCard({ material, courseId, studentId }: MaterialCardProp
         body: JSON.stringify({ materialId: material.id, courseId, studentId }),
       })
       const data = await response.json()
-      alert(`Generated ${data.flashcards.length} flashcards! Check the Flashcards tab.`)
+      const count = Array.isArray(data?.flashcards) ? data.flashcards.length : 0
+      // Say plainly whether the deck survived a reload. Reporting "check the
+      // Flashcards tab" while nothing was stored was the original lie.
+      if (data?.saved) {
+        alert(`Saved ${count} flashcards. They are in the Flashcards tab.`)
+      } else if (count > 0) {
+        alert(`Generated ${count} flashcards for this session, but they could not be saved.`)
+      } else {
+        alert(data?.error || "Could not generate flashcards.")
+      }
     } catch (error) {
       console.error("Failed to generate flashcards:", error)
     } finally {
@@ -70,6 +81,17 @@ export function MaterialCard({ material, courseId, studentId }: MaterialCardProp
         <CardContent>
           <p className="mb-4 text-sm text-muted-foreground line-clamp-3">{material.content}</p>
           <div className="flex flex-wrap gap-2">
+            {material.file_url && (
+              // Opens the original upload. The card otherwise only shows
+              // extracted text, which is useless if the student needs the
+              // diagrams, formatting, or page numbering of the actual file.
+              <Button variant="outline" size="sm" asChild>
+                <a href={material.file_url} target="_blank" rel="noopener noreferrer">
+                  <FileText className="mr-2 h-4 w-4" />
+                  Open PDF
+                </a>
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => setShowContent(true)}>
               <FileText className="mr-2 h-4 w-4" />
               View Full Material

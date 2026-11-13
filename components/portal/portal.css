@@ -99,8 +99,19 @@
 .mfp-scrim,
 .mfp-drawer { display: none; }
 
+/* The sidebar is inline on desktop, so a close button would be meaningless.
+   `display: none` here would lose to `.mfp-icon-btn`'s later `display: grid`,
+   so the hidden state is expressed with the same specificity class. */
+.mfp-icon-btn.mfp-side-close { display: none; }
+
 @media (max-width: 1024px) {
-  .mfp-scrim {
+  .mfp-icon-btn.mfp-side-close { display: inline-flex; }
+
+  /* Scoped to the chromes that actually have a drawer. The admin topbar chrome
+     keeps an inline column until 640px, so a scrim at 1024px would dim a
+     sidebar that is already visible. */
+  .mfp[data-chrome="rail"] .mfp-scrim,
+  .mfp[data-chrome="sidebar"] .mfp-scrim {
     display: block;
     position: fixed;
     inset: 0;
@@ -110,7 +121,8 @@
     pointer-events: none;
     transition: opacity 0.2s var(--p-ease);
   }
-  .mfp-scrim[data-open="true"] { opacity: 1; pointer-events: auto; }
+  .mfp[data-chrome="rail"] .mfp-scrim[data-open="true"],
+  .mfp[data-chrome="sidebar"] .mfp-scrim[data-open="true"] { opacity: 1; pointer-events: auto; }
 
   .mfp-drawer {
     display: flex;
@@ -210,6 +222,7 @@
   align-items: center;
   gap: 10px;
   height: 40px;
+  width: 100%;
   padding: 0 12px;
   border-radius: var(--p-radius);
   font-size: 14px;
@@ -226,6 +239,24 @@
   font-weight: 700;
 }
 .mfp-nav-item[data-active="true"] svg { color: var(--p-fg); }
+/* A collapsed parent whose child is the current page. Deliberately quieter than
+   the selected row so the sidebar never shows two "selected" items at once. */
+.mfp-nav-item[data-within="true"] {
+  color: var(--p-fg);
+  font-weight: 600;
+}
+.mfp-nav-item[data-within="true"] svg { color: var(--p-fg-soft); }
+
+/* Course name cell: reads as a link and reacts on hover/focus. */
+.mfp-course-link:hover .mfp-course-link-title,
+.mfp-course-link:focus-visible .mfp-course-link-title {
+  color: var(--p-fg);
+}
+.mfp-course-link:focus-visible {
+  outline: 2px solid #1f56b8;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 .mfp-nav-count {
   margin-left: auto;
   min-width: 20px;
@@ -341,22 +372,64 @@
 
 /* ---------- responsive ---------- */
 @media (max-width: 1024px) {
-  .mfp-side {
+  /* Only the chromes that also render a drawer button may go off-canvas.
+     The admin `topbar` chrome keeps its 232px column inline: it is narrow
+     enough for a tablet, and translating it out of view left the console with
+     no navigation at all because its topbar had no toggle. */
+  .mfp[data-chrome="sidebar"] .mfp-side,
+  .mfp[data-chrome="rail"] .mfp-side {
     position: fixed;
     inset: 0 auto 0 var(--p-rail-w);
-    z-index: 40;
+    /* Above the scrim (45): a panel dimmed by its own overlay reads as broken. */
+    z-index: 50;
     width: 260px;
     transform: translateX(-110%);
     transition: transform 0.22s var(--p-ease);
     box-shadow: var(--p-shadow-menu);
   }
-  .mfp-side[data-open="true"] { transform: none; }
+  .mfp[data-chrome="sidebar"] .mfp-side[data-open="true"],
+  .mfp[data-chrome="rail"] .mfp-side[data-open="true"] { transform: none; }
   .mfp-content { padding: 18px 16px 40px; }
 }
 @media (max-width: 768px) {
   .mfp-rail { display: none; }
-  .mfp-side { left: 0; }
+  .mfp[data-chrome="sidebar"] .mfp-side,
+  .mfp[data-chrome="rail"] .mfp-side { left: 0; }
   .mfp-head { padding: 0 12px 0 16px; }
+}
+
+/* The admin nav column becomes a drawer only when it genuinely cannot fit.
+   Below this width the topbar toggle and the scrim take over. */
+@media (max-width: 640px) {
+  /* The toggle must appear at exactly the width where the drawer activates.
+     `.mfp-only-mobile` flips on at 1024px, which is too early for the admin
+     chrome: between 640px and 1024px the column is inline, so a toggle there
+     would open a scrim over a sidebar that is already visible. */
+  .mfp[data-chrome="topbar"] .mfp-topbar-menu.mfp-only-mobile { display: grid; }
+
+  .mfp[data-chrome="topbar"] .mfp-side--dense {
+    position: fixed;
+    inset: 52px auto 0 0;
+    /* Above the scrim (45) so the panel is not dimmed by its own overlay. */
+    z-index: 50;
+    width: 260px;
+    transform: translateX(-110%);
+    transition: transform 0.22s var(--p-ease);
+    box-shadow: var(--p-shadow-menu);
+  }
+  .mfp[data-chrome="topbar"] .mfp-side--dense[data-open="true"] { transform: none; }
+  .mfp[data-chrome="topbar"] .mfp-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    background: rgba(20, 22, 30, 0.38);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s var(--p-ease);
+  }
+  .mfp[data-chrome="topbar"] .mfp-scrim[data-open="true"] { opacity: 1; pointer-events: auto; }
+  .mfp-content--dense { padding: 16px 14px 32px; }
 }
 
 /* legacy pastel stat-card tints → quiet surfaces (Classum keeps colour for the mark only) */
@@ -482,6 +555,14 @@
   .mfp-only-mobile { display: grid; }
 }
 
+/* The admin nav column stays inline from 640px to 1024px, so its toggle must
+   stay hidden across that range even though `.mfp-only-mobile` switches on at
+   1024px. This block sits before the 640px rule so the drawer's own
+   `display: grid` still wins below that width. */
+@media (max-width: 1024px) and (min-width: 641px) {
+  .mfp[data-chrome="topbar"] .mfp-topbar-menu { display: none; }
+}
+
 
 /* =====================================================================
    Three navigation archetypes — the portals must not share one sidebar.
@@ -514,7 +595,13 @@
   width: 280px;
   padding: 16px 12px 20px;
 }
-.mfp-side-scroll { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; min-height: 0; }
+/* The nav rows scroll; the footer below stays pinned to the sidebar's bottom
+   edge. The scroll area grows to fill the leftover space, which is what lets a
+   pinned footer actually reach the bottom — `margin-top: auto` on a child of the
+   scroll container had no free space to consume. */
+.mfp-side-scroll { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; min-height: 0; flex: 1 1 auto; }
+
+.mfp-side-footer { flex: 0 0 auto; }
 
 /* ---------- course picker (collapsible, pinned above the nav groups) ---------- */
 
@@ -599,12 +686,26 @@
 .mfp-content--dense { padding: 20px 24px 40px; }
 .mfp-page-head--tight { margin-bottom: 14px; }
 
+/* The admin nav column spans the viewport, not the content, so its pinned
+   footer sits above the fold on a long page. Without this the column grew to
+   the article's height (992px on a 900px screen) and "bottom" was off-screen. */
+@media (min-width: 641px) {
+  .mfp[data-chrome="topbar"] .mfp-body { min-height: 0; }
+  .mfp[data-chrome="topbar"] .mfp-side--dense {
+    position: sticky;
+    top: 52px;
+    height: calc(100dvh - 52px);
+    align-self: flex-start;
+  }
+}
+
 @media (max-width: 1024px) {
   .mfp-side--brand { width: 264px; }
   .mfp[data-chrome="sidebar"] .mfp-side--brand {
     position: fixed;
     left: 0;
-    z-index: 40;
+    /* Above the scrim (45), same reason as the dense admin column. */
+    z-index: 50;
     transform: translateX(-110%);
     transition: transform 0.22s var(--p-ease);
   }
@@ -635,4 +736,20 @@
   font-size: 16px;
   line-height: 1;
   color: var(--mfp-tertiary, #8d92a6);
+  transition: transform 0.18s var(--p-ease);
+}
+/* Points down when the section is open, right when collapsed. */
+.mfp-nav-chev[data-expanded="true"] { transform: rotate(90deg); }
+
+/* A nav row may be a link or a disclosure button; both must look identical. */
+button.mfp-nav-item {
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+button.mfp-nav-item:focus-visible {
+  outline: 2px solid var(--p-fg, #232334);
+  outline-offset: -2px;
 }

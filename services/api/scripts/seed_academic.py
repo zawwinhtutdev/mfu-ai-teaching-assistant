@@ -26,12 +26,17 @@ TEACHERS = [
 ]
 
 STUDENTS = [
-    ("student-1", "kanya.wong@mfu.ac.th", "Kanya Wong", 3),
-    ("student-2", "niran.chai@mfu.ac.th", "Niran Chai", 3),
-    ("student-3", "pim.srisuk@mfu.ac.th", "Pim Srisuk", 2),
-    ("student-4", "thanakorn.roj@mfu.ac.th", "Thanakorn Roj", 4),
-    ("student-5", "araya.kitt@mfu.ac.th", "Araya Kitt", 2),
-    ("student-6", "krit.phan@mfu.ac.th", "Krit Phan", 4),
+    # Emails must match the addresses that exist in Supabase `auth.users`,
+    # because `get_person` resolves the caller to a `people` row by email. The
+    # previous invented addresses (kanya.wong@mfu.ac.th) meant a real student
+    # signing in got 403 "No account found for this caller" and an empty course
+    # list. IDs keep the enrollment map below stable.
+    ("student-1", "6631503078@lamduan.mfu.ac.th", "Kanya Wong", 3),
+    ("student-2", "6631503085@lamduan.mfu.ac.th", "Niran Chai", 3),
+    ("student-3", "6631503092@lamduan.mfu.ac.th", "Pim Srisuk", 2),
+    ("student-4", "6631503101@lamduan.mfu.ac.th", "Thanakorn Roj", 4),
+    ("student-5", "6631503118@lamduan.mfu.ac.th", "Araya Kitt", 2),
+    ("student-6", "6631503125@lamduan.mfu.ac.th", "Krit Phan", 4),
 ]
 
 COURSES = [

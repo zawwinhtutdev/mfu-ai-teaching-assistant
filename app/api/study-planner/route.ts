@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
-import { GoogleGenAI } from "@google/genai"
+import { completeText } from "@/lib/ai/text-generation"
+import { logAuditEvent } from "@/lib/server/audit-log"
+import { clientForPrincipal, resolvePrincipal } from "@/lib/server/principal"
 
-function getGeminiClient() {
-  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_API_KEY
-  if (!apiKey) throw new Error("Missing Gemini API key")
-  return new GoogleGenAI({ apiKey })
-}
+/**
+ * Study planner.
+ *
+ * Two problems this had: it authenticated with `supabase.auth.getUser()` only,
+ * so demo students got a 401 and the planner never loaded; and AI generation
+ * called Gemini directly, so it threw on the local-model setup where there is
+ * no key. Generation now goes through `completeText`, which picks the local
+ * model unless a Gemini key is configured.
+ */
 
 /**
  * GET /api/study-planner
@@ -14,20 +19,24 @@ function getGeminiClient() {
  */
 export async function GET(req: Request) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
+    const principal = await resolvePrincipal()
+    if (!principal) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    // Demo principals have no profile row, so they have no stored plan.
+    if (!principal.isPersistable) {
+      return NextResponse.json({ plans: [] })
+    }
+
+    const supabase = await clientForPrincipal(principal)
     const url = new URL(req.url)
     const courseId = url.searchParams.get("courseId")
 
     let query = supabase
       .from("study_plans")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", principal.userId)
       .order("due_date", { ascending: true, nullsFirst: false })
 
     if (courseId) {
@@ -52,14 +61,22 @@ export async function GET(req: Request) {
  */
 export async function POST(req: Request) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
+    const principal = await resolvePrincipal()
+    if (!principal) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const body = await req.json()
+
+    // Demo principals cannot own study_plans rows (no profile to reference).
+    if (!principal.isPersistable) {
+      return NextResponse.json(
+        { error: "Demo accounts cannot save a study plan. Sign in with a real university account." },
+        { status: 403 },
+      )
+    }
+
+    const supabase = await clientForPrincipal(principal)
 
     // If AI generation requested
     if (body.generateAI && body.courseId) {
@@ -68,7 +85,7 @@ export async function POST(req: Request) {
         .from("courses")
         .select("title, code")
         .eq("id", body.courseId)
-        .single()
+        .maybeSingle()
 
       const { data: materials } = await supabase
         .from("course_materials")
@@ -80,10 +97,9 @@ export async function POST(req: Request) {
         .map((m: any) => `- ${m.title} (${m.material_type})`)
         .join("\n")
 
-      const ai = getGeminiClient()
-      const result = await ai.models.generateContent({
-        model: "gemini-3.8-flash",
-        contents: `You are a study planner AI. Generate a personalized 7-day study plan for the course "${course?.title || "Unknown"}" (${course?.code || ""}).
+      // Provider-agnostic: local model by default, Gemini only if configured.
+      const text = await completeText(
+        `You are a study planner AI. Generate a personalized 7-day study plan for the course "${course?.title || "Unknown"}" (${course?.code || ""}).
 
 Course materials:
 ${materialList || "No materials uploaded yet"}
@@ -95,19 +111,18 @@ Generate exactly 5-7 study tasks as a JSON array. Each item should have:
 - priority: "low", "medium", or "high"
 
 Only output the JSON array, no markdown or explanation.`,
-      })
+      )
 
       try {
-        const text = typeof (result as any)?.text === "string" ? (result as any).text : ""
         // Extract JSON array from response
         const jsonMatch = text.match(/\[[\s\S]*\]/)
         if (!jsonMatch) {
-          return NextResponse.json({ error: "AI failed to generate plan" }, { status: 500 })
+          return NextResponse.json({ error: "The model did not return a plan" }, { status: 502 })
         }
 
         const tasks = JSON.parse(jsonMatch[0])
         const insertData = tasks.map((task: any) => ({
-          user_id: user.id,
+          user_id: principal.userId,
           course_id: body.courseId,
           title: String(task.title || "Study Task"),
           description: String(task.description || ""),
@@ -127,7 +142,7 @@ Only output the JSON array, no markdown or explanation.`,
 
         return NextResponse.json({ plans: plans || [], aiGenerated: true })
       } catch (parseError) {
-        return NextResponse.json({ error: "Failed to parse AI response" }, { status: 500 })
+        return NextResponse.json({ error: "Failed to parse the generated plan" }, { status: 502 })
       }
     }
 
@@ -141,7 +156,7 @@ Only output the JSON array, no markdown or explanation.`,
     const { data: plan, error } = await supabase
       .from("study_plans")
       .insert({
-        user_id: user.id,
+        user_id: principal.userId,
         course_id: courseId || null,
         title: title.trim(),
         description: description?.trim() || null,
@@ -167,11 +182,12 @@ Only output the JSON array, no markdown or explanation.`,
  */
 export async function PATCH(req: Request) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
+    const principal = await resolvePrincipal()
+    if (!principal) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (!principal.isPersistable) {
+      return NextResponse.json({ error: "Demo accounts cannot change a study plan." }, { status: 403 })
     }
 
     const { planId, completed, title, description } = await req.json()
@@ -185,13 +201,14 @@ export async function PATCH(req: Request) {
     if (title) updateData.title = title.trim()
     if (description !== undefined) updateData.description = description?.trim() || null
 
+    const supabase = await clientForPrincipal(principal)
     const { data: plan, error } = await supabase
       .from("study_plans")
       .update(updateData)
       .eq("id", planId)
-      .eq("user_id", user.id)
+      .eq("user_id", principal.userId)
       .select()
-      .single()
+      .maybeSingle()
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
@@ -209,11 +226,12 @@ export async function PATCH(req: Request) {
  */
 export async function DELETE(req: Request) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
+    const principal = await resolvePrincipal()
+    if (!principal) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (!principal.isPersistable) {
+      return NextResponse.json({ error: "Demo accounts cannot change a study plan." }, { status: 403 })
     }
 
     const { planId } = await req.json()
@@ -222,11 +240,12 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: "planId is required" }, { status: 400 })
     }
 
+    const supabase = await clientForPrincipal(principal)
     const { error } = await supabase
       .from("study_plans")
       .delete()
       .eq("id", planId)
-      .eq("user_id", user.id)
+      .eq("user_id", principal.userId)
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })

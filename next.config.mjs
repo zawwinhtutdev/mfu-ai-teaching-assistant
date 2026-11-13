@@ -15,6 +15,11 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  // `pdf-parse` ships a pdf.js worker as a separate .mjs file. Bundling it makes
+  // Turbopack rewrite the worker path, and at runtime pdf.js then looks for a
+  // file that does not exist ("Setting up fake worker failed"). Keeping it
+  // external means Node resolves it from node_modules as the package intends.
+  serverExternalPackages: ["pdf-parse", "pdfjs-dist"],
   async headers() {
     return [
       {
