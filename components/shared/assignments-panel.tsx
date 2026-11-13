@@ -15,7 +15,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { CalendarClock, CheckCircle2, Loader2, Plus, Trash2 } from "lucide-react"
+import { CalendarClock, CheckCircle2, Loader2, Plus, Trash2, Upload, Users } from "lucide-react"
+import { SubmitAssignmentDialog, type Submission } from "./submit-assignment-dialog"
+import { SubmissionsDialog } from "./submissions-dialog"
+import { CourseGradebook } from "./course-gradebook"
 
 export type Assignment = {
   id: string
@@ -60,6 +63,12 @@ export function AssignmentsPanel({ courseId, canManage }: AssignmentsPanelProps)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
 
+  // Student: which assignment are they submitting, and what have they already sent?
+  const [submitTarget, setSubmitTarget] = useState<Assignment | null>(null)
+  const [mySubmissions, setMySubmissions] = useState<Record<string, Submission | null>>({})
+  // Teacher: whose submissions are they reviewing?
+  const [reviewTarget, setReviewTarget] = useState<Assignment | null>(null)
+
   const [title, setTitle] = useState("")
   const [instructions, setInstructions] = useState("")
   const [dueAt, setDueAt] = useState("")
@@ -83,6 +92,44 @@ export function AssignmentsPanel({ courseId, canManage }: AssignmentsPanelProps)
   useEffect(() => {
     load()
   }, [load])
+
+  /**
+   * Load the student's own submissions once the assignments are known.
+   *
+   * Batched per assignment because the API is scoped to one assignment id; the
+   * alternative — a course-wide submissions endpoint — would duplicate the
+   * authorization logic for marginal gain on a list this size.
+   */
+  useEffect(() => {
+    if (canManage) return
+    const visible = assignments.filter((assignment) => assignment.visible_to_students)
+    if (visible.length === 0) return
+
+    let cancelled = false
+    const loadMine = async () => {
+      const entries = await Promise.all(
+        visible.map(async (assignment) => {
+          try {
+            const res = await fetch(
+              `/api/courses/${courseId}/assignments/${assignment.id}/submissions`,
+              { cache: "no-store" },
+            )
+            if (!res.ok) return [assignment.id, null] as const
+            const data = await res.json()
+            return [assignment.id, (data?.submission ?? null) as Submission | null] as const
+          } catch {
+            return [assignment.id, null] as const
+          }
+        }),
+      )
+      if (!cancelled) setMySubmissions(Object.fromEntries(entries))
+    }
+
+    void loadMine()
+    return () => {
+      cancelled = true
+    }
+  }, [assignments, canManage, courseId])
 
   const resetForm = () => {
     setTitle("")
@@ -152,10 +199,19 @@ export function AssignmentsPanel({ courseId, canManage }: AssignmentsPanelProps)
   )
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/*
+        Teachers get the matrix first: students down, assignments across. The
+        previous design forced a modal per student, so a teacher could not see
+        who had not submitted at all.
+      */}
+      {canManage && <CourseGradebook courseId={courseId} refreshKey={assignments.length} />}
+
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold">Assignments</h3>
+          <h3 className="text-lg font-semibold">
+            {canManage ? "Assignment settings" : "Assignments"}
+          </h3>
           <p className="text-sm text-muted-foreground">
             {canManage
               ? "Deadlines here generate a reminder for every enrolled student one day ahead."
@@ -190,7 +246,7 @@ export function AssignmentsPanel({ courseId, canManage }: AssignmentsPanelProps)
         </Card>
       ) : (
         <>
-          <div className="space-y-3">
+          <div className={canManage ? "grid gap-3 md:grid-cols-2" : "space-y-3"}>
             {upcoming.map((assignment) => {
               const state = dueState(assignment.due_at)
               return (
@@ -240,6 +296,55 @@ export function AssignmentsPanel({ courseId, canManage }: AssignmentsPanelProps)
                       </p>
                     </CardContent>
                   )}
+
+                  {canManage ? (
+                    <CardContent className="pt-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setReviewTarget(assignment)}
+                      >
+                        <Users className="mr-2 h-4 w-4" />
+                        View submissions
+                      </Button>
+                    </CardContent>
+                  ) : (
+                    <CardContent className="pt-0">
+                      {/*
+                        Without this button the student view was read-only: they
+                        could see the deadline and nothing else. The state below
+                        distinguishes "not started", "submitted", and "graded" so
+                        one glance says whether work is still needed.
+                      */}
+                      {(() => {
+                        const mine = mySubmissions[assignment.id]
+                        return (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant={mine ? "outline" : "default"}
+                              onClick={() => setSubmitTarget(assignment)}
+                            >
+                              <Upload className="mr-2 h-4 w-4" />
+                              {mine ? "Resubmit" : "Submit work"}
+                            </Button>
+
+                            {mine ? (
+                              <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                                Submitted {new Date(mine.submitted_at).toLocaleDateString()}
+                                {mine.grade !== null && (
+                                  <Badge variant="outline">{mine.grade} pts</Badge>
+                                )}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Not submitted yet</span>
+                            )}
+                          </div>
+                        )
+                      })()}
+                    </CardContent>
+                  )}
                 </Card>
               )
             })}
@@ -250,20 +355,42 @@ export function AssignmentsPanel({ courseId, canManage }: AssignmentsPanelProps)
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Past deadlines
               </p>
-              {past.map((assignment) => (
-                <div
-                  key={assignment.id}
-                  className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
-                >
-                  <span className="flex items-center gap-2 text-muted-foreground">
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span className="truncate">{assignment.title}</span>
-                  </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {formatDue(assignment.due_at)}
-                  </span>
-                </div>
-              ))}
+              {past.map((assignment) => {
+                // An overdue assignment must stay actionable for the student who
+                // has not submitted yet, otherwise a missed deadline silently
+                // removes their only way to hand work in.
+                const mine = mySubmissions[assignment.id]
+                return (
+                  <div
+                    key={assignment.id}
+                    className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
+                  >
+                    <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
+                      <CheckCircle2 className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{assignment.title}</span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className="text-xs text-muted-foreground">
+                        {formatDue(assignment.due_at)}
+                      </span>
+                      {!canManage &&
+                        (mine ? (
+                          <Badge variant="outline" className="text-xs">
+                            {mine.grade !== null ? `${mine.grade} pts` : "Submitted"}
+                          </Badge>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSubmitTarget(assignment)}
+                          >
+                            Submit late
+                          </Button>
+                        ))}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
           )}
         </>
@@ -333,6 +460,32 @@ export function AssignmentsPanel({ courseId, canManage }: AssignmentsPanelProps)
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <SubmitAssignmentDialog
+        open={Boolean(submitTarget)}
+        onOpenChange={(open) => {
+          if (!open) setSubmitTarget(null)
+        }}
+        courseId={courseId}
+        assignmentId={submitTarget?.id ?? ""}
+        assignmentTitle={submitTarget?.title ?? ""}
+        dueLabel={formatDue(submitTarget?.due_at ?? null)}
+        onSubmitted={(submission) => {
+          if (!submitTarget) return
+          setMySubmissions((prev) => ({ ...prev, [submitTarget.id]: submission }))
+        }}
+      />
+
+      <SubmissionsDialog
+        open={Boolean(reviewTarget)}
+        onOpenChange={(open) => {
+          if (!open) setReviewTarget(null)
+        }}
+        courseId={courseId}
+        assignmentId={reviewTarget?.id ?? null}
+        assignmentTitle={reviewTarget?.title ?? ""}
+        maxPoints={reviewTarget?.points ?? null}
+      />
     </div>
   )
 }
