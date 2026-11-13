@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase/admin"
+import { scheduleAssignmentReminders } from "@/lib/server/assignment-reminders"
 import { trackApiError } from "@/lib/server/observability"
 
 async function sendEmailJob(params: {
@@ -21,10 +22,17 @@ async function sendEmailJob(params: {
     .join("\n")
 
   if (!resendApiKey) {
-    return {
-      sent: true,
-      providerMessageId: "simulated-email-delivery",
+    // Report what actually happened. Claiming "sent" with a fake provider id
+    // marked every job delivered while nothing left the machine, which is why
+    // the notification dashboard looked healthy and no email ever arrived.
+    if (process.env.NOTIFICATIONS_DRY_RUN === "true") {
+      console.log(`[notifications] dry run — would email ${params.to}: ${subject}`)
+      return { sent: true, providerMessageId: "dry-run" }
     }
+    throw new Error(
+      "RESEND_API_KEY is not set: email cannot be delivered. " +
+        "Set it, or set NOTIFICATIONS_DRY_RUN=true to log instead of send.",
+    )
   }
 
   const response = await fetch("https://api.resend.com/emails", {
@@ -50,6 +58,51 @@ async function sendEmailJob(params: {
     sent: true,
     providerMessageId: payload?.id || "resend-message",
   }
+}
+
+/**
+ * LINE Messaging API push.
+ *
+ * Requires a channel access token and the recipient's LINE user id. Without
+ * both, this throws with a message that says which one is missing — the old
+ * code threw a blanket "not configured" for the whole channel, so a genuinely
+ * misconfigured token was indistinguishable from an unlinked student.
+ */
+async function sendLineJob(params: {
+  to: string
+  reminderText?: string | null
+  reminderTime?: string | null
+  courseTitle?: string | null
+}) {
+  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN
+  if (!token) {
+    throw new Error("LINE_CHANNEL_ACCESS_TOKEN is not set: LINE delivery is unavailable")
+  }
+
+  const lines = [
+    params.courseTitle ? `📚 ${params.courseTitle}` : "Study reminder",
+    params.reminderText || "",
+    params.reminderTime ? new Date(params.reminderTime).toLocaleString() : "",
+  ].filter(Boolean)
+
+  const response = await fetch("https://api.line.me/v2/bot/message/push", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      to: params.to,
+      messages: [{ type: "text", text: lines.join("\n") }],
+    }),
+  })
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "")
+    throw new Error(`LINE push failed (${response.status}): ${detail.slice(0, 200)}`)
+  }
+
+  return { sent: true, providerMessageId: `line-${Date.now()}` }
 }
 
 function isAuthorizedCronRequest(req: Request) {
@@ -104,6 +157,11 @@ async function processNotifications(req: Request) {
     }
 
     const supabase = createServiceRoleClient()
+
+    // Derive reminders from assignment deadlines before dispatching, so a
+    // deadline that entered the lead window today is delivered today rather
+    // than waiting for the next run.
+    const scheduling = await scheduleAssignmentReminders(supabase as any)
 
     const { data: jobs, error: jobsError } = await supabase
       .from("notification_jobs")
@@ -171,8 +229,43 @@ async function processNotifications(req: Request) {
             .eq("id", job.id)
 
           sent += 1
+        } else if (job.channel === "line") {
+          if (!destination) {
+            throw new Error("Missing LINE user id")
+          }
+
+          const { data: course } = await supabase
+            .from("courses")
+            .select("title")
+            .eq("id", job.course_id)
+            .maybeSingle()
+
+          const lineResult = await sendLineJob({
+            to: destination,
+            courseTitle: course?.title || null,
+            reminderText: payload.reminderText,
+            reminderTime: payload.reminderTime,
+          })
+
+          await supabase.from("notification_deliveries").insert({
+            job_id: job.id,
+            channel: "line",
+            destination,
+            provider_message_id: lineResult.providerMessageId,
+            status: "sent",
+            sent_at: new Date().toISOString(),
+          })
+
+          await supabase
+            .from("notification_jobs")
+            .update({ status: "sent", last_error: null, updated_at: new Date().toISOString() })
+            .eq("id", job.id)
+
+          sent += 1
         } else {
-          throw new Error(`${job.channel} notifications are not configured`)
+          // in_app and push are persisted by other paths; record the reason
+          // rather than leaving the job silently queued forever.
+          throw new Error(`${job.channel} delivery is not implemented in this job processor`)
         }
       } catch (deliveryError: any) {
         await supabase.from("notification_deliveries").insert({
@@ -202,6 +295,7 @@ async function processNotifications(req: Request) {
       processed: rows.length,
       sent,
       failed,
+      scheduling,
       retention,
     })
   } catch (error: any) {

@@ -1,70 +1,75 @@
-import { generateText, Output } from "ai"
-import { google } from "@ai-sdk/google"
 import { z } from "zod"
-import { createClient } from "@/lib/supabase/server"
+
 import { getCourseMaterialSourceText } from "@/lib/ai/course-rag"
+import { completeStructured } from "@/lib/ai/text-generation"
+import { assertCourseAccess, clientForPrincipal, resolvePrincipal } from "@/lib/server/principal"
 
 const flashcardsSchema = z.object({
   flashcards: z.array(
     z.object({
-      question: z.string().describe("A clear question about the material"),
-      answer: z.string().describe("A concise answer to the question"),
+      question: z.string(),
+      answer: z.string(),
     }),
   ),
 })
 
 export async function POST(req: Request) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  const principal = await resolvePrincipal()
+  if (!principal) {
     return Response.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const { materialId, courseId, studentId } = await req.json()
+  const { materialId } = await req.json()
+  if (!materialId) {
+    return Response.json({ error: "materialId is required" }, { status: 400 })
+  }
 
-  // Get material content
-  const { data: material } = await supabase.from("course_materials").select("*").eq("id", materialId).single()
+  const supabase = await clientForPrincipal(principal)
+
+  const { data: material } = await supabase
+    .from("course_materials")
+    .select("id, course_id, title, content")
+    .eq("id", materialId)
+    .maybeSingle()
 
   if (!material) {
     return Response.json({ error: "Material not found" }, { status: 404 })
   }
 
-  const materialSource = await getCourseMaterialSourceText({
-    supabase: supabase as any,
-    materialId,
-  })
+  // Authorize on the row's own course, not on whatever the client sent.
+  if (!(await assertCourseAccess(principal, material.course_id))) {
+    return Response.json({ error: "You do not have access to this material" }, { status: 403 })
+  }
 
-  // Generate flashcards
-  const { output } = await generateText({
-    model: google("gemini-3.8-flash"),
-    output: Output.object({ schema: flashcardsSchema }),
-    prompt: `Generate 5-10 educational flashcards from the following material. Each flashcard should have a clear question and a concise answer that helps students learn and remember key concepts.
+  try {
+    const materialSource = await getCourseMaterialSourceText({
+      supabase: supabase as any,
+      materialId,
+    })
+
+    const result = await completeStructured(
+      `Generate 5-10 educational flashcards from the following material.
 
 Material Title: ${materialSource.title}
 Content:
 ${materialSource.text}
 
-Create flashcards that:
-- Cover important concepts and definitions
-- Are clear and easy to understand
-- Help with memorization and comprehension
-- Vary in difficulty`,
-  })
+Each flashcard needs a clear question and a concise answer that helps a student
+memorise and understand a key concept. Cover important definitions, processes and
+examples.
 
-  // Save flashcards to database
-  const flashcardsToInsert = output.flashcards.map((fc) => ({
-    student_id: studentId,
-    course_id: courseId,
-    material_id: materialId,
-    question: fc.question,
-    answer: fc.answer,
-  }))
+Return JSON exactly in this shape:
+{"flashcards":[{"question":"...","answer":"..."}]}`,
+      flashcardsSchema,
+      { system: "You create study flashcards from course material. Be accurate and concise." },
+    )
 
-  const { data: savedFlashcards, error } = await supabase.from("flashcards").insert(flashcardsToInsert).select()
-
-  if (error) {
-    return Response.json({ error: error.message }, { status: 500 })
+    return Response.json({ flashcards: result.flashcards })
+  } catch (error: any) {
+    console.error("[flashcards] failed:", error?.message || error)
+    return Response.json(
+      { error: error?.message || "Could not generate flashcards" },
+      { status: 502 },
+    )
   }
-
-  return Response.json({ flashcards: savedFlashcards })
 }

@@ -23,6 +23,9 @@ export default function SignUpPage() {
   const [password, setPassword] = useState("")
   const [repeatPassword, setRepeatPassword] = useState("")
   const [fullName, setFullName] = useState("")
+  // Spec §6 requires informed consent, so it is captured here rather than
+  // assumed. The checkbox is required and blocks submit until ticked.
+  const [acceptedPrivacy, setAcceptedPrivacy] = useState(false)
   // Role is not selected by the user: the database derives it from the email
   // domain (lamduan.mfu.ac.th = student, mfu.ac.th = teacher, admin allowlist).
   const [error, setError] = useState<string | null>(null)
@@ -64,6 +67,22 @@ export default function SignUpPage() {
         },
       })
       if (error) throw error
+
+      // Record the consent that was just given. This runs before the redirect
+      // so the row exists even if the user never returns to the app. A failure
+      // here must not block account creation — the default is "allow", and the
+      // student can change it in Settings.
+      if (data.session) {
+        try {
+          await fetch("/api/consents", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ consentType: "ai_processing", isGranted: true }),
+          })
+        } catch {
+          // Non-fatal: the consent row can be created from Settings later.
+        }
+      }
 
       // With email confirmation enabled, signUp returns a user but no session:
       // the account is inactive until the emailed link is opened. Send the user
@@ -149,9 +168,33 @@ export default function SignUpPage() {
                       />
 
                       <div className="td_form_card_bottom td_mb_25">
+                        {/* Consent must be explicit and recorded before the
+                            account exists, which is what DoD #6 asks for. The
+                            row is written by /api/consents immediately after
+                            signup, while the session is still fresh. */}
+                        <label
+                          className="td_fs_16 td_mb_20"
+                          style={{ display: "flex", alignItems: "flex-start", gap: 10 }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={acceptedPrivacy}
+                            onChange={(e) => setAcceptedPrivacy(e.target.checked)}
+                            required
+                            style={{ marginTop: 4 }}
+                          />
+                          <span>
+                            I consent to my course questions being processed by AI and logged to
+                            improve the assistant. I have read the{" "}
+                            <a href="/privacy" target="_blank" rel="noopener noreferrer">
+                              privacy notice
+                            </a>{" "}
+                            and the <a href="/terms" target="_blank" rel="noopener noreferrer">terms</a>.
+                          </span>
+                        </label>
                         <button
                           type="submit"
-                          disabled={isLoading}
+                          disabled={isLoading || !acceptedPrivacy}
                           className="td_btn td_style_1 td_radius_10 td_medium"
                         >
                           <span className="td_btn_in td_white_color td_accent_bg">

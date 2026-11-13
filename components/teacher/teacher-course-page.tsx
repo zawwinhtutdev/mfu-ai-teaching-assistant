@@ -7,12 +7,13 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Upload, Settings, FileText, Sparkles, Bell, Bot, Pencil, MoreVertical, FileText as FileTextIcon, Clipboard, MessageSquare, Brain, Plus, Trash2, Users, Copy, HelpCircle } from "lucide-react"
+import { Upload, Settings, FileText, Sparkles, Bell, Bot, Pencil, MoreVertical, FileText as FileTextIcon, Clipboard, MessageSquare, Brain, Plus, Trash2, Users, Copy, HelpCircle, CalendarClock } from "lucide-react"
 import type { Course, CourseMaterial, ChatbotSettings } from "@/lib/types"
 import { UploadMaterialDialog } from "./upload-material-dialog"
 import { CreateAnnouncementDialog } from "./create-announcement-dialog"
 import { ChatbotSettingsForm } from "./chatbot-settings-form"
 import { EditCourseDialog } from "./edit-course-dialog"
+import { AssignmentsPanel } from "@/components/shared/assignments-panel"
 import { ManageStudentsDialog } from "./manage-students-dialog"
 import { AIChatbot } from "../student/ai-chatbot"
 import { FlashcardsView } from "../student/flashcards-view"
@@ -751,13 +752,20 @@ Please review these materials before the workshop to maximize your learning expe
 
           <TabsContent value="settings" className="mt-6">
             <Tabs defaultValue="chat" className="w-full">
-              <TabsList className="grid w-full grid-cols-5 bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 shadow-[4px_4px_8px_rgba(0,0,0,0.08),-4px_-4px_8px_rgba(255,255,255,0.8)] dark:shadow-[4px_4px_8px_rgba(0,0,0,0.2),-4px_-4px_8px_rgba(255,255,255,0.05)] rounded-xl p-1">
+              <TabsList className="grid w-full grid-cols-6 bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 shadow-[4px_4px_8px_rgba(0,0,0,0.08),-4px_-4px_8px_rgba(255,255,255,0.8)] dark:shadow-[4px_4px_8px_rgba(0,0,0,0.2),-4px_-4px_8px_rgba(255,255,255,0.05)] rounded-xl p-1">
                 <TabsTrigger 
                   value="chat"
                   className="rounded-lg data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-200 data-[state=active]:to-blue-300 dark:data-[state=active]:from-blue-800 dark:data-[state=active]:to-blue-900 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-200 data-[state=active]:font-semibold data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)] dark:data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.05)]"
                 >
                   <MessageSquare className="mr-2 h-4 w-4" />
                   AI Chat
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="assignments"
+                  className="rounded-lg data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-200 data-[state=active]:to-blue-300 dark:data-[state=active]:from-blue-800 dark:data-[state=active]:to-blue-900 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-200 data-[state=active]:font-semibold data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)] dark:data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.05)]"
+                >
+                  <CalendarClock className="mr-2 h-4 w-4" />
+                  Assignments
                 </TabsTrigger>
                 <TabsTrigger 
                   value="flashcards"
@@ -806,6 +814,10 @@ Please review these materials before the workshop to maximize your learning expe
                   materials={materials}
                   chatbotSettings={chatbotSettings}
                 />
+              </TabsContent>
+
+              <TabsContent value="assignments" className="mt-6">
+                <AssignmentsPanel courseId={course.id} canManage />
               </TabsContent>
 
               <TabsContent value="flashcards" className="mt-6">
