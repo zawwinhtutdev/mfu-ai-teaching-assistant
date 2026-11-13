@@ -11,7 +11,7 @@ import {
   REFUSAL_TEXT,
   type Source,
 } from "@/lib/ai/grounding"
-import { streamChat, useOllama, type ChatMessage } from "@/lib/ai/ollama"
+import { streamChat, isOllamaEnabled, type ChatMessage } from "@/lib/ai/ollama"
 import { retrieveCourseRagContext } from "@/lib/ai/course-rag"
 
 /**
@@ -64,7 +64,7 @@ type WireMessage = { role: "user" | "assistant" | "system"; content: string }
  * exists, so adding a key later restores cloud behaviour without a code change.
  */
 export function shouldUseLocalChatService(): boolean {
-  return useOllama()
+  return isOllamaEnabled()
 }
 
 function extractText(value: { content?: unknown; parts?: unknown }): string {

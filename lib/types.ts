@@ -28,6 +28,10 @@ export interface CourseMaterial {
   content: string
   file_url: string | null
   material_type: "lecture" | "document" | "video" | "other"
+  /** draft = teacher-only, approved = queued for release, published = student-visible. */
+  approval_status?: "draft" | "approved" | "published"
+  /** AI-generated summary, released with the material. */
+  summary_text?: string | null
   created_at: string
   updated_at: string
 }
