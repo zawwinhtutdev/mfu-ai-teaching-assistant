@@ -20,6 +20,7 @@ import { createServiceRoleClient, hasServiceRoleKey } from "@/lib/supabase/admin
 import {
   DEMO_EMAIL_COOKIE,
   DEMO_ROLE_COOKIE,
+  demoAuthEnabled,
   findDemoAccountByEmail,
   isDemoRole,
 } from "@/lib/demo-auth"
@@ -75,6 +76,7 @@ export async function resolvePrincipal(): Promise<Principal | null> {
   // the middleware refuses to create these cookies otherwise.
   const { cookies } = await import("next/headers")
   const jar = await cookies()
+  if (!demoAuthEnabled()) return null
   const demoRole = jar.get(DEMO_ROLE_COOKIE)?.value
   const demoEmail = jar.get(DEMO_EMAIL_COOKIE)?.value
 
@@ -125,21 +127,35 @@ export function demoCourseCodes(principal: Principal): string[] | null {
 /**
  * May this principal read this course?
  *
- * Accepts either a course code or a course UUID, because demo seed data uses
- * codes while Supabase rows use UUIDs. Returns the course row on success so
- * callers do not have to look it up twice.
+ * Accepts a course UUID, a course code ("CSB321"), or a demo seed id
+ * ("course-csb321"). The seed id matters because the demo portal hands those
+ * out everywhere; without this the lookup searched for a course whose *code*
+ * was "COURSE-CSB321", found nothing, and every demo request came back
+ * unauthorized even for the teacher who owns the course.
+ *
+ * Returns the course row on success so callers do not look it up twice.
  */
 export async function assertCourseAccess(
   principal: Principal,
   courseIdOrCode: string,
 ): Promise<{ id: string; code: string; title: string } | null> {
   const supabase = await clientForPrincipal(principal)
-  const isUuid = UUID_RE.test(courseIdOrCode)
+  const raw = (courseIdOrCode || "").trim()
+  if (!raw) return null
+
+  const isUuid = UUID_RE.test(raw)
+  // "course-csb321" -> "CSB321". Only applied when the remainder is a plausible
+  // course code, so a genuine uuid or code is passed through untouched.
+  const seedMatch = /^course-(.+)$/i.exec(raw)
+  const candidateCode = (seedMatch ? seedMatch[1] : raw).toUpperCase()
+  const lookup = isUuid
+    ? { column: "id", value: raw }
+    : { column: "code", value: candidateCode }
 
   const { data: course } = await supabase
     .from("courses")
     .select("id, code, title, teacher_id")
-    .eq(isUuid ? "id" : "code", isUuid ? courseIdOrCode : courseIdOrCode.toUpperCase())
+    .eq(lookup.column, lookup.value)
     .maybeSingle()
 
   if (!course) return null

@@ -8,6 +8,9 @@ import {
   getDocsPageByHref,
   type DocsSearchItem,
 } from "@/lib/docs-config"
+import { slugifyHeading, stripMarkdown } from "@/lib/docs-slug"
+
+export { slugifyHeading } from "@/lib/docs-slug"
 
 export type DocsHeading = {
   id: string
@@ -23,20 +26,6 @@ export type DocsPageContent = {
 }
 
 const docsDirectory = path.join(process.cwd(), "content", "docs")
-
-function stripMarkdown(value: string) {
-  return value
-    .replace(/\[([^\]]+)\]\([^\)]+\)/g, "$1")
-    .replace(/[*_`~]/g, "")
-    .trim()
-}
-
-export function slugifyHeading(value: string) {
-  return stripMarkdown(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9\u0E00-\u0E7F]+/g, "-")
-    .replace(/^-|-$/g, "")
-}
 
 function extractHeadings(content: string): DocsHeading[] {
   const seen = new Map<string, number>()

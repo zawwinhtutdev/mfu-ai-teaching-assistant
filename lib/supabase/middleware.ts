@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import {
   DEMO_EMAIL_COOKIE,
   DEMO_ROLE_COOKIE,
+  demoAuthEnabled,
   findDemoAccountByEmail,
   getDefaultRouteForRole,
   isDemoRole,
@@ -90,8 +91,11 @@ export async function updateSession(request: NextRequest) {
   // (see /api/demo-auth/login), so demo identity always wins when present.
   // This prevents a stale "student" Supabase session from silently shadowing a
   // fresh admin demo login and bouncing the user back to the student portal.
-  const demoRoleValue = request.cookies.get(DEMO_ROLE_COOKIE)?.value
-  const demoEmailValue = request.cookies.get(DEMO_EMAIL_COOKIE)?.value
+  //
+  // Gated on ALLOW_INSECURE_DEV_AUTH: without it, a forged cookie would be a
+  // role-escalation path on any deployment, since no password is involved.
+  const demoRoleValue = demoAuthEnabled() ? request.cookies.get(DEMO_ROLE_COOKIE)?.value : undefined
+  const demoEmailValue = demoAuthEnabled() ? request.cookies.get(DEMO_EMAIL_COOKIE)?.value : undefined
   const demoAccount = findDemoAccountByEmail(demoEmailValue)
   const demoRole =
     demoAccount && isDemoRole(demoRoleValue) && demoAccount.role === demoRoleValue ? demoRoleValue : null

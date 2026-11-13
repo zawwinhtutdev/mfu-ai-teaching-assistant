@@ -13,6 +13,21 @@ export interface DemoAccount {
 export const DEMO_ROLE_COOKIE = "mfu_demo_role"
 export const DEMO_EMAIL_COOKIE = "mfu_demo_email"
 
+/**
+ * Env var that gates the demo-cookie identity path.
+ *
+ * The cookie path exists so a local stack can be exercised without a real
+ * Supabase project. It is only honoured when this is "true", which is asserted
+ * in `middleware.ts` and `/api/demo-auth/login`. Without the gate, a cookie
+ * could mint an admin session on any deployment.
+ */
+export const ALLOW_INSECURE_DEV_AUTH_ENV = "ALLOW_INSECURE_DEV_AUTH"
+
+/** Whether the demo-cookie identity path may be used at all. */
+export function demoAuthEnabled(): boolean {
+  return process.env[ALLOW_INSECURE_DEV_AUTH_ENV] === "true"
+}
+
 const TEACHER_PASSWORD = "teacher1234"
 const STUDENT_PASSWORD = "student1234"
 
