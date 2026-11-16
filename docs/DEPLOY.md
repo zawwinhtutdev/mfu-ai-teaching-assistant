@@ -92,6 +92,27 @@ Leave `ALLOW_INSECURE_DEV_AUTH` **unset**. `deploy.sh` refuses to run if it is
 its strict checks (rejecting a loopback Supabase URL and insecure dev auth) when
 it is set, and `deploy.sh` refuses to deploy without it.
 
+Before the first deploy, verify the credentials actually work:
+
+```bash
+./scripts/preflight.sh
+```
+
+It contacts Supabase and Google and reports one line per check. Unlike a
+presence check, it catches the mistakes that look fine until the app is live:
+
+- an anon key pasted into the service-role slot (reported when the two are
+  identical, since server-side writes would then be blocked by RLS)
+- a service key that cannot read `public.profiles`, which usually means the
+  schema was never applied
+- a Gemini key from a project where the Generative Language API is not enabled
+- a `GEMINI_MODEL` the key cannot use
+
+A missing Gemini key is a warning, not a failure, because the app can run on a
+local model. Pass `--require-ai` to make it fatal. `deploy.sh` runs preflight
+automatically; set `SKIP_PREFLIGHT=1` only if the services are unreachable from
+the build host.
+
 ## 4. Deploy
 
 ```bash
@@ -197,6 +218,35 @@ git checkout <previous-commit>
 Images are built locally, so the previous commit rebuilds to its prior state.
 Migrations are not rolled back — if a deploy included a schema change, revert
 it with a new migration rather than `supabase db reset` against production.
+
+## Rate limiting
+
+The AI routes (`/api/chat`, `/api/summarize`, `/api/generate-quiz`,
+`/api/generate-flashcards`, and AI plan generation in `/api/study-planner`) are
+limited per signed-in account, so one heavy user cannot exhaust the Gemini quota
+or starve a shared local model:
+
+| Route | Limit |
+|---|---|
+| `/api/chat` | 30 requests / minute |
+| Summarize, quiz, flashcards | 12 requests / minute (each) |
+| Study planner (AI generation) | 20 requests / minute |
+
+Limits are keyed on the authenticated user id rather than IP, because students
+behind the campus NAT share one address — an IP-keyed limit would let one person
+lock out a whole classroom. A refused request returns `429` with `Retry-After`
+and `X-RateLimit-*` headers.
+
+The counters live in the web process's memory. Two consequences:
+
+- **They reset on every deploy and restart.** That is acceptable for abuse
+  control (the window is one minute) but it is not an accounting system.
+- **They are per container.** Do not raise the `web` service above one replica
+  without moving the counter to Redis; two replicas would each grant the full
+  quota.
+
+To tune the numbers, edit `RATE_LIMITS` in `lib/server/rate-limit.ts` and
+rebuild.
 
 ## Troubleshooting
 
