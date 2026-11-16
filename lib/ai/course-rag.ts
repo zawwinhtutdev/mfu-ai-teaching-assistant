@@ -3,7 +3,11 @@ import { buildContext, type Source } from "./grounding"
 import { embedTexts as embedWithOllama, toVectorLiteral, isOllamaEnabled } from "./ollama"
 import { transcribeAudio } from "./transcription"
 
-const DEFAULT_EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || "text-embedding-004"
+// `text-embedding-004` was retired and now returns 404 from the v1beta API,
+// which broke all course-material retrieval when a Gemini key was configured.
+// `gemini-embedding-001` is the current model and returns the same 768
+// dimensions the `vector(768)` columns and `match_*` RPCs expect.
+const DEFAULT_EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001"
 const EMBEDDING_DIMENSIONS = Number(process.env.GEMINI_EMBEDDING_DIMENSIONS || 768)
 const MAX_CONTEXT_CHARS = Number(process.env.COURSE_RAG_MAX_CONTEXT_CHARS || 22000)
 const MAX_CHUNK_CHARS = Number(process.env.COURSE_RAG_CHUNK_CHARS || 1400)
