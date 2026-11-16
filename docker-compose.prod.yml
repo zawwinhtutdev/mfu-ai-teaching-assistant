@@ -1,0 +1,86 @@
+# Production stack for a single VPS.
+#
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+#
+# Two containers:
+#   web     Next.js (standalone output)
+#   caddy   TLS termination + reverse proxy
+#
+# Why there is no database container
+# ----------------------------------
+# The app never opens a direct Postgres connection — `DATABASE_URL` appears
+# nowhere under app/ or lib/. All data access goes through the Supabase client
+# (which is also where auth.uid(), RLS, and storage live). Running a local
+# Postgres therefore cannot serve the app, and the migrations cannot even be
+# applied to one: they reference `auth.users`, `auth.uid()` and
+# `storage.objects`, which only exist inside a Supabase deployment.
+#
+# Supabase Cloud is required, not optional.
+#
+# Deliberately absent, compared with docker-compose.yml:
+#   redis        nothing imports it
+#   api          the FastAPI service is optional; the web app does retrieval,
+#                chat, and material ingestion in-process
+#   db           see above
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_* values are inlined into the browser bundle at build
+        # time. Changing either of these requires a rebuild, not a restart.
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?NEXT_PUBLIC_SUPABASE_URL is required}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:?NEXT_PUBLIC_SUPABASE_ANON_KEY is required}
+    image: ata-web:prod
+    container_name: ata-web
+    restart: unless-stopped
+    ports:
+      # Loopback only: Caddy is the sole public entry point.
+      - "127.0.0.1:3000:3000"
+    environment:
+      NODE_ENV: production
+      ENVIRONMENT: production
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      # AI runs against a cloud API — no GPU, no model weights on this box.
+      AI_PROVIDER: ${AI_PROVIDER:-gemini}
+      GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      CRON_SECRET: ${CRON_SECRET:-}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      # NEVER set ALLOW_INSECURE_DEV_AUTH here: it mints a passwordless admin
+      # session. /api/health reports it as a failure if it is present.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: ata-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?SITE_ADDRESS is required, e.g. ata.example.com}
+    depends_on:
+      - web
+
+volumes:
+  caddy_data:
+  caddy_config:
