@@ -122,7 +122,6 @@ export function CourseDialog({ open, onOpenChange, teachers, course, onSaved }: 
                 id="course-code"
                 value={form.code}
                 onChange={(e) => set("code", e.target.value.toUpperCase())}
-                placeholder="10051001"
                 maxLength={16}
                 required
               />
@@ -133,7 +132,6 @@ export function CourseDialog({ open, onOpenChange, teachers, course, onSaved }: 
                 id="academic-year"
                 value={form.academicYear}
                 onChange={(e) => set("academicYear", e.target.value)}
-                placeholder="2569"
               />
             </div>
             <div className="space-y-2">
@@ -142,7 +140,6 @@ export function CourseDialog({ open, onOpenChange, teachers, course, onSaved }: 
                 id="semester"
                 value={form.semester}
                 onChange={(e) => set("semester", e.target.value)}
-                placeholder="2"
               />
             </div>
           </div>
@@ -153,7 +150,6 @@ export function CourseDialog({ open, onOpenChange, teachers, course, onSaved }: 
               id="course-title"
               value={form.title}
               onChange={(e) => set("title", e.target.value)}
-              placeholder="Thai Conversation for Foreigners"
               required
             />
           </div>
@@ -164,7 +160,6 @@ export function CourseDialog({ open, onOpenChange, teachers, course, onSaved }: 
               id="school"
               value={form.school}
               onChange={(e) => set("school", e.target.value)}
-              placeholder="School of Liberal Arts"
             />
           </div>
 
@@ -174,7 +169,6 @@ export function CourseDialog({ open, onOpenChange, teachers, course, onSaved }: 
               id="course-description"
               value={form.description}
               onChange={(e) => set("description", e.target.value)}
-              placeholder="What the course covers, shown to students in the portal."
               rows={3}
             />
           </div>
@@ -208,7 +202,6 @@ export function CourseDialog({ open, onOpenChange, teachers, course, onSaved }: 
               id="further-information"
               value={form.furtherInformation}
               onChange={(e) => set("furtherInformation", e.target.value)}
-              placeholder="Prerequisites, assessment breakdown, attendance policy…"
               rows={2}
             />
           </div>
