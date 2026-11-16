@@ -22,6 +22,8 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
+import { geminiModelName } from "@/lib/ai/models"
+
 const TRANSCRIBE_TIMEOUT_MS = 15 * 60 * 1000
 
 export class TranscriptionUnavailableError extends Error {
@@ -170,7 +172,7 @@ async function transcribeWithGemini(buffer: Buffer, fileName: string, mimeType: 
   }
 
   const result = await ai.models.generateContent({
-    model: "gemini-3.8-flash",
+    model: geminiModelName(),
     contents: [
       {
         role: "user",

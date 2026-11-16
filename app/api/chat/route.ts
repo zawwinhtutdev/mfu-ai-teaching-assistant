@@ -2,7 +2,7 @@ import { convertToModelMessages, createUIMessageStreamResponse, streamText, toUI
 import { createGoogle } from "@ai-sdk/google"
 import { cookies } from "next/headers"
 import { getUserFacingChatError } from "@/lib/ai/chat-errors"
-import { getModelConfig, normalizeGoogleProviderModel } from "@/lib/ai/models"
+import { geminiModelName, getModelConfig, normalizeGoogleProviderModel } from "@/lib/ai/models"
 import { createClient } from "@/lib/supabase/server"
 import { getDocumentReadUrl } from "@/lib/storage/spaces"
 import { trackApiError } from "@/lib/server/observability"
@@ -19,6 +19,7 @@ import { isPdfDocument } from "@/lib/documents/supported-formats"
 import { hasAiProcessingConsent } from "@/lib/server/consent"
 import { logStudentQuery } from "@/lib/server/query-logging"
 import { assertCourseAccess, clientForPrincipal, resolvePrincipal } from "@/lib/server/principal"
+import { RATE_LIMITS, checkRateLimit, rateLimitResponse, userRateLimitKey } from "@/lib/server/rate-limit"
 
 // A local 7B model on a laptop can exceed 30s on a long grounded answer, and
 // the previous limit cut streams off mid-sentence.
@@ -135,6 +136,14 @@ export async function POST(req: Request) {
     const userRole = principal?.role || "student"
 
     console.log("[v0] Using userId:", userId, "role:", userRole, "demo:", principal?.isDemo)
+
+    // Charged before retrieval and generation so a refused request costs
+    // nothing upstream. Regenerating an answer is a real provider call, so it
+    // counts too rather than being a way to bypass the limit.
+    const limit = checkRateLimit(userRateLimitKey("chat", userId || "anonymous"), RATE_LIMITS.chat)
+    if (!limit.ok) {
+      return rateLimitResponse(limit)
+    }
 
     // Create or get conversation
     let currentConversationId = conversationId
@@ -699,7 +708,11 @@ Guidelines:
       const providerModel = normalizeGoogleProviderModel(
         requestedModel.startsWith("google/") ? requestedModel : cfg.providerModel,
       )
-      const selectedGoogleModel = providerModel.startsWith("google/") ? providerModel.replace("google/", "") : "gemini-3.8-flash"
+      // The provider model id can be retired by Google; `geminiModelName` keeps
+      // the fallback in one place and allows an env override without a rebuild.
+      const selectedGoogleModel = providerModel.startsWith("google/")
+        ? providerModel.replace("google/", "")
+        : geminiModelName()
       const maxOutputTokens = cfg.maxOutputTokens ?? 700
       const temperature = cfg.temperature ?? 0.6
       result = streamText({

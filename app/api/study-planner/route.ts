@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { completeText } from "@/lib/ai/text-generation"
 import { logAuditEvent } from "@/lib/server/audit-log"
 import { clientForPrincipal, resolvePrincipal } from "@/lib/server/principal"
+import { RATE_LIMITS, checkRateLimit, rateLimitResponse, userRateLimitKey } from "@/lib/server/rate-limit"
 
 /**
  * Study planner.
@@ -80,6 +81,13 @@ export async function POST(req: Request) {
 
     // If AI generation requested
     if (body.generateAI && body.courseId) {
+      // Charged only on the AI path; saving a plan item by hand is cheap and
+      // should not consume the same budget as a provider call.
+      const limit = checkRateLimit(userRateLimitKey("study-planner", principal.userId), RATE_LIMITS.planner)
+      if (!limit.ok) {
+        return rateLimitResponse(limit)
+      }
+
       // Get course materials for context
       const { data: course } = await supabase
         .from("courses")

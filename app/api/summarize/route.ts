@@ -1,10 +1,19 @@
 import { getCourseMaterialSourceText } from "@/lib/ai/course-rag"
 import { completeText } from "@/lib/ai/text-generation"
 import { assertCourseAccess, clientForPrincipal, resolvePrincipal } from "@/lib/server/principal"
+import { RATE_LIMITS, checkRateLimit, rateLimitResponse, userRateLimitKey } from "@/lib/server/rate-limit"
 
 export async function POST(req: Request) {  const principal = await resolvePrincipal()
   if (!principal) {
     return Response.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  // Charged before the material lookup so a request that is refused for rate
+  // limiting never reaches the provider. A request that later 404s still costs
+  // an attempt; that is the price of not doing database work first.
+  const limit = checkRateLimit(userRateLimitKey("summarize", principal.userId), RATE_LIMITS.generation)
+  if (!limit.ok) {
+    return rateLimitResponse(limit)
   }
 
   const { materialId, courseId } = await req.json()

@@ -4,6 +4,10 @@ name: scheduled-jobs
 # Repo secrets required:
 #   APP_BASE_URL  e.g. https://ata.example.com   (no trailing slash)
 #   CRON_SECRET   must match the app's CRON_SECRET env var
+#
+# Without those secrets this job used to fail with "exit code 3" from curl,
+# which says only "URL malformed" — the real problem (an unset secret) was
+# invisible. The guard step below names the missing value instead.
 
 on:
   schedule:
@@ -22,10 +26,36 @@ jobs:
     if: github.event.schedule == '0 7 * * *' || inputs.job == 'notifications'
     runs-on: ubuntu-latest
     steps:
+      - name: Check required secrets
+        env:
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          missing=""
+          [ -n "$APP_BASE_URL" ] || missing="$missing APP_BASE_URL"
+          [ -n "$CRON_SECRET" ] || missing="$missing CRON_SECRET"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repo secret(s):$missing"
+            echo "Set them with: gh secret set <NAME> --repo $GITHUB_REPOSITORY"
+            echo "APP_BASE_URL must be the public https origin, no trailing slash."
+            exit 1
+          fi
+          case "$APP_BASE_URL" in
+            https://*) ;;
+            *) echo "::error::APP_BASE_URL must start with https:// (got: $APP_BASE_URL)"; exit 1 ;;
+          esac
+          # A trailing slash would build "//api/..." which some servers 404 on.
+          APP_BASE_URL="${APP_BASE_URL%/}"
+          echo "APP_BASE_URL=$APP_BASE_URL" >> "$GITHUB_ENV"
+          echo "configuration present"
+
+      # /api/notifications/process authenticates with a bearer secret and
+      # returns 401 when CRON_SECRET does not match. -f turns that into a
+      # non-zero exit so a bad secret fails the run instead of looking green.
       - name: Dispatch queued notifications
         run: |
-          curl -fsS -X POST "${{ secrets.APP_BASE_URL }}/api/notifications/process" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+          curl -fsS -X POST "$APP_BASE_URL/api/notifications/process" \
+            -H "Authorization: Bearer $CRON_SECRET" \
             -H "Content-Type: application/json" \
             -o response.json -w "HTTP %{http_code}\n"
           cat response.json
@@ -34,8 +64,21 @@ jobs:
     if: github.event.schedule == '0 0 * * 0' || inputs.job == 'keep-alive'
     runs-on: ubuntu-latest
     steps:
-      - name: Ping app
+      - name: Check required secrets
+        env:
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
         run: |
-          curl -fsS "${{ secrets.APP_BASE_URL }}/api/keep-alive" \
+          if [ -z "$APP_BASE_URL" ]; then
+            echo "::error::Missing repo secret: APP_BASE_URL"
+            echo "Set it with: gh secret set APP_BASE_URL --repo $GITHUB_REPOSITORY"
+            exit 1
+          fi
+          echo "configuration present"
+
+      - name: Ping app
+        env:
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+        run: |
+          curl -fsS "$APP_BASE_URL/api/keep-alive" \
             -o response.json -w "HTTP %{http_code}\n"
           cat response.json

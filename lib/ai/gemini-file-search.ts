@@ -1,7 +1,7 @@
 import { GoogleGenAI, type UploadToFileSearchStoreOperation } from "@google/genai"
 import { isSupportedDocument, resolveDocumentMimeType } from "@/lib/documents/supported-formats"
+import { geminiModelName } from "@/lib/ai/models"
 
-const DEFAULT_FILE_SEARCH_MODEL = "gemini-3.8-flash"
 const FILE_SEARCH_POLL_INTERVAL_MS = 1500
 const FILE_SEARCH_MAX_POLLS = 40
 const NO_CONTEXT_SENTINEL = "__NO_CONTEXT__"
@@ -197,7 +197,7 @@ export async function getGeminiFileSearchContext(params: { storeName: string; qu
 
   try {
     const ai = createGeminiClient()
-    const retrievalModel = process.env.GEMINI_FILE_SEARCH_MODEL || DEFAULT_FILE_SEARCH_MODEL
+    const retrievalModel = process.env.GEMINI_FILE_SEARCH_MODEL || geminiModelName()
     const result = await ai.models.generateContent({
       model: retrievalModel,
       contents: [
