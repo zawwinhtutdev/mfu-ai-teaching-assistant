@@ -51,6 +51,16 @@ const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const OLLAMA_URL = (process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434").replace(/\/+$/, "")
 const EMBED_MODEL = process.env.OLLAMA_EMBEDDING_MODEL || "nomic-embed-text"
 
+// Embeddings must come from the same model the app uses for queries, or the
+// vectors are not comparable and similarity search silently returns nonsense.
+// The app picks Ollama unless AI_PROVIDER=gemini, so this script must match it
+// rather than always writing Ollama vectors.
+const AI_PROVIDER = (process.env.AI_PROVIDER || "").trim().toLowerCase()
+const GEMINI_KEY = (process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_API_KEY || "").trim()
+const USE_GEMINI = AI_PROVIDER === "gemini" ? Boolean(GEMINI_KEY) : !GEMINI_KEY
+const GEMINI_EMBED_MODEL = process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001"
+const EMBED_DIMENSIONS = Number(process.env.GEMINI_EMBEDDING_DIMENSIONS || 768)
+
 const CHUNK_CHARS = Number(process.env.COURSE_RAG_CHUNK_CHARS || 1400)
 const CHUNK_OVERLAP = Number(process.env.COURSE_RAG_CHUNK_OVERLAP_CHARS || 220)
 
@@ -113,8 +123,47 @@ function splitIntoChunks(text, maxChars = CHUNK_CHARS, overlap = CHUNK_OVERLAP) 
   return chunks
 }
 
+async function embedWithGemini(texts) {
+  const vectors = []
+  for (const text of texts) {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_EMBED_MODEL}:embedContent?key=${GEMINI_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          // RETRIEVAL_DOCUMENT because this indexes material, matching the app.
+          content: { parts: [{ text }] },
+          taskType: "RETRIEVAL_DOCUMENT",
+          outputDimensionality: EMBED_DIMENSIONS,
+        }),
+      },
+    )
+    if (!response.ok) {
+      throw new Error(
+        `Gemini embed ${response.status}: ${(await response.text()).slice(0, 200)}. ` +
+          `Check the key and that ${GEMINI_EMBED_MODEL} is available.`,
+      )
+    }
+    const payload = await response.json()
+    const values = payload?.embedding?.values
+    if (!Array.isArray(values) || values.length === 0) {
+      throw new Error(`Gemini returned no embedding for a chunk`)
+    }
+    // A wrong width would fail the vector(768) column, so fail loudly here.
+    if (values.length !== EMBED_DIMENSIONS) {
+      throw new Error(
+        `Gemini returned ${values.length} dimensions, expected ${EMBED_DIMENSIONS}`,
+      )
+    }
+    vectors.push(values)
+  }
+  return vectors
+}
+
 async function embed(texts) {
   if (texts.length === 0) return []
+  if (USE_GEMINI) return embedWithGemini(texts)
   const response = await fetch(`${OLLAMA_URL}/api/embed`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -139,7 +188,11 @@ async function embed(texts) {
 
 async function main() {
   console.log(`Supabase: ${SUPABASE_URL}`)
-  console.log(`Ollama:   ${OLLAMA_URL} (${EMBED_MODEL})`)
+  console.log(
+    USE_GEMINI
+      ? `Provider: Gemini (${GEMINI_EMBED_MODEL}, ${EMBED_DIMENSIONS} dims)`
+      : `Provider: Ollama ${OLLAMA_URL} (${EMBED_MODEL})`,
+  )
   console.log(dryRun ? "Mode:     dry run\n" : "Mode:     write\n")
 
   // Confirm the embedding model is reachable before touching any rows.
