@@ -12,14 +12,14 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   icons: {
     icon: [
-      { url: "/brand/mfu-ai-favicon-circle-large.svg", type: "image/svg+xml" },
-      { url: "/icons/favicon-circle-large-32.png", sizes: "32x32", type: "image/png" },
-      { url: "/icons/favicon-circle-large-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/icons/crest-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icons/crest-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/icons/crest-48.png", sizes: "48x48", type: "image/png" },
     ],
-    shortcut: "/icons/favicon-circle-large-32.png",
+    shortcut: "/icons/crest-32.png",
     apple: [
       {
-        url: "/icons/apple-touch-icon-mono.png",
+        url: "/icons/crest-180.png",
         sizes: "180x180",
         type: "image/png",
       },

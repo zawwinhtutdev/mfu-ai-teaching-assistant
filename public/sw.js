@@ -5,16 +5,15 @@ const OFFLINE_URL = "/";
 const PRECACHE_ASSETS = [
   "/",
   "/manifest.json",
-  "/brand/mfu-ai-mark-dark.svg",
-  "/brand/mfu-ai-mark-light.svg",
-  "/brand/mfu-ai-favicon-circle-large.svg",
-  "/icons/favicon-circle-large-16.png",
-  "/icons/favicon-circle-large-32.png",
-  "/icons/apple-touch-icon-mono.png",
-  "/icons/icon-mono-192.png",
-  "/icons/icon-mono-512.png",
-  "/icons/icon-maskable-mono-192.png",
-  "/icons/icon-maskable-mono-512.png",
+  "/brand/mfu-crest.png",
+  "/icons/crest-16.png",
+  "/icons/crest-32.png",
+  "/icons/crest-48.png",
+  "/icons/crest-180.png",
+  "/icons/crest-192.png",
+  "/icons/crest-512.png",
+  "/icons/crest-maskable-192.png",
+  "/icons/crest-maskable-512.png",
 ];
 
 // Install: cache critical assets
@@ -123,8 +122,8 @@ self.addEventListener("push", (event) => {
     event.waitUntil(
       self.registration.showNotification(data.title || "MFU AI TA", {
         body: data.body || "",
-        icon: "/icons/icon-mono-192.png",
-        badge: "/icons/icon-mono-192.png",
+        icon: "/icons/crest-192.png",
+        badge: "/icons/crest-192.png",
         data: { url: data.url || "/" },
       })
     );
@@ -133,7 +132,7 @@ self.addEventListener("push", (event) => {
     event.waitUntil(
       self.registration.showNotification("MFU AI TA", {
         body: event.data.text(),
-        icon: "/icons/icon-mono-192.png",
+        icon: "/icons/crest-192.png",
       })
     );
   }

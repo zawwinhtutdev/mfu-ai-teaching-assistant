@@ -113,7 +113,7 @@ type DocsShellProps = {
 function DocsLogo() {
   return (
     <Link href="/docs" className="flex min-w-0 items-center gap-2.5 text-foreground" aria-label="MFU AI documentation home">
-      <BrandIcon size={34} priority className="shrink-0 rounded-full" />
+      <BrandIcon size={34} priority className="shrink-0" />
       <span className="min-w-0 leading-tight">
         <span className="block truncate text-sm font-semibold">MFU AI</span>
         <span className="block truncate text-[11px] text-muted-foreground">Documentation</span>
