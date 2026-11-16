@@ -22,6 +22,9 @@ yarn-error.log*
 !.envrc
 !.envrc.private.example
 !.env.example
+# Deployment template: contains no secrets, and scripts/deploy.sh + docs/DEPLOY.md
+# reference it by name. The real file stays ignored by the .env* rule above.
+!.env.production.example
 .envrc.private
 
 # vercel
