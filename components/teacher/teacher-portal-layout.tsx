@@ -31,8 +31,8 @@ const pageTitles: Record<string, { title: string; crumbs: string[] }> = {
 export function TeacherPortalLayout({ profile, courses, children }: TeacherPortalLayoutProps) {
   const pathname = usePathname() || ""
 
-  // No `contextChip` is passed: the course count is already visible in the
-  // sidebar under "My Courses", so a badge repeating it in the header was noise.
+  // The teacher layout passes no header badge, so there is nothing extra to
+  // configure here.
 
   // Course shortcuts live under "My Courses" as a disclosure rather than in the
   // sidebar footer. A footer at the very bottom put them far from the nav item

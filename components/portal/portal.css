@@ -99,6 +99,40 @@
 .mfp-scrim,
 .mfp-drawer { display: none; }
 
+/* The student rail only carries five links, so the drawer is the only route to
+   reminders, documents, analytics and the agent builder. It is opened by a
+   "More" button in the rail, which exists at every width — not only mobile. */
+.mfp[data-chrome="rail"] .mfp-drawer {
+  display: flex;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 50;
+  flex-direction: column;
+  width: 272px;
+  max-width: 84vw;
+  height: 100dvh;
+  padding: 16px 12px 24px;
+  background: var(--p-side);
+  border-right: 1px solid var(--p-line);
+  box-shadow: var(--p-shadow-menu);
+  transform: translateX(-105%);
+  transition: transform 0.22s var(--p-ease);
+}
+.mfp[data-chrome="rail"] .mfp-drawer[data-open="true"] { transform: none; }
+
+.mfp[data-chrome="rail"] .mfp-scrim {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background: rgba(20, 22, 30, 0.38);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s var(--p-ease);
+}
+.mfp[data-chrome="rail"] .mfp-scrim[data-open="true"] { opacity: 1; pointer-events: auto; }
+
 /* The sidebar is inline on desktop, so a close button would be meaningless.
    `display: none` here would lose to `.mfp-icon-btn`'s later `display: grid`,
    so the hidden state is expressed with the same specificity class. */
@@ -401,12 +435,6 @@
 /* The admin nav column becomes a drawer only when it genuinely cannot fit.
    Below this width the topbar toggle and the scrim take over. */
 @media (max-width: 640px) {
-  /* The toggle must appear at exactly the width where the drawer activates.
-     `.mfp-only-mobile` flips on at 1024px, which is too early for the admin
-     chrome: between 640px and 1024px the column is inline, so a toggle there
-     would open a scrim over a sidebar that is already visible. */
-  .mfp[data-chrome="topbar"] .mfp-topbar-menu.mfp-only-mobile { display: grid; }
-
   .mfp[data-chrome="topbar"] .mfp-side--dense {
     position: fixed;
     inset: 52px auto 0 0;
@@ -465,19 +493,6 @@
 .mfp-only-mobile { display: none; }
 .mfp-crumb-current { color: var(--p-fg-soft); }
 .mfp-rail-caption { color: var(--p-tertiary); }
-.mfp-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 10px;
-  border-radius: 100px;
-  background: var(--p-rail);
-  color: var(--p-muted);
-  font-size: 11.5px;
-  font-weight: 600;
-  white-space: nowrap;
-}
 
 /* =====================================================================
    Per-portal identity. The portals share a rhythm, not a skin:
@@ -505,7 +520,6 @@
 }
 .mfp[data-variant="teacher"] .mfp-nav-item[data-active="true"] svg { color: var(--p-accent); }
 .mfp[data-variant="teacher"] .mfp-rail-btn[data-active="true"] { color: var(--p-accent); }
-.mfp[data-variant="teacher"] .mfp-chip { background: var(--p-accent-soft); color: var(--p-accent); }
 
 .mfp[data-variant="student"] {
   --p-accent: #2563eb;
@@ -523,7 +537,6 @@
 }
 .mfp[data-variant="student"] .mfp-nav-item[data-active="true"] svg { color: var(--p-accent); }
 .mfp[data-variant="student"] .mfp-rail-btn[data-active="true"] { color: var(--p-accent); }
-.mfp[data-variant="student"] .mfp-chip { background: var(--p-accent-soft); color: var(--p-accent); }
 .mfp[data-variant="student"] .mfp-page-title { letter-spacing: -0.015em; }
 
 .mfp[data-variant="admin"] {
@@ -545,7 +558,6 @@
 .mfp[data-variant="admin"] .mfp-content { padding: 20px 22px 40px; }
 .mfp[data-variant="admin"] .mfp-head-title { font-size: 15px; font-weight: 700; letter-spacing: -0.005em; }
 .mfp[data-variant="admin"] .mfp-page-title { font-size: 19px; }
-.mfp[data-variant="admin"] .mfp-chip { background: #f1f2f6; color: #4a4d5e; font-variant-numeric: tabular-nums; }
 .mfp[data-variant="admin"] table { font-size: 12.5px; }
 .mfp[data-variant="admin"] thead th { padding: 9px 14px; }
 .mfp[data-variant="admin"] tbody td { padding: 10px 14px; }
@@ -554,15 +566,6 @@
 @media (max-width: 1024px) {
   .mfp-only-mobile { display: grid; }
 }
-
-/* The admin nav column stays inline from 640px to 1024px, so its toggle must
-   stay hidden across that range even though `.mfp-only-mobile` switches on at
-   1024px. This block sits before the 640px rule so the drawer's own
-   `display: grid` still wins below that width. */
-@media (max-width: 1024px) and (min-width: 641px) {
-  .mfp[data-chrome="topbar"] .mfp-topbar-menu { display: none; }
-}
-
 
 /* =====================================================================
    Three navigation archetypes — the portals must not share one sidebar.
@@ -678,12 +681,41 @@
   text-transform: uppercase;
   color: #9ba0b3;
 }
-.mfp-topbar .mfp-chip { background: #2b2e37; color: #dfe2ea; }
 .mfp-topbar .mfp-head-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 .mfp[data-chrome="topbar"] { flex-direction: column; }
 .mfp[data-chrome="topbar"] .mfp-body { flex: 1 1 auto; }
 .mfp-side--dense { width: 232px; }
 .mfp-content--dense { padding: 20px 24px 40px; }
+
+/* Collapsible admin column. The width animates to zero rather than the element
+   being `display: none`d, so the content does not jump while the transition
+   runs; `overflow: hidden` keeps the labels from bleeding out mid-animation.
+
+   Scoped to desktop widths: below 641px the same <nav> is the drawer, and
+   collapsing it there would open an empty off-canvas panel. */
+@media (min-width: 641px) {
+  .mfp[data-chrome="topbar"] .mfp-side--dense {
+    transition: width 0.2s var(--p-ease), padding 0.2s var(--p-ease);
+    overflow: hidden;
+  }
+  .mfp[data-chrome="topbar"] .mfp-side--dense[data-collapsed="true"] {
+    width: 0;
+    padding-left: 0;
+    padding-right: 0;
+    /* The 1px border is outside the element width, so leaving it would hide
+       the column but still reserve a visible stripe down the page. */
+    border-right-width: 0;
+  }
+}
+
+/* Sidebar toggle, first in the admin topbar. It is the only control for the nav
+   at every width: it collapses the inline column on desktop and opens the
+   off-canvas drawer below 641px, so it must never be hidden. */
+.mfp-topbar-collapse { margin-right: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mfp[data-chrome="topbar"] .mfp-side--dense { transition: none; }
+}
 .mfp-page-head--tight { margin-bottom: 14px; }
 
 /* The admin nav column spans the viewport, not the content, so its pinned
