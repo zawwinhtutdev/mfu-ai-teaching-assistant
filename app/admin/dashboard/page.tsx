@@ -40,6 +40,8 @@ interface ApiCourse {
   teacher_id: string | null
   teacher_name: string | null
   teacher_email: string | null
+  /** The full teaching team; `teacher_*` above is the legacy primary owner. */
+  teachers?: Array<{ id: string; full_name: string | null; email: string }>
   enrolled_students: number
   documents: number
   documents_ready: number
@@ -59,6 +61,14 @@ function toFormValues(course: ApiCourse): CourseFormValues {
     school: course.school ?? "",
     furtherInformation: course.further_information ?? "",
     teacherId: course.teacher_id,
+    // Prefer the full team; fall back to the legacy single owner so a course
+    // created before multiple teachers existed still opens with its teacher.
+    teacherEmails:
+      course.teachers && course.teachers.length > 0
+        ? course.teachers.map((teacher) => teacher.email)
+        : course.teacher_email
+          ? [course.teacher_email]
+          : [],
   }
 }
 
@@ -92,8 +102,6 @@ export default function ManageCoursesPage() {
   const [enrollCourse, setEnrollCourse] = useState<{ id: string; label: string } | null>(null)
   const [infoCourseId, setInfoCourseId] = useState<string | null>(null)
   const [scheduleCourse, setScheduleCourse] = useState<{ id: string; label: string } | null>(null)
-  const [teachers, setTeachers] = useState<Array<{ id: string; full_name: string | null; email: string }>>([])
-
   const load = useCallback(async () => {
     setLoading(true)
     try {
@@ -106,28 +114,9 @@ export default function ManageCoursesPage() {
     setLoading(false)
   }, [])
 
-  // Teachers are needed by the create/edit dialogs. Loaded once, alongside the
-  // course list, so opening a dialog never waits on a second round-trip.
-  const loadTeachers = useCallback(async () => {
-    try {
-      const res = await fetch("/api/admin/users", { cache: "no-store" })
-      const data = await res.json()
-      if (!res.ok) return
-      const list = Array.isArray(data?.users) ? data.users : []
-      setTeachers(
-        list
-          .filter((u: any) => u.role === "teacher")
-          .map((u: any) => ({ id: u.id, full_name: u.full_name, email: u.email })),
-      )
-    } catch {
-      /* the dialog still works, just without an assignee list */
-    }
-  }, [])
-
   useEffect(() => {
     void load()
-    void loadTeachers()
-  }, [load, loadTeachers])
+  }, [load])
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -197,28 +186,6 @@ export default function ManageCoursesPage() {
               }}
             />
           </div>
-          <button
-            type="button"
-            onClick={() => setCreateOpen(true)}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 7,
-              height: 40,
-              padding: "0 16px",
-              borderRadius: 999,
-              border: "none",
-              background: TEXT,
-              color: "#fff",
-              fontSize: 14,
-              fontWeight: 600,
-              whiteSpace: "nowrap",
-              cursor: "pointer",
-            }}
-          >
-            <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
-            New course
-          </button>
         </div>
       </div>
 
@@ -571,10 +538,43 @@ export default function ManageCoursesPage() {
         </div>
       </div>
 
+      {/*
+        Floating action button, pinned to the viewport rather than the page.
+        Creating a course is the primary action here and the table can be long,
+        so the control must stay reachable without scrolling back to the top.
+        It sits above the pager and clears the sidebar's own bottom edge.
+      */}
+      <button
+        type="button"
+        onClick={() => setCreateOpen(true)}
+        style={{
+          position: "fixed",
+          right: 24,
+          bottom: 24,
+          zIndex: 30,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          height: 44,
+          padding: "0 20px",
+          borderRadius: 999,
+          border: "none",
+          background: TEXT,
+          color: "#fff",
+          fontSize: 14,
+          fontWeight: 600,
+          whiteSpace: "nowrap",
+          cursor: "pointer",
+          boxShadow: "0 6px 20px rgba(16, 18, 28, 0.28)",
+        }}
+      >
+        <span style={{ fontSize: 17, lineHeight: 1 }}>+</span>
+        New course
+      </button>
+
       <CourseDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
-        teachers={teachers}
         course={null}
         onSaved={() => void load()}
       />
@@ -584,7 +584,6 @@ export default function ManageCoursesPage() {
         onOpenChange={(open) => {
           if (!open) setEditingCourse(null)
         }}
-        teachers={teachers}
         course={editingCourse}
         onSaved={() => void load()}
       />
