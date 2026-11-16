@@ -30,18 +30,133 @@ export type CourseFormValues = {
   school: string
   furtherInformation: string
   teacherId: string | null
+  /** Co-teachers, plus the primary owner, as emails. Empty means unassigned. */
+  teacherEmails: string[]
 }
 
 interface CourseDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  teachers: TeacherOption[]
   /** When present the dialog edits; otherwise it creates. */
   course?: CourseFormValues | null
   onSaved: () => void
 }
 
-const UNASSIGNED = "__unassigned__"
+/** Semesters a course can run in. Stored as a string, like the rest of the form. */
+const SEMESTERS = ["1", "2", "3"] as const
+
+/**
+ * MFU schools, in the order the university lists them.
+ *
+ * A fixed list rather than free text: the value is shown to students and used
+ * for filtering, so "School of Science" and "school of science" must not become
+ * two different schools.
+ */
+const SCHOOLS = [
+  "School of Liberal Arts",
+  "School of Science",
+  "School of Management",
+  "School of Applied Digital Technology",
+  "School of Agro-Industry",
+  "School of Law",
+  "School of Cosmetic Science",
+  "School of Health Science",
+  "School of Nursing",
+  "School of Anti-Aging and Regenerative Medicine",
+  "School of Medicine",
+  "School of Dentistry",
+  "School of Social Innovation",
+  "School of Sinology",
+  "School of Integrative Medicine",
+] as const
+
+/**
+ * Radix Select treats an empty string as "no selection" and renders the
+ * SelectValue placeholder, which is what these two fields want — so no sentinel
+ * is needed here. (The teacher dropdown still uses one, because its "unassigned"
+ * option must be a real, selectable item rather than absence.)
+ */
+
+/**
+ * Email chips for co-teachers.
+ *
+ * An administrator types an address and presses Enter or comma to add it. Each
+ * entry is validated here so an obvious typo is caught before a round trip; the
+ * API is still the authority on whether the account exists and is a teacher.
+ */
+function TeacherEmailInput({
+  emails,
+  onChange,
+}: {
+  emails: string[]
+  onChange: (emails: string[]) => void
+}) {
+  const [draft, setDraft] = useState("")
+  const [error, setError] = useState<string | null>(null)
+
+  const commit = (raw: string) => {
+    const email = raw.trim().replace(/,$/, "").toLowerCase()
+    if (!email) return
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError("That does not look like an email address")
+      return
+    }
+    if (emails.includes(email)) {
+      setError("That teacher is already added")
+      return
+    }
+    onChange([...emails, email])
+    setDraft("")
+    setError(null)
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-1.5 rounded-md border bg-transparent px-2 py-1.5">
+        {emails.map((email) => (
+          <span
+            key={email}
+            className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs"
+          >
+            {email}
+            <button
+              type="button"
+              onClick={() => onChange(emails.filter((value) => value !== email))}
+              aria-label={`Remove ${email}`}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        <input
+          value={draft}
+          onChange={(event) => {
+            setDraft(event.target.value)
+            setError(null)
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === ",") {
+              // Enter would otherwise submit the form while the admin is still
+              // adding a colleague.
+              event.preventDefault()
+              commit(draft)
+            }
+            if (event.key === "Backspace" && !draft && emails.length > 0) {
+              onChange(emails.slice(0, -1))
+            }
+          }}
+          onBlur={() => commit(draft)}
+          placeholder={emails.length === 0 ? "teacher@mfu.ac.th" : "Add another"}
+          className="min-w-[180px] flex-1 bg-transparent px-1 py-1 text-sm outline-none"
+          aria-label="Teacher email"
+        />
+      </div>
+
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  )
+}
 
 function emptyCourse(): CourseFormValues {
   return {
@@ -53,10 +168,11 @@ function emptyCourse(): CourseFormValues {
     school: "",
     furtherInformation: "",
     teacherId: null,
+    teacherEmails: [],
   }
 }
 
-export function CourseDialog({ open, onOpenChange, teachers, course, onSaved }: CourseDialogProps) {
+export function CourseDialog({ open, onOpenChange, course, onSaved }: CourseDialogProps) {
   const editing = Boolean(course?.id)
   const [form, setForm] = useState<CourseFormValues>(emptyCourse())
   const [error, setError] = useState<string | null>(null)
@@ -87,7 +203,9 @@ export function CourseDialog({ open, onOpenChange, teachers, course, onSaved }: 
         academicYear: form.academicYear,
         school: form.school,
         furtherInformation: form.furtherInformation,
-        teacherId: form.teacherId,
+        // The multi-teacher field. Sent even when empty, so clearing every chip
+        // actually unassigns rather than leaving the previous team in place.
+        teacherEmails: form.teacherEmails,
       }
 
       const res = await fetch("/api/admin/courses", {
@@ -136,11 +254,32 @@ export function CourseDialog({ open, onOpenChange, teachers, course, onSaved }: 
             </div>
             <div className="space-y-2">
               <Label htmlFor="semester">Semester</Label>
-              <Input
-                id="semester"
+              {/*
+                `value` is the raw form value, so an empty string means "nothing
+                chosen" and Radix renders the placeholder. A sentinel such as
+                "__none__" would match no item, and Radix then shows neither a
+                value nor the placeholder — the trigger collapsed to a bare box.
+              */}
+              <Select
                 value={form.semester}
-                onChange={(e) => set("semester", e.target.value)}
-              />
+                onValueChange={(value) => set("semester", value)}
+              >
+                <SelectTrigger id="semester" className="w-full">
+                  <SelectValue placeholder="Select semester" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SEMESTERS.map((semester) => (
+                    <SelectItem key={semester} value={semester}>
+                      {semester}
+                    </SelectItem>
+                  ))}
+                  {/* An existing course may hold a value outside the list; show it
+                      rather than silently blanking the field on edit. */}
+                  {form.semester && !SEMESTERS.includes(form.semester as any) ? (
+                    <SelectItem value={form.semester}>{form.semester}</SelectItem>
+                  ) : null}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -156,11 +295,23 @@ export function CourseDialog({ open, onOpenChange, teachers, course, onSaved }: 
 
           <div className="space-y-2">
             <Label htmlFor="school">School</Label>
-            <Input
-              id="school"
-              value={form.school}
-              onChange={(e) => set("school", e.target.value)}
-            />
+            <Select value={form.school} onValueChange={(value) => set("school", value)}>
+              <SelectTrigger id="school" className="w-full">
+                <SelectValue placeholder="Select a school" />
+              </SelectTrigger>
+              <SelectContent>
+                {SCHOOLS.map((school) => (
+                  <SelectItem key={school} value={school}>
+                    {school}
+                  </SelectItem>
+                ))}
+                {/* Same reason as semester: editing a course whose school is not
+                    in the list must not lose the stored value. */}
+                {form.school && !SCHOOLS.includes(form.school as any) ? (
+                  <SelectItem value={form.school}>{form.school}</SelectItem>
+                ) : null}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
@@ -174,25 +325,14 @@ export function CourseDialog({ open, onOpenChange, teachers, course, onSaved }: 
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="course-teacher">Assigned teacher</Label>
-            <Select
-              value={form.teacherId ?? UNASSIGNED}
-              onValueChange={(value) => set("teacherId", value === UNASSIGNED ? null : value)}
-            >
-              <SelectTrigger id="course-teacher">
-                <SelectValue placeholder="Unassigned" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={UNASSIGNED}>Unassigned — assign later</SelectItem>
-                {teachers.map((teacher) => (
-                  <SelectItem key={teacher.id} value={teacher.id}>
-                    {teacher.full_name || teacher.email}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label htmlFor="course-teacher">Assigned teachers</Label>
+            <TeacherEmailInput
+              emails={form.teacherEmails}
+              onChange={(emails) => set("teacherEmails", emails)}
+            />
             <p className="text-xs text-muted-foreground">
-              The assigned teacher owns the course and can upload materials and post to it.
+              Every teacher listed can upload materials and post to the course. Leave empty to
+              assign later.
             </p>
           </div>
 

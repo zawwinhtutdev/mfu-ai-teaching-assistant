@@ -168,7 +168,18 @@ export async function assertCourseAccess(
   }
 
   if (principal.role === "teacher") {
-    return course.teacher_id === principal.userId ? course : null
+    // A course can have several teachers. `teacher_id` is the primary owner, so
+    // checking it alone locked co-teachers out of every route.
+    if (course.teacher_id === principal.userId) return course
+
+    const { data: membership } = await supabase
+      .from("course_teachers")
+      .select("course_id")
+      .eq("course_id", course.id)
+      .eq("teacher_id", principal.userId)
+      .maybeSingle()
+
+    return membership ? course : null
   }
 
   const { data: enrollment } = await supabase
