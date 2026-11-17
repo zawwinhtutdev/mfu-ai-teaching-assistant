@@ -101,6 +101,9 @@ export async function POST(req: Request) {
       const queuedJobs = await queueReminderNotificationJobs({
         supabase: supabase as any,
         userId: user.id,
+        // Resolve the destination here, where the profile is already in scope.
+        // The processor cannot look it up without a service-role client.
+        email: user.email,
         courseId,
         reminderId: reminder.id,
         reminderText,

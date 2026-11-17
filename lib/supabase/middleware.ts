@@ -23,6 +23,9 @@ const PUBLIC_PATHS = new Set([
   "/reset-password",
   "/auth/callback",
   "/terms",
+  // Linked from the signup consent checkbox, so it must be reachable before
+  // an account exists.
+  "/privacy",
   "/faq",
   "/admin/login",
 ])
