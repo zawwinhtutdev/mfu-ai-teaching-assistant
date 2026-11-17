@@ -87,4 +87,7 @@ def repair_citations(text: str, sources: list[Source]) -> tuple[str, list[Revisi
             1,
         )
 
+    # Collapse consecutive duplicate citations such as "[2] [2]" or "[2][2]".
+    repaired = re.sub(r"(\[\d+\])(?:\s*\1)+", r"\1", repaired)
+
     return repaired, revisions

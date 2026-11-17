@@ -68,3 +68,26 @@ def test_marker_beyond_sources_is_ignored() -> None:
     repaired, revisions = repair_citations(text, sources)
     assert repaired == text
     assert revisions == []
+
+
+def test_duplicate_adjacent_citations_are_collapsed() -> None:
+    sources = [
+        _source(1, "Requirements analysis creates the SRS."),
+        _source(2, "System design produces the SDD."),
+    ]
+    text = "- **System Design**: Produces the SDD [2] [2]."
+    repaired, _ = repair_citations(text, sources)
+    assert "[2] [2]" not in repaired
+    assert "[2]" in repaired
+
+
+def test_normalize_output_structure_splits_inline_bullets() -> None:
+    from app.rag.pipeline import normalize_output_structure
+
+    raw = (
+        "- **Requirements Analysis** [1] [1]: Gather requirements. "
+        "- **System Design** [2]: Transform into architecture."
+    )
+    cleaned = normalize_output_structure(raw)
+    assert "[1] [1]" not in cleaned
+    assert "\n- **System Design**" in cleaned

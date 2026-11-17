@@ -29,14 +29,12 @@ import {
   Lock,
   Mail,
   MessageCircle,
-  Moon,
   Shield,
   User,
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/types";
-import { useTheme } from "next-themes";
 
 const formSchema = z.object({
   language: z.string(),
@@ -87,7 +85,6 @@ function Row({
 }
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
   const [userProfile, setUserProfile] = React.useState<Profile | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = React.useState(true);
@@ -101,7 +98,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     resolver: zodResolver(formSchema),
     defaultValues: {
       language: "en",
-      theme: theme || "system",
+      theme: "light",
       emailNotifications: true,
       lineNotification: false,
       twoFactorAuth: false,
@@ -111,8 +108,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   });
 
   React.useEffect(() => {
-    if (mounted && theme) form.setValue("theme", theme);
-  }, [theme, mounted, form]);
+    if (mounted) form.setValue("theme", "light");
+  }, [mounted, form]);
 
   React.useEffect(() => {
     const fetchUserProfile = async () => {
@@ -149,7 +146,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               id: user.id,
               email: user.email || "user@mfu.ac.th",
               full_name: user.user_metadata?.full_name || null,
-              role: (user.user_metadata?.role as "student" | "teacher") || "student",
+              // Never take the role from metadata; lowest privilege on fallback.
+              role: "student",
               avatar_url: user.user_metadata?.avatar_url || null,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -170,7 +168,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     if (userProfile) {
       form.reset({
         language: form.getValues("language"),
-        theme: form.getValues("theme"),
+        theme: "light",
         emailNotifications: form.getValues("emailNotifications"),
         lineNotification: form.getValues("lineNotification"),
         twoFactorAuth: form.getValues("twoFactorAuth"),
@@ -211,7 +209,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     };
   }, []);
 
-  const isDark = mounted ? theme === "dark" : false;
+  const isDark = false;
   const roleLabel =
     userProfile?.role === "teacher" ? "Teacher Mode" : userProfile?.role === "admin" ? "Admin Mode" : "Student Mode";
   const showsSaveButton = activeTab !== "about";
@@ -357,12 +355,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         </FormItem>
                       )}
                     />
-                    <Row icon={<Moon size={18} />} label="Dark mode">
-                      <Switch
-                        checked={isDark}
-                        onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
-                      />
-                    </Row>
                   </>
                 )}
 

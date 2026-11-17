@@ -2,7 +2,9 @@ import React from "react";
 import { VideoPlayer } from "@/components/educve/videos/VideoPlayer";
 
 const aboutImg1 = "/home_1/about_img_1.jpg";
-const aboutImg2 = "/home_1/about_img_2.jpg";
+// Transparent PNG (white background knocked out) so the robot/panel art
+// composites over about_img_1 instead of covering it with a white box.
+const aboutImg2 = "/home_1/about_img_2.png";
 const circleText = "/home_1/about_circle_text.svg";
 
 export const AboutOne = () => {
@@ -25,7 +27,11 @@ export const AboutOne = () => {
                   <img src={aboutImg1} alt="Student using MFU AI" />
                 </div>
                 <div className="td_about_thumb_2">
-                  <img src={aboutImg2} alt="Teacher reviewing platform insights" />
+                  <img
+                    src={aboutImg2}
+                    alt="Teacher reviewing platform insights"
+                    className="td_thumb_cutout"
+                  />
                 </div>
 
                 <VideoPlayer

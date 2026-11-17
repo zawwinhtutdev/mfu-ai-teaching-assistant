@@ -3,6 +3,9 @@
 Vector search alone misses exact identifiers (course codes, "Section 4.2",
 error strings); lexical search alone misses paraphrase. Reciprocal Rank Fusion
 combines both without needing score calibration between them.
+
+Scoping is authorization, not filtering: every query is constrained to the
+course ids the caller may read.
 """
 
 from __future__ import annotations
@@ -39,9 +42,11 @@ select c.id, c.document_id, c.content, c.page_from, c.page_to, c.section,
        false as from_lexical,
        row_number() over (order by c.embedding <=> cast(:vector as vector)) as rank
 from document_chunks c
-where (cast(:course_id as text) is null or c.document_id in (
-    select id from documents where course_id = cast(:course_id as text)
-))
+where c.document_id in (
+    select id from documents
+    where (cast(:course_ids as text[]) is null or course_id = any(cast(:course_ids as text[])))
+      and (cast(:document_ids as uuid[]) is null or id = any(cast(:document_ids as uuid[])))
+)
 order by c.embedding <=> cast(:vector as vector)
 limit :pool
 """
@@ -53,9 +58,11 @@ select c.id, c.document_id, c.content, c.page_from, c.page_to, c.section,
        row_number() over (order by ts_rank(c.tsv, plainto_tsquery('english', :query)) desc) as rank
 from document_chunks c
 where c.tsv @@ plainto_tsquery('english', :query)
-  and (cast(:course_id as text) is null or c.document_id in (
-      select id from documents where course_id = cast(:course_id as text)
-  ))
+  and c.document_id in (
+      select id from documents
+      where (cast(:course_ids as text[]) is null or course_id = any(cast(:course_ids as text[])))
+        and (cast(:document_ids as uuid[]) is null or id = any(cast(:document_ids as uuid[])))
+  )
 order by ts_rank(c.tsv, plainto_tsquery('english', :query)) desc
 limit :pool
 """
@@ -88,6 +95,90 @@ limit :limit
 """
 
 
+_DOC_CHUNKS_SQL = """
+with target_docs as (
+    select d.id, d.filename, d.created_at,
+           coalesce(
+               d.page_count,
+               (
+                   select max(coalesce(c2.page_to, c2.page_from))
+                   from document_chunks c2
+                   where c2.document_id = d.id
+               )
+           ) as max_page
+    from documents d
+    where d.status = 'ready'
+      and (cast(:course_ids as text[]) is null or d.course_id = any(cast(:course_ids as text[])))
+      and (cast(:document_ids as uuid[]) is null or d.id = any(cast(:document_ids as uuid[])))
+)
+select c.id, c.document_id, td.filename, c.content, c.page_from, c.page_to, c.section,
+       1.0::float as score,
+       1.0::float as similarity,
+       true as matched_lexically
+from document_chunks c
+join target_docs td on td.id = c.document_id
+where (
+    cast(:page_number as integer) is null
+    or (
+        cast(:page_number as integer) = -1
+        and td.max_page is not null
+        and c.page_from is not null
+        and c.page_from <= td.max_page
+        and coalesce(c.page_to, c.page_from) >= td.max_page
+    )
+    or (
+        cast(:page_number as integer) > 0
+        and c.page_from is not null
+        and c.page_from <= cast(:page_number as integer)
+        and coalesce(c.page_to, c.page_from) >= cast(:page_number as integer)
+    )
+)
+order by td.created_at desc, c.chunk_index asc
+limit :limit
+"""
+
+
+async def fetch_document_chunks(
+    session: AsyncSession,
+    *,
+    course_ids: list[str] | None = None,
+    document_ids: list[uuid.UUID] | None = None,
+    page_number: int | None = None,
+    limit: int = 10,
+) -> list[SearchHit]:
+    """Fetch ordered chunks for page-level or document-overview queries."""
+    if course_ids is not None and not course_ids:
+        return []
+    if document_ids is not None and not document_ids:
+        return []
+
+    rows = await session.execute(
+        text(_DOC_CHUNKS_SQL),
+        {
+            "course_ids": list(course_ids) if course_ids is not None else None,
+            "document_ids": list(document_ids) if document_ids is not None else None,
+            "page_number": page_number,
+            "limit": limit,
+        },
+    )
+
+    return [
+        SearchHit(
+            chunk_id=row.id,
+            document_id=row.document_id,
+            filename=row.filename,
+            content=row.content,
+            page_from=row.page_from,
+            page_to=row.page_to,
+            section=row.section,
+            score=float(row.score),
+            similarity=float(row.similarity) if row.similarity is not None else None,
+            matched_lexically=bool(row.matched_lexically),
+        )
+        for row in rows
+    ]
+
+
 def _vector_literal(vector: list[float]) -> str:
     return "[" + ",".join(f"{v:.6f}" for v in vector) + "]"
 
@@ -97,12 +188,28 @@ async def hybrid_search(
     *,
     query: str,
     vector: list[float],
-    course_id: str | None = None,
+    course_ids: list[str] | None = None,
+    document_ids: list[uuid.UUID] | None = None,
     limit: int = 5,
     pool: int = 30,
     mode: str = "hybrid",
 ) -> list[SearchHit]:
+    """Rank chunks for a query inside an explicit course scope.
+
+    ``course_ids`` is the caller's authorization scope, not a UI filter: ``None``
+    means unrestricted (admin only) and an empty list means "no courses" and
+    returns nothing. Callers pass ``course_scope_for(...)`` directly, so an
+    unauthenticated or unscoped request can never read the whole corpus.
+    ``document_ids`` optionally narrows retrieval to specific selected PDFs
+    within that same authorized course scope.
+    """
     if not query.strip():
+        return []
+
+    if course_ids is not None and not course_ids:
+        return []
+
+    if document_ids is not None and not document_ids:
         return []
 
     if mode == "vector":
@@ -122,7 +229,8 @@ async def hybrid_search(
         {
             "vector": _vector_literal(vector),
             "query": query,
-            "course_id": str(course_id) if course_id else None,
+            "course_ids": list(course_ids) if course_ids is not None else None,
+            "document_ids": list(document_ids) if document_ids is not None else None,
             "pool": pool,
             "limit": limit,
             "rrf_k": RRF_K,

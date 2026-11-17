@@ -75,6 +75,22 @@ class Settings(BaseSettings):
         default="nomic-embed-text",
         validation_alias=AliasChoices("OLLAMA_EMBEDDING_MODEL"),
     )
+    ollama_vision_model: str = Field(
+        default="qwen2.5vl:7b",
+        validation_alias=AliasChoices("OLLAMA_VISION_MODEL"),
+    )
+    pdf_vision_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("PDF_VISION_ENABLED"),
+    )
+    pdf_vision_max_pages: int = Field(
+        default=15,
+        validation_alias=AliasChoices("PDF_VISION_MAX_PAGES"),
+    )
+    pdf_vision_min_image_px: int = Field(
+        default=140,
+        validation_alias=AliasChoices("PDF_VISION_MIN_IMAGE_PX"),
+    )
 
     # ---- Local development only ----
     # Allows X-Dev-Principal in place of a bearer token so the demo can run

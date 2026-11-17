@@ -1,7 +1,55 @@
+"use client"
+
+import { Suspense, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { EducveStyleLinks } from "@/components/educve/EducveStyleLinks"
 import { InnerPageLayout } from "@/components/educve/InnerPageLayout"
+import { createClient } from "@/lib/supabase/client"
+
+const noticeStyle = {
+  borderRadius: 10,
+  padding: "12px 18px",
+  fontSize: 15,
+  fontWeight: 500,
+  marginBottom: 16,
+}
 
 export default function SignUpSuccessPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignUpSuccessContent />
+    </Suspense>
+  )
+}
+
+function SignUpSuccessContent() {
+  const searchParams = useSearchParams()
+  const email = (searchParams.get("email") || "").trim()
+
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle")
+  const [message, setMessage] = useState<string | null>(null)
+
+  const resend = async () => {
+    if (!email) return
+    setStatus("sending")
+    setMessage(null)
+
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email,
+        options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      })
+      if (error) throw error
+      setStatus("sent")
+      setMessage("Confirmation email sent again. Check your inbox and spam folder.")
+    } catch (resendError) {
+      setStatus("error")
+      setMessage(resendError instanceof Error ? resendError.message : "Could not resend the email.")
+    }
+  }
+
   return (
     <>
       <EducveStyleLinks />
@@ -29,19 +77,64 @@ export default function SignUpSuccessPage() {
                       ✉️
                     </div>
                     <h2 className="td_fs_36 td_mb_20">Check Your Email</h2>
-                    <p className="td_fs_18 td_mb_30" style={{ color: "#666" }}>
-                      We&apos;ve sent you a confirmation link. Please check your email and click
-                      the link to activate your account. Once confirmed, you can log in and
-                      start using the platform.
+
+                    {email ? (
+                      <p className="td_fs_18 td_mb_15" style={{ color: "#666" }}>
+                        We sent a confirmation link to{" "}
+                        <strong style={{ color: "#222" }}>{email}</strong>. Open it to activate
+                        your account, then log in.
+                      </p>
+                    ) : (
+                      <p className="td_fs_18 td_mb_15" style={{ color: "#666" }}>
+                        We sent you a confirmation link. Open it to activate your account, then
+                        log in.
+                      </p>
+                    )}
+
+                    <p className="td_fs_16 td_mb_30" style={{ color: "#888" }}>
+                      The link expires in one hour. If you do not see it, check your spam folder.
                     </p>
-                    <a
-                      href="/login"
-                      className="td_btn td_style_1 td_radius_10 td_medium"
+
+                    {message ? (
+                      <div
+                        style={{
+                          ...noticeStyle,
+                          backgroundColor:
+                            status === "sent" ? "rgba(22, 163, 74, 0.12)" : "rgba(137, 12, 37, 0.12)",
+                          color: status === "sent" ? "#166534" : "#890C25",
+                        }}
+                      >
+                        {message}
+                      </div>
+                    ) : null}
+
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 12,
+                        justifyContent: "center",
+                        flexWrap: "wrap",
+                      }}
                     >
-                      <span className="td_btn_in td_white_color td_accent_bg">
-                        <span>Back to Login</span>
-                      </span>
-                    </a>
+                      <a href="/login" className="td_btn td_style_1 td_radius_10 td_medium">
+                        <span className="td_btn_in td_white_color td_accent_bg">
+                          <span>Back to Login</span>
+                        </span>
+                      </a>
+
+                      {email ? (
+                        <button
+                          type="button"
+                          onClick={() => void resend()}
+                          disabled={status === "sending"}
+                          className="td_btn td_style_1 td_radius_10 td_medium"
+                        >
+                          <span className="td_btn_in td_white_color td_gray_bg_7">
+                            <span>{status === "sending" ? "Sending…" : "Resend email"}</span>
+                          </span>
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               </div>

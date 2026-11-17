@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { cookies } from "next/headers"
-import { DEMO_ROLE_COOKIE, DEMO_EMAIL_COOKIE, isDemoRole } from "@/lib/demo-auth"
+import { DEMO_ROLE_COOKIE, DEMO_EMAIL_COOKIE, findDemoAccountByEmail } from "@/lib/demo-auth"
 
 function parseAdminEmails() {
   return new Set(
@@ -13,6 +13,29 @@ function parseAdminEmails() {
 
 export async function requireAdminUser() {
   const supabase = await createClient()
+  const cookieStore = await cookies()
+
+  // Demo identity wins when present: a demo sign-in clears Supabase auth
+  // cookies, so the two can never legitimately coexist. Checking it first keeps
+  // this helper consistent with the route middleware.
+  const demoRole = cookieStore.get(DEMO_ROLE_COOKIE)?.value
+  const demoEmail = cookieStore.get(DEMO_EMAIL_COOKIE)?.value
+  const demoAccount = findDemoAccountByEmail(demoEmail)
+
+  if (demoAccount?.role === "admin" && demoRole === "admin") {
+    return {
+      supabase,
+      user: { id: demoAccount.profileId, email: demoAccount.email } as any,
+      profile: {
+        id: demoAccount.profileId,
+        email: demoAccount.email,
+        role: "admin",
+        full_name: demoAccount.fullName,
+      },
+      isAdmin: true,
+    }
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -29,20 +52,6 @@ export async function requireAdminUser() {
       user,
       profile: profile || null,
       isAdmin,
-    }
-  }
-
-  // Check for demo admin user (cookie-based auth)
-  const cookieStore = await cookies()
-  const demoRole = cookieStore.get(DEMO_ROLE_COOKIE)?.value
-  const demoEmail = cookieStore.get(DEMO_EMAIL_COOKIE)?.value
-
-  if (isDemoRole(demoRole) && demoRole === "admin") {
-    return {
-      supabase,
-      user: { id: "mock-admin-1", email: demoEmail || "admin@mfu.ac.th" } as any,
-      profile: { id: "mock-admin-1", email: demoEmail || "admin@mfu.ac.th", role: "admin", full_name: "MFU Admin" },
-      isAdmin: true,
     }
   }
 

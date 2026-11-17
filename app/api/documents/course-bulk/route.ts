@@ -5,6 +5,7 @@ import { indexDocumentToGeminiFileSearch } from "@/lib/ai/gemini-file-search"
 import { extractCourseMaterialFileTexts, indexCourseMaterialContent } from "@/lib/ai/course-rag"
 import { trackApiError } from "@/lib/server/observability"
 import { uploadUserDocumentToSpaces, deleteObjectFromSpaces } from "@/lib/storage/spaces"
+import { isHttpsRequest } from "@/lib/server/request-security"
 import { DEMO_EMAIL_COOKIE, DEMO_ROLE_COOKIE, getDemoAccountByRole } from "@/lib/demo-auth"
 import {
   DEMO_COOKIE_MAX_AGE_SECONDS,
@@ -130,7 +131,7 @@ export async function POST(req: Request) {
       })
       response.cookies.set(DEMO_DOCUMENTS_COOKIE, writeDemoDocumentsCookie(demoAccount.email, merged), {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: await isHttpsRequest(),
         sameSite: "lax",
         path: "/",
         maxAge: DEMO_COOKIE_MAX_AGE_SECONDS,

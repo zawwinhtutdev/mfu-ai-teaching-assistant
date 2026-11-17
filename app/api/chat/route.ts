@@ -12,6 +12,7 @@ import {
   getUserGeminiFileSearchStoreName,
 } from "@/lib/ai/gemini-file-search"
 import { retrieveCourseRagContext } from "@/lib/ai/course-rag"
+import { createLocalChatResponse, shouldUseLocalChatService } from "@/lib/ai/local-chat"
 import { DEMO_EMAIL_COOKIE, DEMO_ROLE_COOKIE, getDemoAccountByRole } from "@/lib/demo-auth"
 import { getLatestReadyDemoStoreName, readDemoDocumentsCookie, type DemoDocumentRecord, DEMO_DOCUMENTS_COOKIE } from "@/lib/demo-documents"
 import { isPdfDocument } from "@/lib/documents/supported-formats"
@@ -638,6 +639,18 @@ Guidelines:
     ])
 
     console.log("[v0] Calling AI model with", messages.length, "messages")
+
+    // Local models are the default path: without a Gemini key we forward to the
+    // FastAPI/Ollama service and translate its SSE into the AI SDK stream shape.
+    if (shouldUseLocalChatService()) {
+      console.log("[v0] Routing chat to the local AI service")
+      return await createLocalChatResponse({
+        messages,
+        model: requestedModel,
+        courseId: requestedCourseId || null,
+        pdfRagEnabled: shouldUsePdfRag,
+      })
+    }
 
     // Initialize Gemini provider
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY

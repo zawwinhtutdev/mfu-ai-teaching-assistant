@@ -46,12 +46,12 @@ export async function getInitialEducveAuthState(): Promise<EducveInitialAuthStat
     return anonymousState
   }
 
-  let role = user.user_metadata?.role ?? user.app_metadata?.role ?? null
+  // Role comes from public.profiles only — user_metadata is user-writable, so
+  // reading it here would make the portal link spoofable.
+  let role: string | null = null
 
-  if (!role) {
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle()
-    role = profile?.role ?? null
-  }
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle()
+  role = profile?.role ?? null
 
   return {
     isAuthenticated: true,

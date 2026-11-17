@@ -85,9 +85,10 @@ export function TeacherDashboard({ profile, courses }: TeacherDashboardProps) {
       {/* Floating Action Button - Bottom Right */}
       <Button 
         onClick={() => setShowCreateDialog(true)}
-        className="fixed bottom-6 right-6 h-14 w-14 rounded-full bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 z-50 p-0"
+        className="mfp-pill fixed bottom-6 right-6 z-50 h-12 px-5 shadow-[0_10px_24px_-8px_rgba(0,0,0,0.45)]"
       >
-        <Plus className="h-6 w-6" />
+        <Plus size={18} />
+        <span style={{ marginLeft: 2 }}>New course</span>
       </Button>
       </motion.div>
     </LazyMotion>

@@ -16,8 +16,8 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
     image: ai-teaching-assistant-web:local
     container_name: ata-web
     restart: unless-stopped
@@ -26,8 +26,8 @@ services:
     environment:
       NODE_ENV: production
       # Auth + data still served by Supabase in this phase.
-      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
       # AI (chat stays degraded until a key is present)
       GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY:-}
@@ -59,16 +59,27 @@ services:
       - "8000:8000"
     environment:
       # Shares Supabase Auth with the web app; this service only verifies tokens.
-      SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
-      SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
       SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       GEMINI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY:-}
       CHAT_MODEL: ${CHAT_MODEL:-gemini-2.5-flash}
+      AI_PROVIDER: ${AI_PROVIDER:-ollama}
+      # Inside Docker, reach Ollama running on the host via host.docker.internal
+      OLLAMA_BASE_URL: ${DOCKER_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
+      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
+      OLLAMA_VISION_MODEL: ${OLLAMA_VISION_MODEL:-qwen2.5vl:7b}
+      PDF_VISION_ENABLED: ${PDF_VISION_ENABLED:-true}
+      REFUSAL_THRESHOLD: ${REFUSAL_THRESHOLD:-0.55}
+      CONTEXT_CHARS: ${CONTEXT_CHARS:-6000}
       ALLOW_INSECURE_DEV_AUTH: ${ALLOW_INSECURE_DEV_AUTH:-false}
       ENVIRONMENT: ${ENVIRONMENT:-local}
       # Only reachable when the `platform` profile is enabled.
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ata:ata-local-dev@db:5432/ata}
+      DATABASE_URL: ${DOCKER_DATABASE_URL:-postgresql+asyncpg://ata:ata-local-dev@db:5432/ata}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status==200 else 1)"]
       interval: 30s

@@ -7,6 +7,7 @@ import {
   getDemoAccountByRole,
 } from "@/lib/demo-auth"
 import { mockTeacherCourses } from "@/lib/mock-data"
+import { toUserRole } from "@/lib/auth/roles"
 
 /**
  * Lightweight teacher courses endpoint.
@@ -44,9 +45,11 @@ export async function GET() {
   }
 
   const user = session.user
-  const role = user.user_metadata?.role ?? user.app_metadata?.role ?? null
+  // Authoritative role lookup — never user_metadata (user-writable).
+  const { data: profileRow } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle()
+  const role = toUserRole(profileRow?.role)
 
-  if (role !== "teacher") {
+  if (role !== "teacher" && role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

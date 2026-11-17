@@ -7,6 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.academic import assert_course_access, course_scope_for, get_person
 from app.auth import CurrentPrincipal
 from app.config import Settings, get_settings
 from app.db import get_session
@@ -27,6 +28,14 @@ async def search(
     settings: SettingsDep,
     session: SessionDep,
 ) -> SearchResponse:
+    # Search reads the same corpus as chat, so it enforces the same scope.
+    person = await get_person(session, principal)
+    if request.course_id is not None:
+        await assert_course_access(session, person, request.course_id)
+        course_ids: list[str] | None = [request.course_id]
+    else:
+        course_ids = await course_scope_for(session, person)
+
     embedder = get_embedder(settings)
     vector = await embedder.embed_query(request.query)
 
@@ -34,7 +43,8 @@ async def search(
         session,
         query=request.query,
         vector=vector,
-        course_id=request.course_id,
+        course_ids=course_ids,
+        document_ids=request.document_ids,
         limit=request.limit,
     )
 

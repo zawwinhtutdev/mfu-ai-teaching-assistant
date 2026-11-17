@@ -1,11 +1,11 @@
 "use client"
 
 import type React from "react"
-import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { EducveStyleLinks } from "@/components/educve/EducveStyleLinks"
 import { BrandIcon } from "@/components/brand-icon"
+import { toUserRole } from "@/lib/auth/roles"
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("")
@@ -13,7 +13,42 @@ export default function AdminLoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const router = useRouter()
+  const [signedInAs, setSignedInAs] = useState<{ role: string; email: string; fullName: string } | null>(null)
+  const [denied, setDenied] = useState(false)
+
+  // Explain why an admin-page visit landed back here: either the guard sent the
+  // visitor away (?denied=admin) or a non-admin demo account is still signed in.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    setDenied(params.get("denied") === "admin")
+
+    let cancelled = false
+    fetch("/api/demo-auth/session", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((payload) => {
+        if (cancelled) return
+        const account = payload?.isDemo ? payload.account : null
+        setSignedInAs(account && account.role !== "admin" ? account : null)
+      })
+      .catch(() => {
+        /* ignore — the form still works */
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const handleSignOut = async () => {
+    try {
+      await fetch("/api/demo-auth/logout", { method: "POST" })
+      const { createClient } = await import("@/lib/supabase/client")
+      await createClient().auth.signOut()
+    } catch {
+      /* ignore — reloading is still the right next step */
+    }
+    window.location.assign("/admin/login")
+  }
 
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -31,8 +66,9 @@ export default function AdminLoginPage() {
       if (demoRes.ok) {
         const payload = await demoRes.json()
         if (payload?.account?.role === "admin") {
-          router.push("/admin/dashboard")
-          router.refresh()
+          // Full navigation so the new cookies are visible to the middleware
+          // on the very first request for /admin/dashboard.
+          window.location.assign("/admin/dashboard")
           return
         } else {
           // Demo account found but not admin
@@ -66,15 +102,16 @@ export default function AdminLoginPage() {
         .eq("id", data.user.id)
         .single()
 
-      const role = profile?.role ?? data.user.user_metadata?.role
+      // Authoritative role check. user_metadata is user-writable and must never
+      // be consulted here — doing so would let any account claim admin.
+      const role = toUserRole(profile?.role)
 
       if (role !== "admin") {
         await supabase.auth.signOut()
         throw new Error("Access denied — this account does not have admin privileges.")
       }
 
-      router.push("/admin/dashboard")
-      router.refresh()
+      window.location.assign("/admin/dashboard")
     } catch (loginError: unknown) {
       setError(loginError instanceof Error ? loginError.message : "An error occurred")
     } finally {
@@ -274,6 +311,49 @@ export default function AdminLoginPage() {
               </svg>
               Restricted — University IT &amp; authorized staff only
             </div>
+
+            {/* Why am I here? */}
+            {(denied || signedInAs) && (
+              <div
+                style={{
+                  padding: "14px 16px",
+                  borderRadius: "8px",
+                  background: "#fff7e6",
+                  border: "1px solid #f0d9a8",
+                  color: "#7a5200",
+                  fontSize: "14px",
+                  lineHeight: 1.55,
+                  marginBottom: "24px",
+                }}
+              >
+                {signedInAs ? (
+                  <>
+                    You are signed in as <strong>{signedInAs.email}</strong> ({signedInAs.role}). The Admin
+                    Console requires an admin account.
+                  </>
+                ) : (
+                  <>The account you are signed in with does not have access to the Admin Console.</>
+                )}
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  style={{
+                    display: "inline-block",
+                    marginTop: "10px",
+                    padding: "6px 12px",
+                    borderRadius: "6px",
+                    border: "1px solid #d9b56b",
+                    background: "#fff",
+                    color: "#7a5200",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Sign out and switch account
+                </button>
+              </div>
+            )}
 
             {/* Error */}
             {error && (

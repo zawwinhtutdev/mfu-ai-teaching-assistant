@@ -111,7 +111,7 @@ async def _roundtrip() -> None:
             query = "late submission penalty"
             vector = await embedder.embed_query(query)
             hits = await hybrid_search(
-                session, query=query, vector=vector, limit=5, course_id=course_id
+                session, query=query, vector=vector, limit=5, course_ids=[course_id]
             )
             assert hits, "expected at least one hit"
             assert any(
@@ -128,7 +128,7 @@ async def _roundtrip() -> None:
                 query=exact,
                 vector=await embedder.embed_query(exact),
                 limit=5,
-                course_id=course_id,
+                course_ids=[course_id],
             )
             assert any("CS303" in hit.content for hit in exact_hits)
 
@@ -139,10 +139,35 @@ async def _roundtrip() -> None:
                 query=other,
                 vector=await embedder.embed_query(other),
                 limit=5,
-                course_id=course_id,
+                course_ids=[course_id],
             )
             no_exact_match = not any("CS303" in hit.content for hit in other_hits)
             assert no_exact_match or other_hits[0].score <= hits[0].score
+
+            # A caller scoped to another course sees nothing, even though the
+            # chunks exist: the scope is authorization, not a ranking hint.
+            assert (
+                await hybrid_search(
+                    session,
+                    query="late submission penalty",
+                    vector=await embedder.embed_query("late submission penalty"),
+                    limit=5,
+                    course_ids=[f"course-other-{uuid.uuid4()}"],
+                )
+                == []
+            )
+
+            # An empty scope means "no courses", never "all courses".
+            assert (
+                await hybrid_search(
+                    session,
+                    query="late submission penalty",
+                    vector=await embedder.embed_query("late submission penalty"),
+                    limit=5,
+                    course_ids=[],
+                )
+                == []
+            )
 
         finally:
             await session.execute(

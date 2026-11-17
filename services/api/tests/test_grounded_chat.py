@@ -129,7 +129,7 @@ async def _grounded_reply() -> None:
                 settings=_settings(),
                 provider=StubProvider(),
                 session=session,
-                course_id=course_id,
+                course_ids=[course_id],
             )
         ]
 
@@ -273,3 +273,76 @@ async def _ungrounded() -> None:
     assert sources.sources == []  # type: ignore[attr-defined]
     assert any(e.type == "start" for e in events)
     await dispose_engine()
+
+
+def test_overview_page_query_on_selected_document_answers_despite_low_similarity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    asyncio.run(_overview_page_query(monkeypatch))
+
+
+async def _overview_page_query(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.rag.pipeline as pipeline
+    from app.providers.stub import StubProvider
+    from app.rag.search import SearchHit
+    from app.schemas import ChatMessage
+
+    doc_id = uuid.uuid4()
+
+    class _SemanticEmbedder:
+        name = "ollama-nomic"
+        dim = 768
+
+        async def embed(self, texts: list[str]) -> list[list[float]]:
+            return [[0.1] * 768 for _ in texts]
+
+        async def embed_query(self, text: str) -> list[float]:
+            return [0.1] * 768
+
+    async def _meta_search(*args: object, **kwargs: object) -> list[SearchHit]:
+        return [
+            SearchHit(
+                chunk_id=uuid.uuid4(),
+                document_id=doc_id,
+                filename="1.Software Development Life Cycle.pdf",
+                content="SDLC is a framework defining tasks performed at each step.",
+                page_from=1,
+                page_to=1,
+                section="SDLC",
+                score=0.016,
+                similarity=0.48,
+                matched_lexically=False,
+            )
+        ]
+
+    monkeypatch.setattr(pipeline, "get_embedder", lambda settings: _SemanticEmbedder())
+    monkeypatch.setattr(pipeline, "hybrid_search", _meta_search)
+
+    events = [
+        event
+        async for event in stream_grounded_reply_events(
+            messages=[
+                ChatMessage(
+                    role="user",
+                    content="explain what are said in the first page with bullet points",
+                )
+            ],
+            settings=_settings(refusal_threshold=0.55),
+            provider=StubProvider(),
+            session=object(),  # type: ignore[arg-type]
+            document_ids=[doc_id],
+        )
+    ]
+
+    done = [e for e in events if e.type == "done"][-1]
+    assert done.refusal is False  # type: ignore[attr-defined]
+    assert any(e.type == "start" for e in events)
+
+
+def test_last_page_query_detection() -> None:
+    from app.rag.pipeline import extract_requested_page, is_overview_query
+
+    assert extract_requested_page("what are said at the last page") == -1
+    assert extract_requested_page("summarize the final page") == -1
+    assert extract_requested_page("explain page 2") == 2
+    assert is_overview_query("what are said at the last page") is True

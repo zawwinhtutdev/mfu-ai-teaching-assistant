@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { isHttpsRequest } from "@/lib/server/request-security"
 import { DEMO_EMAIL_COOKIE, DEMO_ROLE_COOKIE } from "@/lib/demo-auth"
 import { DEMO_CONVERSATIONS_COOKIE } from "@/lib/demo-conversations"
 import { DEMO_DOCUMENTS_COOKIE } from "@/lib/demo-documents"
@@ -8,7 +9,7 @@ export async function POST() {
 
   response.cookies.set(DEMO_ROLE_COOKIE, "", {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: await isHttpsRequest(),
     sameSite: "lax",
     path: "/",
     maxAge: 0,
@@ -16,7 +17,7 @@ export async function POST() {
 
   response.cookies.set(DEMO_EMAIL_COOKIE, "", {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: await isHttpsRequest(),
     sameSite: "lax",
     path: "/",
     maxAge: 0,
@@ -24,7 +25,7 @@ export async function POST() {
 
   response.cookies.set(DEMO_DOCUMENTS_COOKIE, "", {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: await isHttpsRequest(),
     sameSite: "lax",
     path: "/",
     maxAge: 0,
@@ -32,7 +33,7 @@ export async function POST() {
 
   response.cookies.set(DEMO_CONVERSATIONS_COOKIE, "", {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: await isHttpsRequest(),
     sameSite: "lax",
     path: "/",
     maxAge: 0,
