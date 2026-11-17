@@ -1,75 +1,85 @@
-import { generateText, Output } from "ai"
-import { google } from "@ai-sdk/google"
 import { z } from "zod"
-import { createClient } from "@/lib/supabase/server"
+
 import { getCourseMaterialSourceText } from "@/lib/ai/course-rag"
+import { completeStructured } from "@/lib/ai/text-generation"
+import { assertCourseAccess, clientForPrincipal, resolvePrincipal } from "@/lib/server/principal"
 
 const quizSchema = z.object({
   title: z.string(),
   questions: z.array(
     z.object({
       question: z.string(),
-      options: z.array(z.string()).length(4),
-      correct_answer: z.number().min(0).max(3),
+      options: z.array(z.string()),
+      correct_answer: z.number(),
     }),
   ),
 })
 
 export async function POST(req: Request) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  const principal = await resolvePrincipal()
+  if (!principal) {
     return Response.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const { materialId, courseId } = await req.json()
+  const { materialId } = await req.json()
+  if (!materialId) {
+    return Response.json({ error: "materialId is required" }, { status: 400 })
+  }
 
-  // Get material content
-  const { data: material } = await supabase.from("course_materials").select("*").eq("id", materialId).single()
+  const supabase = await clientForPrincipal(principal)
+
+  const { data: material } = await supabase
+    .from("course_materials")
+    .select("id, course_id, title, content")
+    .eq("id", materialId)
+    .maybeSingle()
 
   if (!material) {
     return Response.json({ error: "Material not found" }, { status: 404 })
   }
 
-  const materialSource = await getCourseMaterialSourceText({
-    supabase: supabase as any,
-    materialId,
-  })
+  if (!(await assertCourseAccess(principal, material.course_id))) {
+    return Response.json({ error: "You do not have access to this material" }, { status: 403 })
+  }
 
-  // Generate quiz
-  const { output } = await generateText({
-    model: google("gemini-3.8-flash"),
-    output: Output.object({ schema: quizSchema }),
-    prompt: `Generate a quiz with 5 multiple-choice questions based on the following educational material.
+  try {
+    const materialSource = await getCourseMaterialSourceText({
+      supabase: supabase as any,
+      materialId,
+    })
+
+    const result = await completeStructured(
+      `Create a short multiple-choice quiz about the following material.
 
 Material Title: ${materialSource.title}
 Content:
 ${materialSource.text}
 
-For each question:
-- Create a clear, specific question
-- Provide 4 answer options (A, B, C, D)
-- Mark the correct answer (0-3 index)
-- Ensure questions test understanding, not just memorization
-- Vary difficulty levels
+Write 5 questions. Each question must have exactly 4 options and one correct
+answer. "correct_answer" is the zero-based index of the correct option (0-3).
+Questions must be answerable from the material alone.
 
-Return a quiz title and the questions array.`,
-  })
+Return JSON exactly in this shape:
+{"title":"...","questions":[{"question":"...","options":["a","b","c","d"],"correct_answer":0}]}`,
+      quizSchema,
+      { system: "You write quiz questions from course material. Never invent facts." },
+    )
 
-  // Save quiz to database
-  const { data: savedQuiz, error } = await supabase
-    .from("quizzes")
-    .insert({
-      course_id: courseId,
-      title: output.title,
-      questions: output.questions,
-    })
-    .select()
-    .single()
+    // A model that returns the wrong number of options would break the UI's
+    // rendering silently, so reject it rather than shipping a malformed quiz.
+    const malformed = result.questions.find(
+      (question) =>
+        question.options.length !== 4 ||
+        question.correct_answer < 0 ||
+        question.correct_answer > 3,
+    )
+    if (malformed) {
+      throw new Error("The model returned a question without exactly four options or a valid answer index")
+    }
 
-  if (error) {
-    return Response.json({ error: error.message }, { status: 500 })
+    return Response.json(result)
+  } catch (error: any) {
+    console.error("[quiz] failed:", error?.message || error)
+    return Response.json({ error: error?.message || "Could not generate a quiz" }, { status: 502 })
   }
-
-  return Response.json({ quiz: savedQuiz })
 }
