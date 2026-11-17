@@ -9,16 +9,30 @@ export function isNotificationsTableMissing(error: any) {
 export async function queueReminderNotificationJobs(params: {
   supabase: SupabaseLikeClient
   userId: string
+  /** Where to deliver email reminders. Required for the email channel. */
+  email?: string | null
   courseId: string
   reminderId: string
   reminderText: string
   reminderTime: string
   lineEnabled?: boolean
+  /** LINE user id, when the student has linked one. */
+  lineUserId?: string | null
 }) {
+  // The processor reads `payload.email` (and `payload.lineUserId`) to decide
+  // where to send. Leaving them out of the payload — which is what happened
+  // before — made every queued job fail with "Missing email destination", so
+  // the scheduler ran daily and delivered nothing.
+  if (!params.email && !params.lineUserId) {
+    throw new Error("No delivery destination: the student has no email or LINE id on file")
+  }
+
   const basePayload = {
     reminderId: params.reminderId,
     reminderText: params.reminderText,
     reminderTime: params.reminderTime,
+    ...(params.email ? { email: params.email } : {}),
+    ...(params.lineUserId ? { lineUserId: params.lineUserId } : {}),
   }
 
   const jobs = [
@@ -33,7 +47,9 @@ export async function queueReminderNotificationJobs(params: {
     },
   ] as any[]
 
-  if (params.lineEnabled) {
+  // LINE is only offered when a destination exists. Queuing a job that the
+  // processor is guaranteed to reject just produces noise in the admin view.
+  if (params.lineEnabled && params.lineUserId) {
     jobs.push({
       user_id: params.userId,
       course_id: params.courseId,
