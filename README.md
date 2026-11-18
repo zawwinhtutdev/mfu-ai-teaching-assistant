@@ -179,7 +179,7 @@ cp .env.example .env.local
 supabase start
 supabase db reset          # applies migrations + seed demo content
 
-# Paste the API URL and anon key printed by `supabase status` into .env.local
+# Paste the API URL, anon key and service_role key from `supabase status` into .env.local
 npm run dev
 ```
 

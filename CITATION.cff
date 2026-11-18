@@ -5,8 +5,8 @@ abstract: "A course-scoped RAG teaching assistant: isolated course retrieval, ve
 authors:
   - family-names: Htut
     given-names: Zaw Win
-    alias: zawwinhuttt
-    website: "https://github.com/zawwinhuttt"
+    alias: zawwinhtutdev
+    website: "https://github.com/zawwinhtutdev"
 version: 1.0.0
 date-released: 2026-11-19
 license: MIT
