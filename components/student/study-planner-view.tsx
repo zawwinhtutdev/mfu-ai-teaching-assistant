@@ -29,6 +29,22 @@ const PRIORITY_COLORS = {
   high: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
 }
 
+/**
+ * A plan's due date is a calendar date, not an instant.
+ *
+ * `new Date("2026-11-19")` parses as UTC midnight, so `toLocaleDateString()`
+ * renders the 18th for anyone west of UTC — a task due on the 19th appears a day
+ * early. Reading the parts back in UTC keeps the date the teacher and student
+ * agreed on.
+ */
+function formatPlanDate(value: string): string {
+  // Accept both "2026-11-19" and a full timestamp.
+  const date = new Date(value.length === 10 ? `${value}T00:00:00Z` : value)
+  if (Number.isNaN(date.getTime())) return value
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${pad(date.getUTCDate())}/${pad(date.getUTCMonth() + 1)}/${date.getUTCFullYear()}`
+}
+
 export function StudyPlannerView({ courseId, courseName }: StudyPlannerViewProps) {
   const [plans, setPlans] = useState<StudyPlan[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -227,7 +243,7 @@ export function StudyPlannerView({ courseId, courseName }: StudyPlannerViewProps
                     {plan.due_date && (
                       <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
-                        {new Date(plan.due_date).toLocaleDateString()}
+                        {formatPlanDate(plan.due_date)}
                       </p>
                     )}
                   </div>
