@@ -1,0 +1,56 @@
+# Caddy reverse proxy for the AI Teaching Assistant.
+#
+# Automatic HTTPS: Caddy obtains and renews a Let's Encrypt certificate for
+# $SITE_ADDRESS. That requires a real hostname pointing at this server and
+# ports 80/443 reachable — both are open in ufw.
+#
+# To run without a domain (temporary verification), set SITE_ADDRESS to :80 in
+# .env.production. The site then serves plain HTTP and Caddy skips TLS.
+
+{
+	# Reply to ACME challenges on 80 even while redirecting everything else.
+	email {$ACME_EMAIL:admin@mfu.ac.th}
+
+	servers {
+		protocols h1 h2 h3
+	}
+}
+
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	# Security headers. Applied here rather than only in next.config.mjs so
+	# they also cover static assets and error pages served by Caddy.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		# Do not advertise the stack.
+		-Server
+	}
+
+	# Health endpoint is intentionally not cached, so a proxy or browser cannot
+	# serve a stale "ok" while the app is down.
+	@health path /api/health
+	header @health Cache-Control "no-store"
+
+	reverse_proxy web:3000 {
+		# Pass the real client IP through; the app records it in audit logs.
+		header_up X-Real-IP {remote_host}
+
+		# Streaming responses (chat) must not be buffered or they arrive in one
+		# chunk after the model finishes, defeating the point.
+		flush_interval -1
+
+		health_uri /api/health
+		health_interval 30s
+		health_timeout 10s
+	}
+
+	# Uploads and generated documents can be large.
+	request_body {
+		max_size 55MB
+	}
+}
