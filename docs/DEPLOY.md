@@ -198,6 +198,35 @@ Images are built locally, so the previous commit rebuilds to its prior state.
 Migrations are not rolled back — if a deploy included a schema change, revert
 it with a new migration rather than `supabase db reset` against production.
 
+## Rate limiting
+
+The AI routes (`/api/chat`, `/api/summarize`, `/api/generate-quiz`,
+`/api/generate-flashcards`, and AI plan generation in `/api/study-planner`) are
+limited per signed-in account, so one heavy user cannot exhaust the Gemini quota
+or starve a shared local model:
+
+| Route | Limit |
+|---|---|
+| `/api/chat` | 30 requests / minute |
+| Summarize, quiz, flashcards | 12 requests / minute (each) |
+| Study planner (AI generation) | 20 requests / minute |
+
+Limits are keyed on the authenticated user id rather than IP, because students
+behind the campus NAT share one address — an IP-keyed limit would let one person
+lock out a whole classroom. A refused request returns `429` with `Retry-After`
+and `X-RateLimit-*` headers.
+
+The counters live in the web process's memory. Two consequences:
+
+- **They reset on every deploy and restart.** That is acceptable for abuse
+  control (the window is one minute) but it is not an accounting system.
+- **They are per container.** Do not raise the `web` service above one replica
+  without moving the counter to Redis; two replicas would each grant the full
+  quota.
+
+To tune the numbers, edit `RATE_LIMITS` in `lib/server/rate-limit.ts` and
+rebuild.
+
 ## Troubleshooting
 
 ```bash
