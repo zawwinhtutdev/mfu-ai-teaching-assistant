@@ -46,6 +46,24 @@ function loadEnvFile(file) {
 loadEnvFile(".env.local")
 loadEnvFile(".env")
 
+// `.env.local` wins over the environment, so this script would re-embed the
+// *local* database even when invoked after a deploy, leaving the hosted project
+// with no vectors and retrieval silently empty. Refuse instead.
+if (!process.argv.includes("--allow-local")) {
+  const target = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+  if (target.includes("localhost") || target.includes("127.0.0.1")) {
+    console.error(
+      [
+        `Refusing to reindex a local database (${target}).`,
+        "For the hosted project, load its config first:",
+        "  set -a && . ./.env.production && set +a && node scripts/reindex-materials.mjs",
+        "Pass --allow-local to override when you really mean the local database.",
+      ].join("\n"),
+    )
+    process.exit(1)
+  }
+}
+
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const OLLAMA_URL = (process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434").replace(/\/+$/, "")
