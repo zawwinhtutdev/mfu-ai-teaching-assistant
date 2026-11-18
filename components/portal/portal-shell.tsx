@@ -406,25 +406,24 @@ export function PortalShell(props: PortalShellProps) {
         >
           {mobileOpen ? <X size={18} /> : <Menu size={18} />}
         </button>
-        {/* Reopens the column once its in-panel X has closed it. Matches the
-            teacher/student pattern: an X inside the panel closes, a menu
-            button in the header opens. */}
-        <button
-          type="button"
-          className="mfp-icon-btn mfp-topbar-collapse"
-          onClick={toggleSide}
-          aria-label="Show navigation"
-          aria-expanded={!sideCollapsed}
-          aria-controls="mfp-dense-nav"
-          data-hidden={!sideCollapsed}
-        >
-          <Menu size={18} />
-        </button>
         <BrandIcon size={28} tone="light" />
         <div className="mfp-topbar-id">
           <span className="mfp-topbar-name">MFU AI</span>
           <span className="mfp-topbar-product">{productName}</span>
         </div>
+        {/* Sidebar toggle, beside the product name. One control that reflects
+            state (X = open, menu = closed) rather than two buttons that hide and
+            show, so the position never moves and there is always a way back. */}
+        <button
+          type="button"
+          className="mfp-icon-btn mfp-topbar-collapse"
+          onClick={toggleSide}
+          aria-label={sideCollapsed ? "Show navigation" : "Hide navigation"}
+          aria-expanded={!sideCollapsed}
+          aria-controls="mfp-dense-nav"
+        >
+          {sideCollapsed ? <Menu size={18} /> : <X size={18} />}
+        </button>
         <div className="mfp-head-actions">{actions}</div>
       </div>
       <div className="mfp-body">
@@ -437,21 +436,6 @@ export function PortalShell(props: PortalShellProps) {
           aria-label="Sections"
           aria-hidden={sideCollapsed ? true : undefined}
         >
-          <div className="mfp-side-head">
-            <BrandIcon size={22} tone={brandTone as "light" | "dark"} />
-            <span className="mfp-side-head-label">Sections</span>
-            {/* Same affordance as the teacher and student sidebars: an X inside
-                the panel. The topbar keeps a menu button to reopen. */}
-            <button
-              type="button"
-              className="mfp-icon-btn mfp-admin-side-close"
-              onClick={toggleSide}
-              aria-label="Close navigation"
-              style={{ marginLeft: "auto" }}
-            >
-              <X size={18} />
-            </button>
-          </div>
           <div className="mfp-side-scroll">{navList(true)}</div>
           {extra ? <div className="mfp-side-footer">{extra}</div> : null}
         </nav>
