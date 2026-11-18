@@ -44,10 +44,19 @@ record_pid() {
 }
 
 start_api() {
+  # SUPABASE_URL and SUPABASE_ANON_KEY are required for token verification: the
+  # service resolves signing keys from the project's JWKS endpoint. Without them
+  # every real bearer token fails with "Token signing key could not be resolved",
+  # which made /api/rag/* return 401 for signed-in users even though the rest of
+  # the app worked.
+  local supabase_url="${NEXT_PUBLIC_SUPABASE_URL:-$(sed -n 's/^NEXT_PUBLIC_SUPABASE_URL=//p' .env.local | head -1)}"
+  local supabase_anon_key="${NEXT_PUBLIC_SUPABASE_ANON_KEY:-$(sed -n 's/^NEXT_PUBLIC_SUPABASE_ANON_KEY=//p' .env.local | head -1)}"
+
   ( cd services/api && \
     ALLOW_INSECURE_DEV_AUTH=true ENVIRONMENT=local \
     DATABASE_URL="postgresql+asyncpg://ata:ata-local-dev@127.0.0.1:5432/ata" \
     AI_PROVIDER=ollama OLLAMA_MODEL=qwen2.5:7b \
+    SUPABASE_URL="$supabase_url" SUPABASE_ANON_KEY="$supabase_anon_key" \
     nohup bash -c "$(declare -f detach); detach .venv/bin/python -m uvicorn \
       app.main:app --host 127.0.0.1 --port 8000 --log-level warning" >"$API_LOG" 2>&1 & )
   echo "api  started (log: $API_LOG)"
@@ -97,6 +106,9 @@ case "${1:-status}" in
       PYTHONPATH=. DATABASE_URL="postgresql+asyncpg://ata:ata-local-dev@127.0.0.1:5432/ata" \
       AI_PROVIDER=ollama OLLAMA_MODEL=qwen2.5:7b \
       .venv/bin/python scripts/seed_documents.py )
+    # FAQs (with embeddings) and assignments live in Supabase, which is what the
+    # web app reads. Deadline reminders are derived from these assignments.
+    node scripts/seed-course-content.mjs
     ;;
   stop)
     stop_one "$WEB_PID"; stop_one "$API_PID"

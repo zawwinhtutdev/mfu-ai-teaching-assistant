@@ -11,14 +11,27 @@ import { X, Plus, Search } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 
-interface ManageStudentsDialogProps {
-  open: boolean
+/**
+ * DD/MM/YYYY from UTC.
+ *
+ * Not `toLocaleDateString`: server and browser default locales can differ, which
+ * makes the rendered string differ and triggers a React hydration mismatch.
+ */
+function formatEnrolledDate(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return "—"
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${pad(date.getUTCDate())}/${pad(date.getUTCMonth() + 1)}/${date.getUTCFullYear()}`
+}
+
+interface ManageStudentsDialogProps {  open: boolean
   onOpenChange: (open: boolean) => void
   courseId: string
   enrolledStudents: Array<{
     id: string
     email: string
     full_name: string | null
+    enrolled_at?: string | null
   }>
 }
 
@@ -218,6 +231,11 @@ export function ManageStudentsDialog({ open, onOpenChange, courseId, enrolledStu
                     <div className="flex-1">
                       <p className="font-medium">{student.full_name || "Unknown"}</p>
                       <p className="text-sm text-muted-foreground">{student.email}</p>
+                      {student.enrolled_at && (
+                        <p className="text-[11px] text-muted-foreground/70">
+                          Enrolled {formatEnrolledDate(student.enrolled_at)}
+                        </p>
+                      )}
                     </div>
                     <Button
                       variant="ghost"

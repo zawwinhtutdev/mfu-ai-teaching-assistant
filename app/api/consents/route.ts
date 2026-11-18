@@ -1,22 +1,32 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
 import { logAuditEvent } from "@/lib/server/audit-log"
+import { clientForPrincipal, resolvePrincipal } from "@/lib/server/principal"
 
-export async function GET(req: Request) {
+/**
+ * Consent records (spec §2.3 / §6).
+ *
+ * Authenticated with `supabase.auth.getUser()` only, so a demo student's
+ * Settings page showed no consent state and the toggles silently did nothing.
+ */
+
+export async function GET(_req: Request) {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
+    const principal = await resolvePrincipal()
+    if (!principal) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    // Demo accounts have no profile row, so no consent can be recorded for them.
+    // An empty list is the honest answer; the UI then shows the platform default.
+    if (!principal.isPersistable) {
+      return NextResponse.json({ consents: [] })
+    }
+
+    const supabase = await clientForPrincipal(principal)
     const { data, error } = await supabase
       .from("consents")
       .select("consent_type, is_granted, granted_at, revoked_at, updated_at")
-      .eq("user_id", user.id)
+      .eq("user_id", principal.userId)
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
@@ -30,16 +40,18 @@ export async function GET(req: Request) {
 
 export async function PATCH(req: Request) {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
+    const principal = await resolvePrincipal()
+    if (!principal) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const body = await req.json().catch(() => ({}))
+    let body: any
+    try {
+      body = await req.json()
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
+    }
+
     const consentType = String(body?.consentType || "").trim()
     const isGranted = !!body?.isGranted
 
@@ -47,9 +59,16 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "consentType is required" }, { status: 400 })
     }
 
+    if (!principal.isPersistable) {
+      return NextResponse.json(
+        { error: "Demo accounts cannot record consent. Sign in with a real university account." },
+        { status: 403 },
+      )
+    }
+
     const now = new Date().toISOString()
     const row = {
-      user_id: user.id,
+      user_id: principal.userId,
       consent_type: consentType,
       is_granted: isGranted,
       granted_at: isGranted ? now : null,
@@ -58,6 +77,7 @@ export async function PATCH(req: Request) {
       source: "settings_page",
     }
 
+    const supabase = await clientForPrincipal(principal)
     const { data, error } = await supabase
       .from("consents")
       .upsert(row, { onConflict: "user_id,consent_type" })
@@ -70,7 +90,7 @@ export async function PATCH(req: Request) {
 
     await logAuditEvent({
       supabase: supabase as any,
-      actorId: user.id,
+      actorId: principal.userId,
       action: "consent.updated",
       resourceType: "consent",
       resourceId: consentType,
@@ -84,3 +104,4 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: error?.message || "Failed to update consent" }, { status: 500 })
   }
 }
+

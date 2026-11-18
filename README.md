@@ -160,7 +160,7 @@ supabase db reset       # re-apply migrations + seed demo content
 | --- | --- |
 | Admin | `admin@mfu.ac.th` |
 | Teacher | `anan.suwan@mfu.ac.th`, `malee.chaiyaporn@mfu.ac.th`, `somchai.prasert@mfu.ac.th` |
-| Student | `kanya.wong@mfu.ac.th`, `niran.chai@mfu.ac.th`, and four more |
+| Student | `6631503078@lamduan.mfu.ac.th`, `6631503085@lamduan.mfu.ac.th`, and four more |
 
 New signups get a real `profiles` row via the `on_auth_user_created` trigger and
 land in a portal populated with the same demo courses, enrollments, and
@@ -316,14 +316,16 @@ when `ALLOW_INSECURE_DEV_AUTH=true`.
 
 | Email | Password | Role | Courses |
 | --- | --- | --- | --- |
-| `anan.suwan@mfu.ac.th` | `teacher1234` | Teacher | CSB321, CSD323 |
-| `malee.chaiyaporn@mfu.ac.th` | `teacher1234` | Teacher | CSD322, CSA411 |
-| `somchai.prasert@mfu.ac.th` | `teacher1234` | Teacher | CSM324, GEN311, AI-EDU |
-| `kanya.wong@mfu.ac.th` | `student1234` | Student | CSB321, CSD322, CSM324 |
-| `pim.srisuk@mfu.ac.th` | `student1234` | Student | CSD323, GEN311 |
-| `admin@mfu.ac.th` | `admin1234` | Admin | all |
+| `anan.suwan@mfu.ac.th` | `demo1234` | Teacher | CSB321, CSD323 |
+| `malee.chaiyaporn@mfu.ac.th` | `demo1234` | Teacher | CSD322, CSA411 |
+| `somchai.prasert@mfu.ac.th` | `demo1234` | Teacher | CSM324, GEN311, AI-EDU |
+| `6631503078@lamduan.mfu.ac.th` | `demo1234` | Student | CSB321, CSD322, CSM324 |
+| `6631503092@lamduan.mfu.ac.th` | `demo1234` | Student | CSD323, GEN311 |
+| `admin@mfu.ac.th` | `demo1234` | Admin | all |
 
-Sign in from the login page with the demo buttons.
+Sign in at `/login` with any of these — they are ordinary Supabase accounts, not
+a special demo path. The full list, including how to reset a password or add an
+account the normal way, is in [docs/TEST_ACCOUNTS.md](docs/TEST_ACCOUNTS.md).
 
 ## Configuration
 

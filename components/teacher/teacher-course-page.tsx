@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Upload, Settings, FileText, Sparkles, Bell, Bot, Pencil, MoreVertical, FileText as FileTextIcon, Clipboard, MessageSquare, Brain, Plus, Trash2, Users, Copy, HelpCircle, CalendarClock } from "lucide-react"
+import { Upload, Settings, FileText, Sparkles, Bell, Bot, Pencil, MoreVertical, FileText as FileTextIcon, Clipboard, MessageSquare, Brain, Plus, Trash2, Users, Copy, HelpCircle, CalendarClock, ClipboardList } from "lucide-react"
 import type { Course, CourseMaterial, ChatbotSettings } from "@/lib/types"
 import { UploadMaterialDialog } from "./upload-material-dialog"
 import { CreateAnnouncementDialog } from "./create-announcement-dialog"
@@ -15,6 +15,8 @@ import { ChatbotSettingsForm } from "./chatbot-settings-form"
 import { EditCourseDialog } from "./edit-course-dialog"
 import { AssignmentsPanel } from "@/components/shared/assignments-panel"
 import { ManageStudentsDialog } from "./manage-students-dialog"
+import { MaterialsReviewPanel } from "./materials-review-panel"
+import { SurveyPanel } from "./survey-panel"
 import { AIChatbot } from "../student/ai-chatbot"
 import { FlashcardsView } from "../student/flashcards-view"
 import { QuizzesView } from "../student/quizzes-view"
@@ -26,6 +28,13 @@ interface TeacherCoursePageProps {
   course: Course
   materials: CourseMaterial[]
   studentsCount: number
+  /** Real enrolled students, read server-side from course_enrollments. */
+  enrolledStudents: Array<{
+    id: string
+    email: string
+    full_name: string | null
+    enrolled_at?: string | null
+  }>
   chatbotSettings: ChatbotSettings | null
 }
 
@@ -54,7 +63,20 @@ interface AnnouncementFeedItem {
   files?: AnnouncementFileItem[]
 }
 
-export function TeacherCoursePage({ course, materials, studentsCount, chatbotSettings }: TeacherCoursePageProps) {
+/**
+ * DD/MM/YYYY, HH:MM from UTC.
+ *
+ * Not `toLocaleString`: server and browser default locales can differ, which
+ * makes the rendered string differ and triggers a React hydration mismatch.
+ */
+function formatDateTime(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ""
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${pad(date.getUTCDate())}/${pad(date.getUTCMonth() + 1)}/${date.getUTCFullYear()}, ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`
+}
+
+export function TeacherCoursePage({ course, materials, studentsCount, enrolledStudents, chatbotSettings }: TeacherCoursePageProps) {
   const searchParams = useSearchParams()
   const [showUploadDialog, setShowUploadDialog] = useState(false)
   const [showAnnouncementDialog, setShowAnnouncementDialog] = useState(false)
@@ -81,26 +103,6 @@ export function TeacherCoursePage({ course, materials, studentsCount, chatbotSet
   
   const { toast } = useToast()
 
-  // Generate mock enrolled students list (in production, this would come from API)
-  const enrolledStudents = useMemo(() => {
-    const firstNames = ["Alex", "Sarah", "John", "Emma", "Michael", "Sophia", "David", "Olivia", "James", "Isabella", "William", "Mia", "Benjamin", "Charlotte", "Daniel", "Amelia", "Matthew", "Harper", "Joseph", "Evelyn", "Andrew", "Abigail", "Joshua", "Emily", "Ryan", "Nathan", "Grace", "Lucas", "Chloe", "Henry", "Lily", "Ethan", "Zoe", "Aiden", "Madison", "Noah", "Ava", "Logan", "Ella", "Mason", "Scarlett", "Liam", "Victoria", "Jacob", "Aria", "Jackson", "Sofia", "Levi", "Hannah", "Sebastian"]
-    const lastNames = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez", "Hernandez", "Lopez", "Wilson", "Anderson", "Thomas", "Taylor", "Moore", "Jackson", "Martin", "Lee", "Thompson", "White", "Harris", "Sanchez", "Clark", "Lewis", "Robinson", "Walker", "Young", "King", "Wright", "Scott", "Torres", "Nguyen", "Hill", "Flores", "Green", "Adams", "Nelson", "Baker", "Hall", "Rivera", "Campbell", "Mitchell", "Carter", "Roberts", "Gomez", "Phillips", "Evans", "Turner"]
-    
-    return Array.from({ length: studentsCount }, (_, index) => {
-      const studentNumber = 6631503101 + index
-      const email = `${studentNumber}@lamduan.mfu.ac.th`
-      const studentId = `mock-student-${studentNumber}`
-      const firstName = firstNames[index % firstNames.length]
-      const lastName = lastNames[index % lastNames.length]
-      const fullName = `${firstName} ${lastName}`
-      
-      return {
-        id: studentId,
-        email,
-        full_name: fullName,
-      }
-    })
-  }, [studentsCount])
 
   // Mock announcement data for CSD323
   const csd323Announcements = [
@@ -430,7 +432,10 @@ Please review these materials before the workshop to maximize your learning expe
     updated_at: item.updated_at,
     author: item.author?.full_name || "Teacher",
     authorAvatar: item.author?.avatar_url || "/placeholder-user.jpg",
-    date: item.created_at ? new Date(item.created_at).toLocaleString() : "",
+    // Formatted from UTC parts rather than toLocaleString: the server and browser
+    // resolve different default locales, which produced different strings and a
+    // React hydration mismatch on this page.
+    date: item.created_at ? formatDateTime(item.created_at) : "",
     edited: !!(item.updated_at && item.created_at && item.updated_at !== item.created_at),
     files: Array.isArray(item.files)
       ? item.files.map((f: any) => ({
@@ -563,22 +568,51 @@ Please review these materials before the workshop to maximize your learning expe
   return (
     <div className="container mx-auto flex-1 px-4 py-8 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 min-h-screen">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 shadow-[4px_4px_8px_rgba(0,0,0,0.08),-4px_-4px_8px_rgba(255,255,255,0.8)] dark:shadow-[4px_4px_8px_rgba(0,0,0,0.2),-4px_-4px_8px_rgba(255,255,255,0.05)] rounded-xl p-1">
+          <TabsList className="grid w-full grid-cols-5 bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 shadow-[4px_4px_8px_rgba(0,0,0,0.08),-4px_-4px_8px_rgba(255,255,255,0.8)] dark:shadow-[4px_4px_8px_rgba(0,0,0,0.2),-4px_-4px_8px_rgba(255,255,255,0.05)] rounded-xl p-1">
             <TabsTrigger 
               value="materials"
               className="rounded-lg data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-200 data-[state=active]:to-blue-300 dark:data-[state=active]:from-blue-800 dark:data-[state=active]:to-blue-900 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-200 data-[state=active]:font-semibold data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)] dark:data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.05)]"
             >
-              <Bell className="mr-2 h-4 w-4" />
+              <Bell className="mr-2 hidden h-4 w-4 sm:block" />
               Announcements
             </TabsTrigger>
             <TabsTrigger 
               value="settings"
               className="rounded-lg data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-200 data-[state=active]:to-blue-300 dark:data-[state=active]:from-blue-800 dark:data-[state=active]:to-blue-900 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-200 data-[state=active]:font-semibold data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)] dark:data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.05)]"
             >
-              <Bot className="mr-2 h-4 w-4" />
+              <Bot className="mr-2 hidden h-4 w-4 sm:block" />
               AI Assistant
             </TabsTrigger>
+            <TabsTrigger 
+              value="content"
+              className="rounded-lg data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-200 data-[state=active]:to-blue-300 dark:data-[state=active]:from-blue-800 dark:data-[state=active]:to-blue-900 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-200 data-[state=active]:font-semibold data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)] dark:data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.05)]"
+            >
+              <FileText className="mr-2 hidden h-4 w-4 sm:block" />
+              Content Review
+            </TabsTrigger>
+            <TabsTrigger 
+              value="evaluation"
+              className="rounded-lg data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-200 data-[state=active]:to-blue-300 dark:data-[state=active]:from-blue-800 dark:data-[state=active]:to-blue-900 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-200 data-[state=active]:font-semibold data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)] dark:data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.05)]"
+            >
+              <ClipboardList className="mr-2 hidden h-4 w-4 sm:block" />
+              Evaluation
+            </TabsTrigger>
+            <TabsTrigger 
+              value="course-settings"
+              className="rounded-lg data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-200 data-[state=active]:to-blue-300 dark:data-[state=active]:from-blue-800 dark:data-[state=active]:to-blue-900 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-200 data-[state=active]:font-semibold data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)] dark:data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.05)]"
+            >
+              <Users className="mr-2 hidden h-4 w-4 sm:block" />
+              Students
+            </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="evaluation" className="mt-6">
+            <SurveyPanel courseId={course.id} />
+          </TabsContent>
+
+          <TabsContent value="content" className="mt-6">
+            <MaterialsReviewPanel courseId={course.id} materials={materials} />
+          </TabsContent>
 
           <TabsContent value="materials" className="mt-6">
             {/* Announcements Feed */}
@@ -998,10 +1032,39 @@ Please review these materials before the workshop to maximize your learning expe
                 <CardHeader>
                   <CardTitle>Student Management</CardTitle>
                   <CardDescription>
-                    Add or remove students from this course
+                    {enrolledStudents.length === 0
+                      ? "No students are enrolled in this course yet."
+                      : `${enrolledStudents.length} student${enrolledStudents.length === 1 ? "" : "s"} enrolled`}
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
+                  {/* The roster is shown inline: the point of this tab is to see
+                      who is enrolled, not to open another dialog to find out. */}
+                  {enrolledStudents.length === 0 ? (
+                    <p className="rounded-lg border border-dashed py-6 text-center text-sm text-muted-foreground">
+                      Students enrolled by an administrator will appear here.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {enrolledStudents.map((student) => (
+                        <div
+                          key={student.id}
+                          className="flex items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">{student.full_name || "Unnamed student"}</p>
+                            <p className="truncate text-xs text-muted-foreground">{student.email}</p>
+                          </div>
+                          {student.enrolled_at && (
+                            <span className="shrink-0 text-[11px] text-muted-foreground/70">
+                              {formatDateTime(student.enrolled_at).split(",")[0]}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <Button 
                     onClick={() => setShowManageStudentsDialog(true)} 
                     className="w-full bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-[4px_4px_8px_rgba(0,0,0,0.15),-4px_-4px_8px_rgba(255,255,255,0.3)] hover:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.2),inset_-2px_-2px_4px_rgba(255,255,255,0.3)] dark:shadow-[4px_4px_8px_rgba(0,0,0,0.3),-4px_-4px_8px_rgba(255,255,255,0.05)] rounded-xl transition-all"
@@ -1039,6 +1102,8 @@ Please review these materials before the workshop to maximize your learning expe
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button 
+              aria-label="Add content"
+              title="Add announcement or material"
               className="fixed bottom-6 right-6 h-14 w-14 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-[6px_6px_12px_rgba(0,0,0,0.2),-6px_-6px_12px_rgba(255,255,255,0.3)] hover:shadow-[inset_3px_3px_6px_rgba(0,0,0,0.25),inset_-3px_-3px_6px_rgba(255,255,255,0.3)] dark:shadow-[6px_6px_12px_rgba(0,0,0,0.4),-6px_-6px_12px_rgba(255,255,255,0.05)] transition-all duration-200 z-50 p-0"
             >
               <Plus className="h-6 w-6" />

@@ -1,48 +1,55 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
-import { GoogleGenAI } from "@google/genai"
 
-const EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || "text-embedding-004"
-const EMBEDDING_DIMENSIONS = Number(process.env.GEMINI_EMBEDDING_DIMENSIONS || 768)
-
-function getGeminiClient() {
-  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_API_KEY
-  if (!apiKey) throw new Error("Missing Gemini API key")
-  return new GoogleGenAI({ apiKey })
-}
-
-async function embedText(text: string): Promise<number[]> {
-  const ai = getGeminiClient()
-  const response = await ai.models.embedContent({
-    model: EMBEDDING_MODEL,
-    contents: text,
-    config: { taskType: "RETRIEVAL_DOCUMENT", outputDimensionality: EMBEDDING_DIMENSIONS } as any,
-  })
-  const values = (response.embeddings || [])[0]?.values
-  return Array.isArray(values) ? values : []
-}
+import { embedTexts as embedWithOllama, isOllamaEnabled } from "@/lib/ai/ollama"
+import { assertCourseAccess, clientForPrincipal, resolvePrincipal } from "@/lib/server/principal"
 
 /**
- * GET /api/courses/[courseId]/faqs
- * List all FAQs for a course
+ * FAQs for one course.
+ *
+ * Two things this route had wrong:
+ *
+ * 1. It authenticated with `supabase.auth.getUser()` only, so every demo account
+ *    got a 401 and the teacher's FAQ tab silently rendered an empty list.
+ * 2. It embedded questions with Gemini unconditionally, so on the local-model
+ *    setup every insert failed to produce a vector — and `match_faqs` filters on
+ *    `embedding IS NOT NULL`, making those FAQs invisible to retrieval.
+ *
+ * Both now go through the shared helpers: `resolvePrincipal` for identity and
+ * the same embedder the rest of the app uses (Ollama locally, Gemini if enabled).
  */
+
+async function embedQuestion(question: string): Promise<number[] | null> {
+  try {
+    const [vector] = await embedWithOllama([question])
+    if (Array.isArray(vector) && vector.length > 0) return vector
+    return null
+  } catch (error: any) {
+    console.error("[FAQ] embedding failed:", error?.message || error)
+    return null
+  }
+}
+
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ courseId: string }> },
 ) {
   try {
-    const { courseId } = await params
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
+    const principal = await resolvePrincipal()
+    if (!principal) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const { courseId } = await params
+    const course = await assertCourseAccess(principal, courseId)
+    if (!course) {
+      return NextResponse.json({ error: "You do not have access to this course" }, { status: 403 })
+    }
+
+    const supabase = await clientForPrincipal(principal)
     const { data: faqs, error } = await supabase
       .from("faqs")
       .select("id, question, answer, created_at, updated_at")
-      .eq("course_id", courseId)
+      .eq("course_id", course.id)
       .order("created_at", { ascending: false })
 
     if (error) {
@@ -55,59 +62,49 @@ export async function GET(
   }
 }
 
-/**
- * POST /api/courses/[courseId]/faqs
- * Create a new FAQ (auto-embeds the question for vector search)
- */
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ courseId: string }> },
 ) {
   try {
-    const { courseId } = await params
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
+    const principal = await resolvePrincipal()
+    if (!principal) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
-
-    // Verify teacher owns course
-    const { data: course } = await supabase
-      .from("courses")
-      .select("id, teacher_id")
-      .eq("id", courseId)
-      .eq("teacher_id", user.id)
-      .single()
-
-    if (!course) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    if (principal.role !== "teacher" && principal.role !== "admin") {
+      return NextResponse.json({ error: "Only the course teacher may add FAQs" }, { status: 403 })
     }
 
-    const { question, answer } = await req.json()
+    const { courseId } = await params
+    const course = await assertCourseAccess(principal, courseId)
+    if (!course) {
+      return NextResponse.json({ error: "You do not have access to this course" }, { status: 403 })
+    }
 
-    if (!question?.trim() || !answer?.trim()) {
+    let body: any
+    try {
+      body = await req.json()
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
+    }
+
+    const question = typeof body?.question === "string" ? body.question.trim() : ""
+    const answer = typeof body?.answer === "string" ? body.answer.trim() : ""
+    if (!question || !answer) {
       return NextResponse.json({ error: "Question and answer are required" }, { status: 400 })
     }
 
-    // Generate embedding for the question
-    let embedding: number[] = []
-    try {
-      embedding = await embedText(question.trim())
-    } catch (embErr: any) {
-      console.error("[FAQ] Embedding failed:", embErr?.message)
-      // Continue without embedding — FAQ will still work, just not via vector search
-    }
+    // An unembedded FAQ is still readable but invisible to vector search, so a
+    // failure here is reported rather than silently degrading the assistant.
+    const embedding = await embedQuestion(question)
 
-    const insertData: any = {
-      course_id: courseId,
-      question: question.trim(),
-      answer: answer.trim(),
-      created_by: user.id,
-    }
-
-    if (embedding.length > 0) {
-      insertData.embedding = `[${embedding.join(",")}]`
+    const supabase = await clientForPrincipal(principal)
+    const insertData: Record<string, unknown> = {
+      course_id: course.id,
+      question,
+      answer,
+      ...(principal.isPersistable ? { created_by: principal.userId } : {}),
+      ...(embedding ? { embedding: `[${embedding.join(",")}]` } : {}),
     }
 
     const { data: faq, error } = await supabase
@@ -120,51 +117,49 @@ export async function POST(
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ faq })
+    return NextResponse.json({ faq, embedded: Boolean(embedding) })
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || "Failed to create FAQ" }, { status: 500 })
   }
 }
 
-/**
- * DELETE /api/courses/[courseId]/faqs
- * Delete a FAQ by id (passed in body)
- */
 export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ courseId: string }> },
 ) {
   try {
-    const { courseId } = await params
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
+    const principal = await resolvePrincipal()
+    if (!principal) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+    if (principal.role !== "teacher" && principal.role !== "admin") {
+      return NextResponse.json({ error: "Only the course teacher may delete FAQs" }, { status: 403 })
+    }
 
-    const { faqId } = await req.json()
+    const { courseId } = await params
+    const course = await assertCourseAccess(principal, courseId)
+    if (!course) {
+      return NextResponse.json({ error: "You do not have access to this course" }, { status: 403 })
+    }
+
+    let body: any
+    try {
+      body = await req.json()
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
+    }
+
+    const faqId = typeof body?.faqId === "string" ? body.faqId : ""
     if (!faqId) {
       return NextResponse.json({ error: "faqId is required" }, { status: 400 })
     }
 
-    // Verify teacher owns course
-    const { data: course } = await supabase
-      .from("courses")
-      .select("id")
-      .eq("id", courseId)
-      .eq("teacher_id", user.id)
-      .single()
-
-    if (!course) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
-
+    const supabase = await clientForPrincipal(principal)
     const { error } = await supabase
       .from("faqs")
       .delete()
       .eq("id", faqId)
-      .eq("course_id", courseId)
+      .eq("course_id", course.id)
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })

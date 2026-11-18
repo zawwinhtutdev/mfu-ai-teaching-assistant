@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import type { ChatbotSettings } from "@/lib/types"
 
@@ -18,7 +17,7 @@ interface ChatbotSettingsFormProps {
 
 export function ChatbotSettingsForm({ courseId, settings }: ChatbotSettingsFormProps) {
   const [tone, setTone] = useState<"professional" | "friendly" | "casual" | "formal">(settings?.tone || "professional")
-  const [aiModel, setAiModel] = useState(settings?.ai_model || "google/gemini-3.8-flash")
+  const [aiModel, setAiModel] = useState(settings?.ai_model || "qwen2.5:7b")
   const [systemPrompt, setSystemPrompt] = useState(settings?.system_prompt || "")
   const [gradingPolicy, setGradingPolicy] = useState(settings?.grading_policy || "")
   const [courseRules, setCourseRules] = useState(settings?.course_rules || "")
@@ -33,21 +32,19 @@ export function ChatbotSettingsForm({ courseId, settings }: ChatbotSettingsFormP
     setError(null)
     setSuccess(false)
 
-    const supabase = createClient()
-
     try {
-      const { error: upsertError } = await supabase.from("chatbot_settings").upsert(
+      // Through the API, not the browser client: a demo course id such as
+      // "course-ai-edu" is not a uuid and Postgres rejects it outright.
+      const response = await fetch(
+        `/api/courses/${encodeURIComponent(courseId)}/chatbot-settings`,
         {
-          course_id: courseId,
-          tone,
-          ai_model: aiModel,
-          system_prompt: systemPrompt.trim() || null,
-          grading_policy: gradingPolicy.trim() || null,
-          course_rules: courseRules.trim() || null,
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tone, aiModel, systemPrompt, gradingPolicy, courseRules }),
         },
-        { onConflict: "course_id" },
       )
-      if (upsertError) throw upsertError
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(payload?.error || "Failed to save settings")
 
       setSuccess(true)
       router.refresh()

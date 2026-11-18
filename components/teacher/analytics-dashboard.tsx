@@ -62,10 +62,16 @@ export function AnalyticsDashboard({ profile, courses, queries }: AnalyticsDashb
     const limitedQueries = queries.slice(0, 1000) as AnalyticsQuery[]
     const totalQueries = queries.length
     const totalCourses = courses.length
-    const totalStudents = new Set(limitedQueries.map(q => q.student_id)).size
-    
+    // Anonymized rows have no student id. Counting them as one "student" would
+    // understate the average and make engagement look better than it is, so
+    // they are excluded from the distinct-student count and reported apart.
+    const attributed = limitedQueries.filter((q) => Boolean(q.student_id))
+    const anonymizedQueries = limitedQueries.length - attributed.length
+    const totalStudents = new Set(attributed.map((q) => q.student_id)).size
+
     // Calculate average queries per student
     const avgQueriesPerStudent = totalStudents > 0 ? (totalQueries / totalStudents).toFixed(1) : "0"
+
     
     // Calculate queries per course with more details
     const queriesPerCourse = courses.map(course => {
@@ -130,7 +136,7 @@ export function AnalyticsDashboard({ profile, courses, queries }: AnalyticsDashb
     })
     
     // Get student activity data
-    const studentActivity = limitedQueries.reduce((acc, query) => {
+    const studentActivity = attributed.reduce((acc, query) => {
       const studentId = query.student_id
       if (!acc[studentId]) {
         acc[studentId] = {
@@ -171,6 +177,7 @@ export function AnalyticsDashboard({ profile, courses, queries }: AnalyticsDashb
       totalCourses,
       totalStudents,
       avgQueriesPerStudent,
+      anonymizedQueries,
       queriesPerCourse,
       topQuestions,
       recentQueries: recentQueries.length,
@@ -232,6 +239,13 @@ export function AnalyticsDashboard({ profile, courses, queries }: AnalyticsDashb
 
   return (
     <div className="container mx-auto flex-1 px-4 py-8 space-y-6">
+      {stats.anonymizedQueries > 0 && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">
+          {stats.anonymizedQueries} question{stats.anonymizedQueries === 1 ? "" : "s"} came from
+          students who have not granted AI-processing consent. They are counted in the totals and
+          in the common-question list, but are not attributed to any student.
+        </div>
+      )}
       {/* Charts Row */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Query Trends Chart */}
