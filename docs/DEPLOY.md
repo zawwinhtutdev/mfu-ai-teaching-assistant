@@ -248,6 +248,38 @@ The counters live in the web process's memory. Two consequences:
 To tune the numbers, edit `RATE_LIMITS` in `lib/server/rate-limit.ts` and
 rebuild.
 
+## Gemini model availability (free tier)
+
+A free-tier Gemini key answers `503 UNAVAILABLE` or `429 RESOURCE_EXHAUSTED` for
+whole models, not just under load. Measured with the project key:
+
+| Model | Result |
+|---|---|
+| `gemini-2.5-flash` | works |
+| `gemini-3.1-flash-lite` | works |
+| `gemini-3.8-flash` | 503 on every attempt |
+| `gemini-3.5-flash` | 503 |
+| `gemini-3.1-pro-preview` | 429 (quota) |
+
+Chat therefore walks `geminiModelCandidates()` — the requested model first, then
+`GEMINI_MODEL`, then the two that work — and retries on a 503/429, since those
+mean "try something else", not "the request is bad". A 404 or 401 is not retried.
+
+If AI answers stall or every model returns 503, the free tier is the limit and
+the fix is enabling billing, not code. Set `GEMINI_MODEL` to pin a specific
+model.
+
+Embeddings use `gemini-embedding-001` (`text-embedding-004` is retired and
+returns 404). **Changing the embedding model requires re-indexing**, because
+vectors from different models are not comparable:
+
+```bash
+node scripts/reindex-materials.mjs
+```
+
+That script follows `AI_PROVIDER`, so it writes the same kind of vectors the app
+queries.
+
 ## Troubleshooting
 
 ```bash

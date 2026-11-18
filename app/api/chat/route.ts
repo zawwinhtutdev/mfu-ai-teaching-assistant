@@ -2,7 +2,13 @@ import { convertToModelMessages, createUIMessageStreamResponse, streamText, toUI
 import { createGoogle } from "@ai-sdk/google"
 import { cookies } from "next/headers"
 import { getUserFacingChatError } from "@/lib/ai/chat-errors"
-import { geminiModelName, getModelConfig, normalizeGoogleProviderModel } from "@/lib/ai/models"
+import {
+  geminiModelCandidates,
+  getModelConfig,
+  googleThinkingOff,
+  isRetryableModelError,
+  normalizeGoogleProviderModel,
+} from "@/lib/ai/models"
 import { createClient } from "@/lib/supabase/server"
 import { getDocumentReadUrl } from "@/lib/storage/spaces"
 import { trackApiError } from "@/lib/server/observability"
@@ -65,6 +71,32 @@ function isTruthy(value: unknown) {
     return normalized === "1" || normalized === "true" || normalized === "yes"
   }
   return false
+}
+
+/**
+ * Wrap an async generator in the `AsyncIterableStream` shape the AI SDK expects.
+ *
+ * Needed only to replay a chunk consumed while probing a model for availability.
+ * The SDK's type requires the ReadableStream half as well as the async-iterable
+ * half, so the underlying stream is built once and both interfaces are exposed
+ * over it — reading through either must not duplicate or drop chunks.
+ */
+function toAsyncIterableStream<T>(source: AsyncIterable<T>) {
+  const iterator = source[Symbol.asyncIterator]()
+  const stream = new ReadableStream<T>({
+    async pull(controller) {
+      const { done, value } = await iterator.next()
+      if (done) controller.close()
+      else controller.enqueue(value)
+    },
+    async cancel() {
+      await iterator.return?.()
+    },
+  })
+
+  return Object.assign(stream, {
+    [Symbol.asyncIterator]: () => iterator,
+  })
 }
 
 async function extractPdfTextFromBuffer(pdfBuffer: Buffer) {
@@ -134,6 +166,15 @@ export async function POST(req: Request) {
 
     const userId = principal?.userId || studentId || ""
     const userRole = principal?.role || "student"
+
+    // Anonymous callers are refused before any provider call is made. The
+    // route used to answer them, which was harmless against a local model but
+    // became billable abuse the moment a paid API key was configured: a probe
+    // with no session got a 200 and a real completion. The rate limiter keys on
+    // a user id, so an anonymous caller would also have shared one bucket.
+    if (!principal) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 })
+    }
 
     console.log("[v0] Using userId:", userId, "role:", userRole, "demo:", principal?.isDemo)
 
@@ -708,31 +749,77 @@ Guidelines:
       const providerModel = normalizeGoogleProviderModel(
         requestedModel.startsWith("google/") ? requestedModel : cfg.providerModel,
       )
-      // The provider model id can be retired by Google; `geminiModelName` keeps
-      // the fallback in one place and allows an env override without a rebuild.
-      const selectedGoogleModel = providerModel.startsWith("google/")
-        ? providerModel.replace("google/", "")
-        : geminiModelName()
       const maxOutputTokens = cfg.maxOutputTokens ?? 700
       const temperature = cfg.temperature ?? 0.6
-      result = streamText({
-        model: google(selectedGoogleModel),
-        messages: modelMessages,
-        instructions: [
-          systemPrompt,
-          courseSettingsNote,
-          courseRetrievalNote,
-          attachmentNote,
-          pdfRagModeInstruction,
-          fileSearchNote,
-        ]
-          .filter(Boolean)
-          .join("\n\n"),
-        abortSignal: req.signal,
-        maxOutputTokens,
-        temperature,
-      } as any)
-      console.log("✅ AI model call initiated successfully")
+      const instructions = [
+        systemPrompt,
+        courseSettingsNote,
+        courseRetrievalNote,
+        attachmentNote,
+        pdfRagModeInstruction,
+        fileSearchNote,
+      ]
+        .filter(Boolean)
+        .join("\n\n")
+
+      // Free-tier keys reject whole models with 503 UNAVAILABLE, so walk the
+      // candidate list until one produces output. `streamText` is lazy: the
+      // provider error only surfaces when the stream is read, which is why this
+      // pulls the first chunk before committing to a model.
+      const candidates = geminiModelCandidates(
+        providerModel.startsWith("google/") ? providerModel : undefined,
+      )
+      let lastError: unknown = null
+
+      for (const candidate of candidates) {
+        const attempt = streamText({
+          model: google(candidate),
+          messages: modelMessages,
+          instructions,
+          abortSignal: req.signal,
+          maxOutputTokens,
+          temperature,
+          // Without this, Gemini 2.5+ spends most of maxOutputTokens on internal
+          // reasoning and the visible answer is truncated. See googleThinkingOff.
+          providerOptions: googleThinkingOff(),
+        } as any)
+
+        // `streamText` resolves before the provider responds, so the 503 only
+        // appears on first read. Peek one chunk to decide whether to keep this
+        // model, then replay it so the client sees the complete stream.
+        const iterator = attempt.stream[Symbol.asyncIterator]()
+        let first: IteratorResult<any>
+        try {
+          first = await iterator.next()
+        } catch (attemptError) {
+          if (isRetryableModelError(attemptError) && candidate !== candidates[candidates.length - 1]) {
+            console.warn(`[v0] model ${candidate} unavailable, trying next`)
+            lastError = attemptError
+            continue
+          }
+          throw attemptError
+        }
+
+        result = {
+          ...attempt,
+          stream: toAsyncIterableStream(
+            (async function* () {
+              if (!first.done) yield first.value
+              while (true) {
+                const next = await iterator.next()
+                if (next.done) return
+                yield next.value
+              }
+            })(),
+          ),
+        } as unknown as typeof attempt
+        console.log(`✅ AI model streaming with ${candidate}`)
+        break
+      }
+
+      if (!result) {
+        throw lastError ?? new Error("No Gemini model was available for this request")
+      }
     } catch (streamError) {
       console.error("💥💥💥 ERROR CALLING AI MODEL:", streamError)
       throw streamError

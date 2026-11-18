@@ -106,7 +106,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("DATABASE_URL"),
     )
     embedding_model: str = Field(
-        default="text-embedding-004",
+        default="gemini-embedding-001",
         validation_alias=AliasChoices("EMBEDDING_MODEL"),
     )
     chunk_chars: int = 1200
