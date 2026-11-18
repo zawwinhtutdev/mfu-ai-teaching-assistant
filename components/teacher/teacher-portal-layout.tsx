@@ -4,7 +4,12 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import type { Profile, Course } from "@/lib/types"
 import { UserNav } from "@/components/user-nav"
-import { PortalShell, type PortalNavGroup, type PortalRailItem } from "@/components/portal/portal-shell"
+import {
+  PortalShell,
+  type PortalNavGroup,
+  type PortalNavItem,
+  type PortalRailItem,
+} from "@/components/portal/portal-shell"
 import { Calendar, BarChart3, Bot, Building, Settings, LayoutGrid, FileText, BookOpen } from "lucide-react"
 
 interface TeacherPortalLayoutProps {
@@ -26,11 +31,35 @@ const pageTitles: Record<string, { title: string; crumbs: string[] }> = {
 export function TeacherPortalLayout({ profile, courses, children }: TeacherPortalLayoutProps) {
   const pathname = usePathname() || ""
 
+  // No `contextChip` is passed: the course count is already visible in the
+  // sidebar under "My Courses", so a badge repeating it in the header was noise.
+
+  // Course shortcuts live under "My Courses" as a disclosure rather than in the
+  // sidebar footer. A footer at the very bottom put them far from the nav item
+  // that names them, and it competed with the account block for that space.
+  const courseChildren: PortalNavItem[] =
+    courses.length > 0
+      ? courses.slice(0, 12).map((course) => ({
+          href: `/teacherportal/mycourses/${course.id}`,
+          label: course.title,
+          icon: BookOpen,
+          depth: 1,
+        }))
+      : []
+
   const nav: PortalNavGroup[] = [
     {
       label: "Teaching",
       items: [
-        { href: "/teacherportal/mycourses", label: "My Courses", icon: LayoutGrid },
+        {
+          href: "/teacherportal/mycourses",
+          label: "My Courses",
+          icon: LayoutGrid,
+          // Exact so the parent is only current on the list itself, not on a
+          // course detail page where the child is the selected row.
+          exact: true,
+          children: courseChildren,
+        },
         { href: "/teacherportal/calendar", label: "Calendar", icon: Calendar },
         { href: "/teacherportal/analytics", label: "Analytics", icon: BarChart3 },
       ],
@@ -70,28 +99,6 @@ export function TeacherPortalLayout({ profile, courses, children }: TeacherPorta
     ? { title: activeCourse.title, crumbs: ["Teacher Portal", "My Courses", activeCourse.title] }
     : pageTitles[base || "/teacherportal/mycourses"] || { title: "Teacher Portal", crumbs: ["Teacher Portal"] }
 
-  const courseList =
-    courses.length > 0 ? (
-      <>
-        <div className="mfp-side-group">My courses</div>
-        {courses.slice(0, 8).map((course) => {
-          const active = activeCourse?.id === course.id
-          return (
-            <Link
-              key={course.id}
-              href={`/teacherportal/mycourses/${course.id}`}
-              className="mfp-nav-item"
-              data-active={active}
-              style={{ height: 36 }}
-            >
-              <BookOpen size={16} />
-              <span className="truncate">{course.title}</span>
-            </Link>
-          )
-        })}
-      </>
-    ) : null
-
   return (
     <PortalShell
       variant="teacher"
@@ -101,10 +108,6 @@ export function TeacherPortalLayout({ profile, courses, children }: TeacherPorta
       crumbs={page.crumbs}
       nav={nav}
       railItems={railItems}
-      extra={courseList}
-      contextChip={
-        courses.length > 0 ? `${courses.length} course${courses.length === 1 ? "" : "s"}` : "No courses yet"
-      }
       actions={
         <>
           <UserNav profile={profile} />

@@ -11,6 +11,7 @@ import { User, Mail } from "lucide-react"
 import type { Profile } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
+import { AvatarUpload } from "@/components/profile/avatar-upload"
 
 interface SettingsPageProps {
   profile: Profile
@@ -65,6 +66,14 @@ export function SettingsPage({ profile }: SettingsPageProps) {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSave} className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Profile photo</Label>
+                  <AvatarUpload
+                    avatarUrl={profile.avatar_url}
+                    fullName={profile.full_name}
+                    email={profile.email}
+                  />
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="fullName">Full Name</Label>
                   <div className="relative">

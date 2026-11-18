@@ -56,31 +56,9 @@ export default function AdminLoginPage() {
     setError(null)
 
     try {
-      // First try demo auth
-      const demoRes = await fetch("/api/demo-auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      })
-
-      if (demoRes.ok) {
-        const payload = await demoRes.json()
-        if (payload?.account?.role === "admin") {
-          // Full navigation so the new cookies are visible to the middleware
-          // on the very first request for /admin/dashboard.
-          window.location.assign("/admin/dashboard")
-          return
-        } else {
-          // Demo account found but not admin
-          await fetch("/api/demo-auth/logout", { method: "POST" })
-          throw new Error("Access denied — this account does not have admin privileges.")
-        }
-      }
-
-      // Clear any demo cookies
-      await fetch("/api/demo-auth/logout", { method: "POST" })
-
-      // Try Supabase auth
+      // Real Supabase credentials only. The demo-cookie shortcut was removed so
+      // the admin console authenticates against the database like every other
+      // surface; the seed admin is a real auth user.
       const supabase = createClient()
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email,
