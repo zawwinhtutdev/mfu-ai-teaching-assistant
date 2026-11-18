@@ -2,7 +2,7 @@ import { convertToModelMessages, createUIMessageStreamResponse, streamText, toUI
 import { createGoogle } from "@ai-sdk/google"
 import { cookies } from "next/headers"
 import { getUserFacingChatError } from "@/lib/ai/chat-errors"
-import { getModelConfig, normalizeGoogleProviderModel } from "@/lib/ai/models"
+import { geminiModelName, getModelConfig, normalizeGoogleProviderModel } from "@/lib/ai/models"
 import { createClient } from "@/lib/supabase/server"
 import { getDocumentReadUrl } from "@/lib/storage/spaces"
 import { trackApiError } from "@/lib/server/observability"
@@ -708,7 +708,11 @@ Guidelines:
       const providerModel = normalizeGoogleProviderModel(
         requestedModel.startsWith("google/") ? requestedModel : cfg.providerModel,
       )
-      const selectedGoogleModel = providerModel.startsWith("google/") ? providerModel.replace("google/", "") : "gemini-3.8-flash"
+      // The provider model id can be retired by Google; `geminiModelName` keeps
+      // the fallback in one place and allows an env override without a rebuild.
+      const selectedGoogleModel = providerModel.startsWith("google/")
+        ? providerModel.replace("google/", "")
+        : geminiModelName()
       const maxOutputTokens = cfg.maxOutputTokens ?? 700
       const temperature = cfg.temperature ?? 0.6
       result = streamText({
