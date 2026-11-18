@@ -30,6 +30,8 @@ export type CourseFormValues = {
   school: string
   furtherInformation: string
   teacherId: string | null
+  /** Co-teachers, plus the primary owner, as emails. Empty means unassigned. */
+  teacherEmails: string[]
 }
 
 interface CourseDialogProps {
@@ -40,8 +42,6 @@ interface CourseDialogProps {
   course?: CourseFormValues | null
   onSaved: () => void
 }
-
-const UNASSIGNED = "__unassigned__"
 
 /** Semesters a course can run in. Stored as a string, like the rest of the form. */
 const SEMESTERS = ["1", "2", "3"] as const
@@ -78,6 +78,107 @@ const SCHOOLS = [
  * option must be a real, selectable item rather than absence.)
  */
 
+/**
+ * Email chips for co-teachers.
+ *
+ * An administrator types an address and presses Enter or comma to add it. Each
+ * entry is validated here so an obvious typo is caught before a round trip; the
+ * API is still the authority on whether the account exists and is a teacher.
+ */
+function TeacherEmailInput({
+  emails,
+  onChange,
+  suggestions,
+}: {
+  emails: string[]
+  onChange: (emails: string[]) => void
+  suggestions: TeacherOption[]
+}) {
+  const [draft, setDraft] = useState("")
+  const [error, setError] = useState<string | null>(null)
+
+  const commit = (raw: string) => {
+    const email = raw.trim().replace(/,$/, "").toLowerCase()
+    if (!email) return
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError("That does not look like an email address")
+      return
+    }
+    if (emails.includes(email)) {
+      setError("That teacher is already added")
+      return
+    }
+    onChange([...emails, email])
+    setDraft("")
+    setError(null)
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-1.5 rounded-md border bg-transparent px-2 py-1.5">
+        {emails.map((email) => (
+          <span
+            key={email}
+            className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs"
+          >
+            {email}
+            <button
+              type="button"
+              onClick={() => onChange(emails.filter((value) => value !== email))}
+              aria-label={`Remove ${email}`}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        <input
+          value={draft}
+          onChange={(event) => {
+            setDraft(event.target.value)
+            setError(null)
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === ",") {
+              // Enter would otherwise submit the form while the admin is still
+              // adding a colleague.
+              event.preventDefault()
+              commit(draft)
+            }
+            if (event.key === "Backspace" && !draft && emails.length > 0) {
+              onChange(emails.slice(0, -1))
+            }
+          }}
+          onBlur={() => commit(draft)}
+          placeholder={emails.length === 0 ? "teacher@mfu.ac.th" : "Add another"}
+          className="min-w-[180px] flex-1 bg-transparent px-1 py-1 text-sm outline-none"
+          aria-label="Teacher email"
+        />
+      </div>
+
+      {error && <p className="text-xs text-destructive">{error}</p>}
+
+      {suggestions.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {suggestions
+            .filter((teacher) => !emails.includes(teacher.email.toLowerCase()))
+            .slice(0, 6)
+            .map((teacher) => (
+              <button
+                key={teacher.id}
+                type="button"
+                onClick={() => commit(teacher.email)}
+                className="rounded border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted"
+              >
+                {teacher.full_name || teacher.email}
+              </button>
+            ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function emptyCourse(): CourseFormValues {
   return {
     code: "",
@@ -88,6 +189,7 @@ function emptyCourse(): CourseFormValues {
     school: "",
     furtherInformation: "",
     teacherId: null,
+    teacherEmails: [],
   }
 }
 
@@ -122,7 +224,9 @@ export function CourseDialog({ open, onOpenChange, teachers, course, onSaved }: 
         academicYear: form.academicYear,
         school: form.school,
         furtherInformation: form.furtherInformation,
-        teacherId: form.teacherId,
+        // The multi-teacher field. Sent even when empty, so clearing every chip
+        // actually unassigns rather than leaving the previous team in place.
+        teacherEmails: form.teacherEmails,
       }
 
       const res = await fetch("/api/admin/courses", {
@@ -242,25 +346,15 @@ export function CourseDialog({ open, onOpenChange, teachers, course, onSaved }: 
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="course-teacher">Assigned teacher</Label>
-            <Select
-              value={form.teacherId ?? UNASSIGNED}
-              onValueChange={(value) => set("teacherId", value === UNASSIGNED ? null : value)}
-            >
-              <SelectTrigger id="course-teacher">
-                <SelectValue placeholder="Unassigned" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={UNASSIGNED}>Unassigned — assign later</SelectItem>
-                {teachers.map((teacher) => (
-                  <SelectItem key={teacher.id} value={teacher.id}>
-                    {teacher.full_name || teacher.email}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label htmlFor="course-teacher">Assigned teachers</Label>
+            <TeacherEmailInput
+              emails={form.teacherEmails}
+              onChange={(emails) => set("teacherEmails", emails)}
+              suggestions={teachers}
+            />
             <p className="text-xs text-muted-foreground">
-              The assigned teacher owns the course and can upload materials and post to it.
+              Every teacher listed can upload materials and post to the course. Leave empty to
+              assign later.
             </p>
           </div>
 

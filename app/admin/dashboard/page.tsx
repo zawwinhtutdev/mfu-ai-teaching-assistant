@@ -40,6 +40,8 @@ interface ApiCourse {
   teacher_id: string | null
   teacher_name: string | null
   teacher_email: string | null
+  /** The full teaching team; `teacher_*` above is the legacy primary owner. */
+  teachers?: Array<{ id: string; full_name: string | null; email: string }>
   enrolled_students: number
   documents: number
   documents_ready: number
@@ -59,6 +61,14 @@ function toFormValues(course: ApiCourse): CourseFormValues {
     school: course.school ?? "",
     furtherInformation: course.further_information ?? "",
     teacherId: course.teacher_id,
+    // Prefer the full team; fall back to the legacy single owner so a course
+    // created before multiple teachers existed still opens with its teacher.
+    teacherEmails:
+      course.teachers && course.teachers.length > 0
+        ? course.teachers.map((teacher) => teacher.email)
+        : course.teacher_email
+          ? [course.teacher_email]
+          : [],
   }
 }
 
