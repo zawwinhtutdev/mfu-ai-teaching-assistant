@@ -148,44 +148,37 @@ export default function ManageCoursesPage() {
       {/* page head */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: TEXT, margin: 0 }}>Manage courses</h1>
-        <span
-          style={{
-            minWidth: 22,
-            height: 22,
-            padding: "0 7px",
-            borderRadius: 6,
-            background: "#f4f6fa",
-            color: TERT,
-            fontSize: 13,
-            fontWeight: 600,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          {courses.length}
-        </span>
-        <button
-          type="button"
-          onClick={() => void load()}
-          aria-label="Refresh"
-          style={{
-            width: 34,
-            height: 34,
-            borderRadius: 999,
-            border: "none",
-            background: "transparent",
-            color: MUTED,
-            cursor: "pointer",
-            fontSize: 16,
-          }}
-        >
-          ⟳
-        </button>
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ position: "relative", width: 240 }}>
-            <span style={{ position: "absolute", left: 14, top: 11, color: TERT, fontSize: 14 }}>⌕</span>
+            {/*
+              Drawn as an SVG rather than the "⌕" character. That glyph is a
+              symbol-font codepoint whose apparent size depends on which font the
+              browser substitutes for it, which is why it rendered as a speck
+              next to the placeholder text. An SVG has an explicit box, so it
+              matches the text at any zoom or platform.
+            */}
+            <svg
+              aria-hidden
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              style={{
+                position: "absolute",
+                left: 13,
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: TERT,
+                pointerEvents: "none",
+              }}
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -194,7 +187,7 @@ export default function ManageCoursesPage() {
               style={{
                 width: "100%",
                 height: 40,
-                padding: "0 14px 0 34px",
+                padding: "0 14px 0 36px",
                 borderRadius: 999,
                 border: `1px solid ${LINE}`,
                 background: "#fff",

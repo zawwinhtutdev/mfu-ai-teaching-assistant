@@ -54,7 +54,6 @@ export interface PortalShellProps {
   extra?: React.ReactNode
   /** Rendered above the first nav group (e.g. a pinned course picker). */
   extraTop?: React.ReactNode
-  contextChip?: React.ReactNode
   onNavigate?: (href: string) => boolean
   children: React.ReactNode
 }
@@ -82,8 +81,11 @@ function isActive(pathname: string, search: URLSearchParams, item: PortalNavItem
   return true
 }
 
+/** Remembered across visits, so a collapsed console stays collapsed. */
+const SIDE_COLLAPSED_KEY = "mfp.admin.side.collapsed"
+
 export function PortalShell(props: PortalShellProps) {
-  const { variant, chrome, productName, title, crumbs, nav, actions, railItems, extra, extraTop, contextChip, onNavigate, children } = props
+  const { variant, chrome, productName, title, crumbs, nav, actions, railItems, extra, extraTop, onNavigate, children } = props
   const pathname = usePathname() || ""
   const searchParams = useSearchParams()
   const search = React.useMemo(() => new URLSearchParams(searchParams?.toString() ?? ""), [searchParams])
@@ -98,6 +100,36 @@ export function PortalShell(props: PortalShellProps) {
    * section without fighting the user's last click.
    */
   const [toggled, setToggled] = React.useState<Record<string, boolean>>({})
+
+  /**
+   * Desktop collapse for the admin nav column.
+   *
+   * Separate from `mobileOpen`, which drives the drawer on narrow screens: the
+   * desktop column is inline, so hiding it is a layout choice the user expects
+   * to persist, not a modal state that resets on navigation. Starts expanded and
+   * is restored from storage in an effect so server and client markup agree.
+   */
+  const [sideCollapsed, setSideCollapsed] = React.useState(false)
+
+  React.useEffect(() => {
+    try {
+      setSideCollapsed(window.localStorage.getItem(SIDE_COLLAPSED_KEY) === "true")
+    } catch {
+      // Storage can be unavailable (private mode); expanded is a safe default.
+    }
+  }, [])
+
+  const toggleSide = () => {
+    setSideCollapsed((current) => {
+      const next = !current
+      try {
+        window.localStorage.setItem(SIDE_COLLAPSED_KEY, String(next))
+      } catch {
+        // Ignore: the in-memory toggle still works for this session.
+      }
+      return next
+    })
+  }
   const isExpanded = (item: PortalNavItem) => {
     const explicit = toggled[item.href]
     if (explicit !== undefined) return explicit
@@ -109,6 +141,24 @@ export function PortalShell(props: PortalShellProps) {
   const items = nav.flatMap((g) => g.items)
   const rail = railItems?.length ? railItems : items.slice(0, 5)
   const brandTone = variant === "admin" ? "light" : "dark"
+
+  /**
+   * Below 641px the admin nav is an off-canvas drawer rather than an inline
+   * column, so the topbar toggle has to drive a different piece of state. This
+   * matches the breakpoint the stylesheet uses (`.mfp-admin-side-close` and the
+   * dense column are both scoped to 641px).
+   *
+   * Starts false so the server and first client render agree; the real value is
+   * applied after mount, which is also when the toggle becomes meaningful.
+   */
+  const [isNarrow, setIsNarrow] = React.useState(false)
+  React.useEffect(() => {
+    const query = window.matchMedia("(max-width: 640px)")
+    const sync = () => setIsNarrow(query.matches)
+    sync()
+    query.addEventListener("change", sync)
+    return () => query.removeEventListener("change", sync)
+  }, [])
 
   // Close the mobile drawer on Escape and lock background scroll while it is open.
   React.useEffect(() => {
@@ -148,7 +198,6 @@ export function PortalShell(props: PortalShellProps) {
           </div>
         ) : null}
       </div>
-      {contextChip ? <div className="mfp-chip">{contextChip}</div> : null}
       <div className="mfp-head-actions">{actions}</div>
     </header>
   )
@@ -256,7 +305,7 @@ export function PortalShell(props: PortalShellProps) {
   const drawer = (
     <>
       <div className="mfp-scrim" data-open={mobileOpen} onClick={() => setMobileOpen(false)} aria-hidden />
-      <aside className="mfp-drawer" data-open={mobileOpen} aria-label={productName} inert={!mobileOpen}>
+      <aside className="mfp-drawer" id="mfp-more-drawer" data-open={mobileOpen} aria-label={productName} inert={!mobileOpen}>
         <div className="mfp-brandblock">
           <BrandIcon size={30} tone={brandTone as "light" | "dark"} />
           <div className="mfp-brandblock-text">
@@ -328,6 +377,25 @@ export function PortalShell(props: PortalShellProps) {
             )
           })}
           <div className="mfp-rail-spacer" />
+          {/*
+            The rail carries five destinations, but the portal has more than
+            five pages (reminders, documents, analytics, agent builder). Those
+            were reachable only through the drawer, and the drawer's toggle is
+            `.mfp-only-mobile`, so on desktop there was no way to open it and
+            those pages had no link at all. This button opens the same drawer at
+            every width.
+          */}
+          <button
+            type="button"
+            className="mfp-rail-btn"
+            onClick={() => setMobileOpen(true)}
+            aria-label="More sections"
+            aria-expanded={mobileOpen}
+            aria-controls="mfp-more-drawer"
+          >
+            <Menu size={20} />
+            <span className="mfp-rail-label">More</span>
+          </button>
           <span className="mfp-rail-label mfp-rail-caption">{variant}</span>
         </aside>
 
@@ -344,29 +412,56 @@ export function PortalShell(props: PortalShellProps) {
   return (
     <div className="mfp" data-variant={variant} data-chrome="topbar">
       <div className="mfp-topbar">
-        {/* The dense nav column is off-canvas below 1024px, so the topbar needs
-            its own toggle. Without this the sidebar translated itself out of
-            view and no control existed to bring it back. */}
+        {/*
+          One sidebar control, first in the bar so it sits at the very left edge
+          where a nav toggle is expected, and outside the panel it hides.
+
+          It replaces two earlier buttons: a mobile-only drawer toggle and a
+          desktop toggle after the product name. Keeping both meant the control
+          moved between widths and could be confused with the panel's own X.
+          The icon reflects state — X while the column is open, menu while it is
+          closed — so there is always a way back from one fixed position.
+        */}
         <button
           type="button"
-          className="mfp-icon-btn mfp-topbar-menu mfp-only-mobile"
-          onClick={() => setMobileOpen((v) => !v)}
-          aria-label="Toggle navigation"
-          aria-expanded={mobileOpen}
+          className="mfp-icon-btn mfp-topbar-collapse"
+          onClick={() => {
+            // Below 641px the same nav element is the off-canvas drawer, which
+            // is a different state from the inline column being collapsed.
+            if (isNarrow) setMobileOpen((open) => !open)
+            else toggleSide()
+          }}
+          aria-label={
+            isNarrow ? "Toggle navigation" : sideCollapsed ? "Show navigation" : "Hide navigation"
+          }
+          aria-expanded={isNarrow ? mobileOpen : !sideCollapsed}
+          aria-controls="mfp-dense-nav"
         >
-          {mobileOpen ? <X size={18} /> : <Menu size={18} />}
+          {isNarrow ? (
+            mobileOpen ? <X size={18} /> : <Menu size={18} />
+          ) : sideCollapsed ? (
+            <Menu size={18} />
+          ) : (
+            <X size={18} />
+          )}
         </button>
         <BrandIcon size={28} tone="light" />
         <div className="mfp-topbar-id">
           <span className="mfp-topbar-name">MFU AI</span>
           <span className="mfp-topbar-product">{productName}</span>
         </div>
-        {contextChip ? <div className="mfp-chip">{contextChip}</div> : null}
         <div className="mfp-head-actions">{actions}</div>
       </div>
       <div className="mfp-body">
         <div className="mfp-scrim" data-open={mobileOpen} onClick={() => setMobileOpen(false)} aria-hidden />
-        <nav className="mfp-side mfp-side--dense" data-open={mobileOpen} aria-label="Sections">
+        <nav
+          id="mfp-dense-nav"
+          className="mfp-side mfp-side--dense"
+          data-open={mobileOpen}
+          data-collapsed={sideCollapsed}
+          aria-label="Sections"
+          aria-hidden={sideCollapsed ? true : undefined}
+        >
           <div className="mfp-side-scroll">{navList(true)}</div>
           {extra ? <div className="mfp-side-footer">{extra}</div> : null}
         </nav>
