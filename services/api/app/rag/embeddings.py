@@ -80,7 +80,7 @@ class GeminiEmbeddings:
     def __init__(
         self,
         api_key: str,
-        model: str = "text-embedding-004",
+        model: str = "gemini-embedding-001",
         dim: int = EMBEDDING_DIM,
         timeout_s: float = 60.0,
     ) -> None:
