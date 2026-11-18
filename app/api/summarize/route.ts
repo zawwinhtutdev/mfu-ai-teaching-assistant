@@ -1,10 +1,8 @@
-import { createClient } from "@/lib/supabase/server"
 import { getCourseMaterialSourceText } from "@/lib/ai/course-rag"
 import { completeText } from "@/lib/ai/text-generation"
 import { assertCourseAccess, clientForPrincipal, resolvePrincipal } from "@/lib/server/principal"
 
-export async function POST(req: Request) {
-  const principal = await resolvePrincipal()
+export async function POST(req: Request) {  const principal = await resolvePrincipal()
   if (!principal) {
     return Response.json({ error: "Unauthorized" }, { status: 401 })
   }
@@ -59,6 +57,18 @@ Provide a well-structured summary with:
 3. Important takeaways`,
     )
 
+    // Store it. Returning without saving is what left the Flashcards/summary
+    // surfaces permanently empty for real users: the caller showed the text
+    // once and a reload lost it. Teachers writing to their own material update
+    // the course-level column; everyone else gets a private per-student row.
+    await persistSummary({
+      supabase,
+      principal,
+      materialId,
+      courseId: material.course_id,
+      summary,
+    })
+
     return Response.json({ summary })
   } catch (error: any) {
     console.error("[summarize] failed:", error?.message || error)
@@ -67,4 +77,40 @@ Provide a well-structured summary with:
       { status: 502 },
     )
   }
+}
+
+async function persistSummary(params: {
+  supabase: any
+  principal: { userId: string; role: string; isPersistable: boolean }
+  materialId: string
+  courseId: string
+  summary: string
+}) {
+  const { supabase, principal, materialId, courseId, summary } = params
+
+  // Demo principals carry seed ids like "student-1", which are not UUIDs and
+  // would fail the foreign key. Their summary still renders this session.
+  if (!principal.isPersistable) return
+
+  const ownsCourse = principal.role === "teacher" || principal.role === "admin"
+
+  if (ownsCourse) {
+    const { error } = await supabase
+      .from("course_materials")
+      .update({ summary_text: summary })
+      .eq("id", materialId)
+    if (error) console.error("[summarize] could not store course summary:", error.message)
+    return
+  }
+
+  const { error } = await supabase.from("material_summaries").upsert(
+    {
+      student_id: principal.userId,
+      material_id: materialId,
+      course_id: courseId,
+      summary_text: summary,
+    },
+    { onConflict: "student_id,material_id" },
+  )
+  if (error) console.error("[summarize] could not store student summary:", error.message)
 }

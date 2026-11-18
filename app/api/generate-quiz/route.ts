@@ -77,9 +77,59 @@ Return JSON exactly in this shape:
       throw new Error("The model returned a question without exactly four options or a valid answer index")
     }
 
-    return Response.json(result)
+    // Persist. A teacher generating from their own material creates a
+    // course-wide quiz they can review before releasing; a student gets a
+    // personal practice quiz, which is what spec §2.1 "Study Guidance" means
+    // by personalised practice questions.
+    const saved = await persistQuiz({
+      supabase,
+      principal,
+      materialId,
+      courseId: material.course_id,
+      quiz: result,
+    })
+
+    return Response.json({ ...result, id: saved?.id ?? null, saved: Boolean(saved) })
   } catch (error: any) {
     console.error("[quiz] failed:", error?.message || error)
     return Response.json({ error: error?.message || "Could not generate a quiz" }, { status: 502 })
   }
+}
+
+async function persistQuiz(params: {
+  supabase: any
+  principal: { userId: string; role: string; isPersistable: boolean }
+  materialId: string
+  courseId: string
+  quiz: { title: string; questions: Array<{ question: string; options: string[]; correct_answer: number }> }
+}): Promise<{ id: string } | null> {
+  const { supabase, principal, materialId, courseId, quiz } = params
+
+  // Demo ids are seed strings, not UUIDs, and would violate the foreign keys.
+  if (!principal.isPersistable) return null
+
+  const isTeacher = principal.role === "teacher" || principal.role === "admin"
+
+  const { data, error } = await supabase
+    .from("quizzes")
+    .insert({
+      course_id: courseId,
+      material_id: materialId,
+      title: quiz.title,
+      questions: quiz.questions,
+      created_by: principal.userId,
+      // A generated quiz is a draft for the teacher to review; a student's
+      // practice quiz is private to them and needs no review step.
+      is_published: !isTeacher,
+      student_id: isTeacher ? null : principal.userId,
+    })
+    .select("id")
+    .maybeSingle()
+
+  if (error) {
+    console.error("[quiz] could not store quiz:", error.message)
+    return null
+  }
+
+  return data ?? null
 }

@@ -1,7 +1,16 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
 
-// Standard SUS questions
+import { assertCourseAccess, clientForPrincipal, resolvePrincipal } from "@/lib/server/principal"
+
+/**
+ * Evaluation surveys (spec §9 usability / satisfaction measurement).
+ *
+ * Previously authenticated with `supabase.auth.getUser()` only. Demo accounts
+ * therefore got a 401, the student widget hid itself and the teacher panel
+ * always reported "No surveys yet" — making the §9 targets unmeasurable in the
+ * environment the project is demonstrated in.
+ */
+
 const SUS_QUESTIONS = [
   "I think that I would like to use this system frequently.",
   "I found the system unnecessarily complex.",
@@ -16,85 +25,86 @@ const SUS_QUESTIONS = [
 ]
 
 /**
- * Calculate SUS score from answers array (1-5 scale for 10 questions)
- * Odd-numbered questions: score - 1
- * Even-numbered questions: 5 - score
- * Sum * 2.5 = SUS score (0-100)
+ * SUS score from ten 1-5 answers.
+ * Odd items score (value - 1), even items score (5 - value); the sum is doubled
+ * and multiplied by 2.5 to normalise to 0-100.
  */
 function calculateSUSScore(answers: number[]): number {
   if (answers.length !== 10) return 0
-
   let sum = 0
-  for (let i = 0; i < 10; i++) {
-    if (i % 2 === 0) {
-      // Odd questions (0-indexed even): score - 1
-      sum += answers[i] - 1
-    } else {
-      // Even questions (0-indexed odd): 5 - score
-      sum += 5 - answers[i]
-    }
+  for (let i = 0; i < 10; i += 1) {
+    sum += i % 2 === 0 ? answers[i] - 1 : 5 - answers[i]
   }
-
   return sum * 2.5
 }
 
-/**
- * GET /api/surveys
- * List surveys (teacher sees all their surveys, student sees active ones for enrolled courses)
- */
 export async function GET(req: Request) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
+    const principal = await resolvePrincipal()
+    if (!principal) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const url = new URL(req.url)
     const courseId = url.searchParams.get("courseId")
     const surveyId = url.searchParams.get("surveyId")
+    const supabase = await clientForPrincipal(principal)
 
-    // If requesting results for a specific survey
+    // Results for one survey.
     if (surveyId) {
       const { data: survey } = await supabase
         .from("surveys")
         .select("*")
         .eq("id", surveyId)
-        .single()
+        .maybeSingle()
 
       if (!survey) {
         return NextResponse.json({ error: "Survey not found" }, { status: 404 })
       }
 
+      const course = await assertCourseAccess(principal, survey.course_id)
+      if (!course) {
+        return NextResponse.json({ error: "You do not have access to this survey" }, { status: 403 })
+      }
+
       const { data: responses } = await supabase
         .from("survey_responses")
-        .select("*")
+        .select("id, score, answers, created_at")
         .eq("survey_id", surveyId)
 
-      const totalResponses = responses?.length || 0
-      const avgScore = totalResponses > 0
-        ? (responses!.reduce((sum, r) => sum + (r.score || 0), 0) / totalResponses)
-        : null
+      const rows = responses ?? []
+      const scored = rows.filter((row: any) => typeof row.score === "number")
+      const averageScore =
+        scored.length > 0
+          ? scored.reduce((sum: number, row: any) => sum + row.score, 0) / scored.length
+          : null
 
       return NextResponse.json({
         survey,
-        responses: responses || [],
+        responses: rows,
         stats: {
-          totalResponses,
-          averageScore: avgScore ? Math.round(avgScore * 10) / 10 : null,
+          totalResponses: rows.length,
+          averageScore: averageScore === null ? null : Math.round(averageScore * 10) / 10,
           susQuestions: survey.survey_type === "sus" ? SUS_QUESTIONS : undefined,
         },
       })
     }
 
-    // List surveys
-    let query = supabase.from("surveys").select("*").order("created_at", { ascending: false })
-    if (courseId) {
-      query = query.eq("course_id", courseId)
+    // Surveys for a course.
+    if (!courseId) {
+      return NextResponse.json({ error: "courseId or surveyId is required" }, { status: 400 })
     }
 
-    const { data: surveys, error } = await query
+    const course = await assertCourseAccess(principal, courseId)
+    if (!course) {
+      return NextResponse.json({ error: "You do not have access to this course" }, { status: 403 })
+    }
+
+    const { data: surveys, error } = await supabase
+      .from("surveys")
+      .select("*")
+      .eq("course_id", course.id)
+      .order("created_at", { ascending: false })
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
@@ -106,94 +116,105 @@ export async function GET(req: Request) {
   }
 }
 
-/**
- * POST /api/surveys
- * Create a new survey (teacher) or submit a response (student)
- */
 export async function POST(req: Request) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
+    const principal = await resolvePrincipal()
+    if (!principal) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const body = await req.json()
+    let body: any
+    try {
+      body = await req.json()
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
+    }
 
-    // If submitting a response
-    if (body.surveyId && body.answers) {
-      const { surveyId, answers } = body
+    const supabase = await clientForPrincipal(principal)
 
+    // Submitting a response.
+    if (body?.surveyId && body?.answers) {
       const { data: survey } = await supabase
         .from("surveys")
         .select("*")
-        .eq("id", surveyId)
-        .single()
+        .eq("id", body.surveyId)
+        .maybeSingle()
 
       if (!survey) {
         return NextResponse.json({ error: "Survey not found" }, { status: 404 })
       }
 
-      // Calculate score
-      let score: number | null = null
-      if (survey.survey_type === "sus") {
-        const scores = Object.values(answers) as number[]
-        score = calculateSUSScore(scores)
-      } else {
-        // Satisfaction: average of all answers (1-5)
-        const values = Object.values(answers) as number[]
-        score = values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : null
+      const course = await assertCourseAccess(principal, survey.course_id)
+      if (!course) {
+        return NextResponse.json({ error: "You do not have access to this survey" }, { status: 403 })
+      }
+
+      const values = Object.values(body.answers) as number[]
+      if (values.length === 0 || values.some((value) => typeof value !== "number")) {
+        return NextResponse.json({ error: "answers must map to numeric ratings" }, { status: 400 })
+      }
+
+      const score =
+        survey.survey_type === "sus"
+          ? calculateSUSScore(values)
+          : values.reduce((a, b) => a + b, 0) / values.length
+
+      // A demo principal has no profile row, so the response cannot be stored
+      // against a user id. Report the computed score instead of throwing a
+      // foreign-key error at the student.
+      if (!principal.isPersistable) {
+        return NextResponse.json({ score, stored: false })
       }
 
       const { data: response, error } = await supabase
         .from("survey_responses")
         .upsert(
           {
-            survey_id: surveyId,
-            user_id: user.id,
-            answers,
+            survey_id: body.surveyId,
+            user_id: principal.userId,
+            answers: body.answers,
             score,
           },
-          { onConflict: "survey_id,user_id" }
+          { onConflict: "survey_id,user_id" },
         )
         .select()
-        .single()
+        .maybeSingle()
 
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 })
       }
 
-      return NextResponse.json({ response, score })
+      return NextResponse.json({ response, score, stored: true })
     }
 
-    // Creating a new survey (teacher only)
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
-
-    if (profile?.role !== "teacher" && profile?.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    // Creating a survey (teacher or admin).
+    if (principal.role !== "teacher" && principal.role !== "admin") {
+      return NextResponse.json({ error: "Only a teacher may create a survey" }, { status: 403 })
     }
 
-    const { title, surveyType, courseId } = body
+    const title = typeof body?.title === "string" ? body.title.trim() : ""
+    const surveyType = body?.surveyType === "sus" ? "sus" : "satisfaction"
+    const courseId = typeof body?.courseId === "string" ? body.courseId : ""
 
-    if (!title || !surveyType || !courseId) {
-      return NextResponse.json({ error: "title, surveyType, and courseId are required" }, { status: 400 })
+    if (!title || !courseId) {
+      return NextResponse.json({ error: "title and courseId are required" }, { status: 400 })
+    }
+
+    const course = await assertCourseAccess(principal, courseId)
+    if (!course) {
+      return NextResponse.json({ error: "You do not have access to this course" }, { status: 403 })
     }
 
     const { data: survey, error } = await supabase
       .from("surveys")
       .insert({
-        title: title.trim(),
+        title,
         survey_type: surveyType,
-        course_id: courseId,
-        created_by: user.id,
+        course_id: course.id,
+        ...(principal.isPersistable ? { created_by: principal.userId } : {}),
       })
       .select()
-      .single()
+      .maybeSingle()
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
@@ -201,6 +222,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ survey })
   } catch (error: any) {
-    return NextResponse.json({ error: error?.message || "Failed" }, { status: 500 })
+    return NextResponse.json({ error: error?.message || "Failed to process survey" }, { status: 500 })
   }
 }
