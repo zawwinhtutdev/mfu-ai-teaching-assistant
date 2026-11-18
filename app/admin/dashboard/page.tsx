@@ -148,40 +148,6 @@ export default function ManageCoursesPage() {
       {/* page head */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: TEXT, margin: 0 }}>Manage courses</h1>
-        <span
-          style={{
-            minWidth: 22,
-            height: 22,
-            padding: "0 7px",
-            borderRadius: 6,
-            background: "#f4f6fa",
-            color: TERT,
-            fontSize: 13,
-            fontWeight: 600,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          {courses.length}
-        </span>
-        <button
-          type="button"
-          onClick={() => void load()}
-          aria-label="Refresh"
-          style={{
-            width: 34,
-            height: 34,
-            borderRadius: 999,
-            border: "none",
-            background: "transparent",
-            color: MUTED,
-            cursor: "pointer",
-            fontSize: 16,
-          }}
-        >
-          ⟳
-        </button>
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ position: "relative", width: 240 }}>
