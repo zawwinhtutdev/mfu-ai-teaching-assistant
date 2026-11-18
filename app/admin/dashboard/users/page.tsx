@@ -14,12 +14,13 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Users as UsersIcon, Search, GraduationCap, ShieldCheck, BookOpen } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { AddUserDialog } from "@/components/admin/add-user-dialog"
+import { Users as UsersIcon, Search, GraduationCap, ShieldCheck, BookOpen, Plus } from "lucide-react"
 
 type AdminRole = "student" | "teacher" | "admin"
 
@@ -38,14 +39,15 @@ function parseRole(value: string | null): AdminRole {
 }
 
 export default function UsersPage() {
-  const router = useRouter()
-  const pathname = usePathname()
+  // Only the search params are needed now that role changes happen at creation
+  // rather than from a per-row control.
   const searchParams = useSearchParams()
 
   const [users, setUsers] = useState<AdminUser[]>([])
   const [search, setSearch] = useState("")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [addOpen, setAddOpen] = useState(false)
 
   const activeRole = parseRole(searchParams.get("role"))
 
@@ -90,30 +92,6 @@ export default function UsersPage() {
     )
   }, [byRole, activeRole, query])
 
-  const setUserRole = async (userId: string, role: AdminRole) => {
-    setError(null)
-    // A promotion moves the row to another view. Remember where it came from so
-    // a failed request can put it back instead of leaving the list wrong.
-    const previous = users.find((u) => u.id === userId)
-    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role } : u)))
-    try {
-      const res = await fetch("/api/admin/users", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, role }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data?.error)
-      // Follow the user into their new view so the change is visible.
-      router.replace(`${pathname}?role=${role}`)
-    } catch (err: any) {
-      if (previous) {
-        setUsers((prev) => prev.map((u) => (u.id === userId ? previous : u)))
-      }
-      setError(err?.message || "Failed to update role")
-    }
-  }
-
   const roleBadge = (role: AdminRole) => {
     switch (role) {
       case "admin":
@@ -144,13 +122,19 @@ export default function UsersPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: "24px" }}>
-        <h1 style={{ fontSize: "24px", fontWeight: 700, color: "#00001b", margin: "0 0 4px" }}>
-          User Management
-        </h1>
-        <p style={{ fontSize: "14px", color: "#888", margin: 0 }}>
-          Switch between students, teachers, and administrators from Members in the sidebar
-        </p>
+      <div style={{ marginBottom: "24px", display: "flex", alignItems: "flex-start", gap: 16 }}>
+        <div>
+          <h1 style={{ fontSize: "24px", fontWeight: 700, color: "#00001b", margin: "0 0 4px" }}>
+            User Management
+          </h1>
+          <p style={{ fontSize: "14px", color: "#888", margin: 0 }}>
+            Switch between students, teachers, and administrators from Members in the sidebar
+          </p>
+        </div>
+        <Button className="ml-auto shrink-0" onClick={() => setAddOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Add account
+        </Button>
       </div>
 
       {error && (
@@ -222,19 +206,9 @@ export default function UsersPage() {
                         Joined {new Date(user.created_at).toLocaleDateString()}
                       </p>
                     </div>
-                    <Select
-                      value={user.role}
-                      onValueChange={(next: AdminRole) => setUserRole(user.id, next)}
-                    >
-                      <SelectTrigger className="w-[130px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="student">student</SelectItem>
-                        <SelectItem value="teacher">teacher</SelectItem>
-                        <SelectItem value="admin">admin</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    {/* Role is shown as a badge only. Changing it per row was an
+                        easy way to demote yourself or promote a student by
+                        accident; role is set when the account is created. */}
                   </div>
                 ))}
               </div>
@@ -242,6 +216,13 @@ export default function UsersPage() {
           )}
         </CardContent>
       </Card>
+
+      <AddUserDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        defaultRole={activeRole}
+        onCreated={() => void loadUsers()}
+      />
     </div>
   )
 }
