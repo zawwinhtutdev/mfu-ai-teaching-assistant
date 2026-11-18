@@ -18,6 +18,7 @@ import {
 import { CalendarClock, CheckCircle2, Loader2, Plus, Trash2, Upload, Users } from "lucide-react"
 import { SubmitAssignmentDialog, type Submission } from "./submit-assignment-dialog"
 import { SubmissionsDialog } from "./submissions-dialog"
+import { CourseGradebook } from "./course-gradebook"
 
 export type Assignment = {
   id: string
@@ -198,10 +199,19 @@ export function AssignmentsPanel({ courseId, canManage }: AssignmentsPanelProps)
   )
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/*
+        Teachers get the matrix first: students down, assignments across. The
+        previous design forced a modal per student, so a teacher could not see
+        who had not submitted at all.
+      */}
+      {canManage && <CourseGradebook courseId={courseId} refreshKey={assignments.length} />}
+
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold">Assignments</h3>
+          <h3 className="text-lg font-semibold">
+            {canManage ? "Assignment settings" : "Assignments"}
+          </h3>
           <p className="text-sm text-muted-foreground">
             {canManage
               ? "Deadlines here generate a reminder for every enrolled student one day ahead."
@@ -236,7 +246,7 @@ export function AssignmentsPanel({ courseId, canManage }: AssignmentsPanelProps)
         </Card>
       ) : (
         <>
-          <div className="space-y-3">
+          <div className={canManage ? "grid gap-3 md:grid-cols-2" : "space-y-3"}>
             {upcoming.map((assignment) => {
               const state = dueState(assignment.due_at)
               return (

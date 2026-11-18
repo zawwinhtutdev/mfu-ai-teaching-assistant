@@ -97,6 +97,8 @@ const PROBES = {
     { method: "POST", path: "/api/reminders", body: {}, ok: [403], name: "teacher cannot create reminder" },
     // A teacher must not be able to read another teacher's course.
     { method: "GET", path: "/api/courses/course-ai-edu/chatbot-settings", ok: [403], name: "no cross-teacher access" },
+    // The gradebook reads across a whole course, so it must be teacher-only.
+    { method: "GET", path: `/api/courses/${COURSE_SEED_ID}/submissions`, ok: [200], name: "gradebook" },
   ],
   student: [
     { method: "GET", path: "/api/portal-data", ok: [200] },
@@ -116,6 +118,8 @@ const PROBES = {
     { method: "PATCH", path: "/api/consents", body: {}, ok: [400] },
     // A student must not be able to read or change another course's agent.
     { method: "GET", path: "/api/courses/course-ai-edu/chatbot-settings", ok: [403], name: "no cross-course access" },
+    // The gradebook exposes every student's work, so a student must be refused.
+    { method: "GET", path: `/api/courses/${COURSE_SEED_ID}/submissions`, ok: [403], name: "student cannot read gradebook" },
     { method: "PUT", path: `/api/courses/${COURSE_SEED_ID}/chatbot-settings`, body: { tone: "friendly" }, ok: [403], name: "student cannot edit settings" },
   ],
   admin: [
