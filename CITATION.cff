@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this project in academic work, please cite it as below."
+title: "MFU AI Teaching Assistant"
+abstract: "A course-scoped RAG teaching assistant: isolated course retrieval, verified citations, role-aware student/teacher/admin portals, and Google SSO, built with Next.js, Supabase and the Vercel AI SDK."
+authors:
+  - family-names: Htut
+    given-names: Zaw Win
+    alias: zawwinhuttt
+    website: "https://github.com/zawwinhuttt"
+version: 1.0.0
+date-released: 2026-11-19
+license: MIT
+repository-code: "https://github.com/zawwinhtutdev/mfu-ai-teaching-assistant"
+url: "https://aiassistant-mfu.vercel.app"
+keywords:
+  - retrieval-augmented-generation
+  - course-scoped-rag
+  - education
+  - nextjs
+  - supabase
+  - pgvector
+  - llm
+  - citations

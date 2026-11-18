@@ -141,6 +141,6 @@ if [ "${1:-status}" = "start" ] || [ "${1:-status}" = "restart" ]; then
   anan.suwan@mfu.ac.th         teacher
   malee.chaiyaporn@mfu.ac.th   teacher
   somchai.prasert@mfu.ac.th    teacher
-  6631503078@lamduan.mfu.ac.th student (+5 more)
+  6531503078@lamduan.mfu.ac.th student (+5 more)
 LINKS
 fi

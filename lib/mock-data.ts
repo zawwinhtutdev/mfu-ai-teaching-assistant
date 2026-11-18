@@ -1,6 +1,6 @@
 export const mockStudentProfile = {
   id: "mock-student-1",
-  email: "6631503101@lamduan.mfu.ac.th", // Updated to use correct university email format
+  email: "6531503101@lamduan.mfu.ac.th", // Updated to use correct university email format
   full_name: "Name",
   role: "student" as const,
   avatar_url: null,

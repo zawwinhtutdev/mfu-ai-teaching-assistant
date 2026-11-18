@@ -25,7 +25,7 @@ export function getEmailDomainError(): string {
 
 /**
  * Extracts student ID from university email
- * Example: 6631503101@lamduan.mfu.ac.th -> 6631503101
+ * Example: 6531503101@lamduan.mfu.ac.th -> 6531503101
  * Example: teacher@mfu.ac.th -> teacher
  */
 export function extractStudentId(email: string): string | null {
