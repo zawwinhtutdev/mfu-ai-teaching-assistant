@@ -54,7 +54,6 @@ export interface PortalShellProps {
   extra?: React.ReactNode
   /** Rendered above the first nav group (e.g. a pinned course picker). */
   extraTop?: React.ReactNode
-  contextChip?: React.ReactNode
   onNavigate?: (href: string) => boolean
   children: React.ReactNode
 }
@@ -86,7 +85,7 @@ function isActive(pathname: string, search: URLSearchParams, item: PortalNavItem
 const SIDE_COLLAPSED_KEY = "mfp.admin.side.collapsed"
 
 export function PortalShell(props: PortalShellProps) {
-  const { variant, chrome, productName, title, crumbs, nav, actions, railItems, extra, extraTop, contextChip, onNavigate, children } = props
+  const { variant, chrome, productName, title, crumbs, nav, actions, railItems, extra, extraTop, onNavigate, children } = props
   const pathname = usePathname() || ""
   const searchParams = useSearchParams()
   const search = React.useMemo(() => new URLSearchParams(searchParams?.toString() ?? ""), [searchParams])
@@ -181,7 +180,6 @@ export function PortalShell(props: PortalShellProps) {
           </div>
         ) : null}
       </div>
-      {contextChip ? <div className="mfp-chip">{contextChip}</div> : null}
       <div className="mfp-head-actions">{actions}</div>
     </header>
   )
@@ -427,7 +425,6 @@ export function PortalShell(props: PortalShellProps) {
           <span className="mfp-topbar-name">MFU AI</span>
           <span className="mfp-topbar-product">{productName}</span>
         </div>
-        {contextChip ? <div className="mfp-chip">{contextChip}</div> : null}
         <div className="mfp-head-actions">{actions}</div>
       </div>
       <div className="mfp-body">

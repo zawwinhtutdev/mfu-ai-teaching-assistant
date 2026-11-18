@@ -163,7 +163,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       variant="admin"
       chrome="topbar"
       productName="Admin Console"
-      contextChip="Production"
       title={title}
       crumbs={["Admin Console", title]}
       nav={nav}
