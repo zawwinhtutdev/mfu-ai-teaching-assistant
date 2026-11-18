@@ -1,0 +1,236 @@
+# Deploying to the VPS
+
+Target: Ubuntu 24.04, 2 vCPU / 2 GB, DigitalOcean `178.128.121.247`.
+
+The server is already prepared — Docker, `deploy` user, ufw, 2 GB swap, and
+`/var/www/ata/{app,data,logs,backups,secrets}` all exist. This document covers
+getting the application onto it.
+
+## What runs where
+
+```
+VPS (this server)                 Supabase Cloud
+├── caddy   :443  ← public        ├── Postgres + pgvector  (all tables)
+├── web     :3000 ← loopback      ├── Auth                 (login, Google SSO)
+│                                 └── Storage              (avatars, PDFs)
+└── outbound: Gemini API (AI)
+```
+
+**There is no database on the VPS.** The app never opens a direct Postgres
+connection — every query goes through the Supabase client, and the migrations
+reference `auth.users` / `storage.objects`, which only exist inside Supabase.
+A local container cannot serve the app. See the comment block at the top of
+`docker-compose.prod.yml`.
+
+## Prerequisites
+
+| Item | Where to get it |
+|---|---|
+| Supabase project (paid) | supabase.com — free tier pauses when idle |
+| Gemini API key | aistudio.google.com/apikey |
+| A domain | e.g. `ata.mfu.ac.th` |
+| DNS A record | `ata.mfu.ac.th` → `178.128.121.247` |
+
+Caddy cannot issue a certificate until DNS resolves. Verify with:
+
+```bash
+dig +short ata.mfu.ac.th    # must print 178.128.121.247
+```
+
+## 1. Apply the schema to Supabase
+
+The VPS never runs migrations — they belong to the Supabase project.
+
+```bash
+# on your laptop, in this repo
+supabase link --project-ref <your-project-ref>
+supabase db push                 # applies all 27 migrations
+psql "<your-db-connection-string>" -f supabase/seed.sql   # demo data
+```
+
+Verify before moving on:
+
+```sql
+select count(*) from public.courses;    -- expect 7+
+select count(*) from public.profiles;   -- expect 10
+```
+
+## 2. Put the code on the server
+
+```bash
+ssh deploy@178.128.121.247
+cd /var/www/ata/app
+git clone https://github.com/zawwinhtutdev/mfu-ai-teaching-assistant.git .
+git checkout main
+```
+
+## 3. Configure the environment
+
+```bash
+cp .env.production.example .env.production
+chmod 600 .env.production
+nano .env.production
+```
+
+Fill in, at minimum:
+
+```bash
+ENVIRONMENT=production
+NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
+SUPABASE_SERVICE_ROLE_KEY=<service role key>
+GOOGLE_GENERATIVE_AI_API_KEY=<gemini key>
+SITE_ADDRESS=ata.mfu.ac.th
+ADMIN_EMAILS=you@mfu.ac.th
+CRON_SECRET=$(openssl rand -hex 32)
+```
+
+Leave `ALLOW_INSECURE_DEV_AUTH` **unset**. `deploy.sh` refuses to run if it is
+`true`, because it grants a passwordless admin session.
+
+`ENVIRONMENT=production` is required, not cosmetic: `/api/health` only applies
+its strict checks (rejecting a loopback Supabase URL and insecure dev auth) when
+it is set, and `deploy.sh` refuses to deploy without it.
+
+## 4. Deploy
+
+```bash
+cd /var/www/ata/app
+./scripts/deploy.sh
+```
+
+The script builds, starts, then polls `/api/health` for up to 40 seconds. On
+failure it prints the last 40 log lines and exits non-zero.
+
+Expected output:
+
+```
+==> building
+==> starting
+==> waiting for health
+    healthy after 12s
+
+deployed: a1b2c3d
+NAME        STATUS
+ata-web     Up (healthy)
+ata-caddy   Up
+```
+
+## 5. Verify
+
+```bash
+curl -s https://ata.mfu.ac.th/api/health | jq
+```
+
+```json
+{
+  "status": "ok",
+  "service": "ata-web",
+  "environment": "production",
+  "checks": {
+    "supabaseUrl":    { "ok": true },
+    "serviceRoleKey": { "ok": true },
+    "secureAuth":     { "ok": true },
+    "database":       { "ok": true }
+  }
+}
+```
+
+A `503` means at least one check failed — the response names which. The most
+common causes:
+
+| Failed check | Meaning |
+|---|---|
+| `supabaseUrl` | not set, or still points at `localhost` |
+| `database` | project paused, wrong URL, or bad anon key |
+| `secureAuth` | `ALLOW_INSECURE_DEV_AUTH=true` is set — fix immediately |
+
+Then confirm login works end to end in a browser:
+
+1. Open `https://ata.mfu.ac.th/login`
+2. Sign in with a seeded account (`docs/TEST_ACCOUNTS.md`, password `demo1234`)
+3. Ask one question in chat — this proves the Gemini key works
+4. Upload a PDF from the teacher course page — this proves storage + embedding
+
+## 6. Backups
+
+```bash
+# once, to verify it runs
+./scripts/backup.sh
+
+# then nightly at 03:15
+crontab -e
+15 3 * * * /var/www/ata/app/scripts/backup.sh >> /var/www/ata/logs/backup.log 2>&1
+```
+
+Snapshots land in `/var/www/ata/backups` (mode 700), kept 14 days. This is an
+*independent* export: Supabase Pro already does daily backups with
+point-in-time recovery, but a Supabase-side deletion would take those with it.
+
+**Copy them off the server.** A backup on the same disk is not a backup:
+
+```bash
+# run from your laptop, weekly
+rsync -avz deploy@178.128.121.247:/var/www/ata/backups/ ./ata-backups/
+```
+
+## Updating a running deployment
+
+```bash
+cd /var/www/ata/app
+./scripts/deploy.sh --pull
+```
+
+`NEXT_PUBLIC_*` values are baked into the browser bundle at build time —
+changing them needs a rebuild, which `deploy.sh` always does. A plain restart
+will not pick them up.
+
+## Rollback
+
+```bash
+cd /var/www/ata/app
+git log --oneline -5
+git checkout <previous-commit>
+./scripts/deploy.sh
+```
+
+Images are built locally, so the previous commit rebuilds to its prior state.
+Migrations are not rolled back — if a deploy included a schema change, revert
+it with a new migration rather than `supabase db reset` against production.
+
+## Troubleshooting
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production ps
+docker compose -f docker-compose.prod.yml --env-file .env.production logs -f web
+docker compose -f docker-compose.prod.yml --env-file .env.production logs -f caddy
+```
+
+**Certificate not issued.** DNS has not propagated, or 80/443 are blocked:
+
+```bash
+dig +short ata.mfu.ac.th
+sudo ufw status
+docker logs ata-caddy 2>&1 | grep -i acme
+```
+
+**Container exits immediately.** Almost always a missing env var. The compose
+file uses `:?` on required values, so `docker compose config` names the
+culprit:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production config
+```
+
+**Out of memory.** 2 GB is enough for web + Caddy (~1.1 GB measured), but a
+build is heavier than the running app. If `npm run build` is OOM-killed during
+`docker compose build`, the 2 GB swap file should absorb it. Confirm it is on:
+
+```bash
+swapon --show
+free -h
+```
+
+**Chat times out after 120s.** `/api/chat` sets `maxDuration = 120`. With a
+cloud API that is ample; a local model on CPU would not be, which is why this
+deployment uses `AI_PROVIDER=gemini`.
