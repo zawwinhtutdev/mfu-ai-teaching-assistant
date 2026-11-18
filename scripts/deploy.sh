@@ -37,6 +37,19 @@ if grep -qE '^ALLOW_INSECURE_DEV_AUTH=true' .env.production; then
   exit 1
 fi
 
+# Presence checks above catch typos in variable names, but not a wrong key. Ask
+# the real services before spending minutes on a build that cannot work. Set
+# SKIP_PREFLIGHT=1 to bypass when the services are unreachable from this host.
+if [ "${SKIP_PREFLIGHT:-0}" != "1" ]; then
+  echo "==> preflight"
+  if ! ./scripts/preflight.sh; then
+    echo "error: preflight failed. Fix the issues above, or SKIP_PREFLIGHT=1 to override." >&2
+    exit 1
+  fi
+else
+  echo "==> preflight skipped (SKIP_PREFLIGHT=1)"
+fi
+
 if [ "${1:-}" = "--pull" ]; then
   echo "==> git pull"
   git pull --ff-only

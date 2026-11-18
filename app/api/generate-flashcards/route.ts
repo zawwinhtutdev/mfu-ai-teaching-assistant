@@ -3,6 +3,7 @@ import { z } from "zod"
 import { getCourseMaterialSourceText } from "@/lib/ai/course-rag"
 import { completeStructured } from "@/lib/ai/text-generation"
 import { assertCourseAccess, clientForPrincipal, resolvePrincipal } from "@/lib/server/principal"
+import { RATE_LIMITS, checkRateLimit, rateLimitResponse, userRateLimitKey } from "@/lib/server/rate-limit"
 
 const flashcardsSchema = z.object({
   flashcards: z.array(
@@ -17,6 +18,13 @@ export async function POST(req: Request) {
   const principal = await resolvePrincipal()
   if (!principal) {
     return Response.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  // Charged before the material lookup so a refused request never reaches the
+  // provider. A request that later 404s still costs an attempt.
+  const limit = checkRateLimit(userRateLimitKey("generate-flashcards", principal.userId), RATE_LIMITS.generation)
+  if (!limit.ok) {
+    return rateLimitResponse(limit)
   }
 
   const { materialId } = await req.json()

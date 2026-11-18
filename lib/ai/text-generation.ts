@@ -12,6 +12,7 @@ import { createGoogle } from "@ai-sdk/google"
 import type { z } from "zod"
 
 import { streamChat, isOllamaEnabled } from "@/lib/ai/ollama"
+import { geminiModelName } from "@/lib/ai/models"
 
 /** Collect a streamed completion into one string. */
 async function ollamaComplete(prompt: string, system?: string): Promise<string> {
@@ -32,7 +33,7 @@ function geminiModel() {
       "No AI provider available: start Ollama (AI_PROVIDER=ollama) or set GOOGLE_GENERATIVE_AI_API_KEY.",
     )
   }
-  return createGoogle({ apiKey })("gemini-3.8-flash")
+  return createGoogle({ apiKey })(geminiModelName())
 }
 
 /** Free-text completion. */

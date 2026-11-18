@@ -1,3 +1,19 @@
+/**
+ * Gemini model name for server-side calls.
+ *
+ * Google retires model ids on its own schedule, and a retired id fails every AI
+ * route with a 404 from the provider. These names were previously hardcoded in
+ * four modules, so recovering from a retirement meant editing code and
+ * rebuilding the image. `GEMINI_MODEL` lets an operator change it with a
+ * restart instead.
+ *
+ * The FastAPI service reads the same setting through `CHAT_MODEL`.
+ */
+export function geminiModelName(): string {
+  const configured = process.env.GEMINI_MODEL?.trim()
+  return configured || "gemini-3.8-flash"
+}
+
 export type ModelConfig = {
   id: string
   label: string
