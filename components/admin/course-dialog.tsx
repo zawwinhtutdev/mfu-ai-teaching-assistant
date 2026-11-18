@@ -37,7 +37,6 @@ export type CourseFormValues = {
 interface CourseDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  teachers: TeacherOption[]
   /** When present the dialog edits; otherwise it creates. */
   course?: CourseFormValues | null
   onSaved: () => void
@@ -88,11 +87,9 @@ const SCHOOLS = [
 function TeacherEmailInput({
   emails,
   onChange,
-  suggestions,
 }: {
   emails: string[]
   onChange: (emails: string[]) => void
-  suggestions: TeacherOption[]
 }) {
   const [draft, setDraft] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -157,24 +154,6 @@ function TeacherEmailInput({
       </div>
 
       {error && <p className="text-xs text-destructive">{error}</p>}
-
-      {suggestions.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {suggestions
-            .filter((teacher) => !emails.includes(teacher.email.toLowerCase()))
-            .slice(0, 6)
-            .map((teacher) => (
-              <button
-                key={teacher.id}
-                type="button"
-                onClick={() => commit(teacher.email)}
-                className="rounded border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted"
-              >
-                {teacher.full_name || teacher.email}
-              </button>
-            ))}
-        </div>
-      )}
     </div>
   )
 }
@@ -193,7 +172,7 @@ function emptyCourse(): CourseFormValues {
   }
 }
 
-export function CourseDialog({ open, onOpenChange, teachers, course, onSaved }: CourseDialogProps) {
+export function CourseDialog({ open, onOpenChange, course, onSaved }: CourseDialogProps) {
   const editing = Boolean(course?.id)
   const [form, setForm] = useState<CourseFormValues>(emptyCourse())
   const [error, setError] = useState<string | null>(null)
@@ -350,7 +329,6 @@ export function CourseDialog({ open, onOpenChange, teachers, course, onSaved }: 
             <TeacherEmailInput
               emails={form.teacherEmails}
               onChange={(emails) => set("teacherEmails", emails)}
-              suggestions={teachers}
             />
             <p className="text-xs text-muted-foreground">
               Every teacher listed can upload materials and post to the course. Leave empty to

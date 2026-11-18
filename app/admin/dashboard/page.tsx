@@ -102,8 +102,6 @@ export default function ManageCoursesPage() {
   const [enrollCourse, setEnrollCourse] = useState<{ id: string; label: string } | null>(null)
   const [infoCourseId, setInfoCourseId] = useState<string | null>(null)
   const [scheduleCourse, setScheduleCourse] = useState<{ id: string; label: string } | null>(null)
-  const [teachers, setTeachers] = useState<Array<{ id: string; full_name: string | null; email: string }>>([])
-
   const load = useCallback(async () => {
     setLoading(true)
     try {
@@ -116,28 +114,9 @@ export default function ManageCoursesPage() {
     setLoading(false)
   }, [])
 
-  // Teachers are needed by the create/edit dialogs. Loaded once, alongside the
-  // course list, so opening a dialog never waits on a second round-trip.
-  const loadTeachers = useCallback(async () => {
-    try {
-      const res = await fetch("/api/admin/users", { cache: "no-store" })
-      const data = await res.json()
-      if (!res.ok) return
-      const list = Array.isArray(data?.users) ? data.users : []
-      setTeachers(
-        list
-          .filter((u: any) => u.role === "teacher")
-          .map((u: any) => ({ id: u.id, full_name: u.full_name, email: u.email })),
-      )
-    } catch {
-      /* the dialog still works, just without an assignee list */
-    }
-  }, [])
-
   useEffect(() => {
     void load()
-    void loadTeachers()
-  }, [load, loadTeachers])
+  }, [load])
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -584,7 +563,6 @@ export default function ManageCoursesPage() {
       <CourseDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
-        teachers={teachers}
         course={null}
         onSaved={() => void load()}
       />
@@ -594,7 +572,6 @@ export default function ManageCoursesPage() {
         onOpenChange={(open) => {
           if (!open) setEditingCourse(null)
         }}
-        teachers={teachers}
         course={editingCourse}
         onSaved={() => void load()}
       />
