@@ -129,6 +129,26 @@ const getSessionContext = cache(async (): Promise<SessionContext> => {
 })
 
 async function getTeacherCoursesReal(supabase: SupabaseClient, teacherId: string): Promise<Course[]> {
+  // A teacher's courses are their primary ones plus anything they co-teach.
+  // `course_teachers` holds the full team (including the primary), so one query
+  // covers both cases without a union.
+  const { data: memberships } = await supabase
+    .from("course_teachers")
+    .select("course_id, courses(*)")
+    .eq("teacher_id", teacherId)
+
+  const fromMembership = (memberships || [])
+    .map((row: any) => row.courses)
+    .filter(Boolean) as Course[]
+
+  if (fromMembership.length > 0) {
+    return fromMembership.sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    )
+  }
+
+  // Fall back to the owner column for any course created before the
+  // `course_teachers` backfill, or if that table is empty for this teacher.
   const { data } = await supabase.from("courses").select("*").eq("teacher_id", teacherId).order("created_at")
   return (data || []) as Course[]
 }

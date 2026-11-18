@@ -66,6 +66,96 @@ function textOrNull(value: unknown): string | null {
 }
 
 /**
+ * Resolve a list of teacher emails to profile ids.
+ *
+ * Emails are what an administrator has to hand; ids are what the tables store.
+ * Every address must resolve to a teacher, because a typo would otherwise
+ * silently grant nobody access, or a student address would grant a student the
+ * course. Returns the ids in the order given, de-duplicated.
+ */
+async function resolveTeacherEmails(
+  supabase: any,
+  emails: string[],
+): Promise<{ ids: string[]; error: string | null }> {
+  const cleaned = Array.from(
+    new Set(
+      emails
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  )
+  if (cleaned.length === 0) return { ids: [], error: null }
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, email, role")
+    .in("email", cleaned)
+
+  if (error) return { ids: [], error: error.message }
+
+  const byEmail = new Map<string, { id: string; role: string }>()
+  for (const row of data ?? []) {
+    byEmail.set(String(row.email).toLowerCase(), { id: row.id, role: row.role })
+  }
+
+  const missing = cleaned.filter((email) => !byEmail.has(email))
+  if (missing.length > 0) {
+    return { ids: [], error: `No account found for: ${missing.join(", ")}` }
+  }
+
+  const notTeacher = cleaned.filter((email) => byEmail.get(email)!.role !== "teacher")
+  if (notTeacher.length > 0) {
+    return {
+      ids: [],
+      error: `These accounts are not teachers: ${notTeacher.join(", ")}`,
+    }
+  }
+
+  return { ids: cleaned.map((email) => byEmail.get(email)!.id), error: null }
+}
+
+/**
+ * Give `courseId` exactly this set of teachers.
+ *
+ * The first teacher also becomes the legacy `courses.teacher_id` owner, which
+ * older queries and the student-facing course payload still read. Removing the
+ * last teacher leaves `teacher_id` null, which is the same "unassigned" state
+ * the single-teacher form had.
+ */
+async function replaceCourseTeachers(
+  supabase: any,
+  courseId: string,
+  teacherIds: string[],
+): Promise<{ error: string | null }> {
+  const unique = Array.from(new Set(teacherIds))
+
+  const { error: deleteError } = await supabase
+    .from("course_teachers")
+    .delete()
+    .eq("course_id", courseId)
+  if (deleteError) return { error: deleteError.message }
+
+  if (unique.length > 0) {
+    const { error: insertError } = await supabase.from("course_teachers").insert(
+      unique.map((teacherId, index) => ({
+        course_id: courseId,
+        teacher_id: teacherId,
+        is_primary: index === 0,
+      })),
+    )
+    if (insertError) return { error: insertError.message }
+  }
+
+  const { error: courseError } = await supabase
+    .from("courses")
+    .update({ teacher_id: unique[0] ?? null })
+    .eq("id", courseId)
+  if (courseError) return { error: courseError.message }
+
+  return { error: null }
+}
+
+/**
  * Validate and normalise the section list sent by the dialog.
  *
  * Sections are replaced wholesale on save: the dialog shows the complete set, so
@@ -208,9 +298,29 @@ export async function GET(req: Request) {
     }
 
     const rows = courses ?? []
-    const teacherIds = Array.from(new Set(rows.map((c) => c.teacher_id).filter(Boolean))) as string[]
     const courseIds = rows.map((c) => c.id)
 
+    // Every teacher per course, not just the legacy owner, so the admin table
+    // can show a co-taught course as such.
+    const membershipsResult = courseIds.length
+      ? await supabase
+          .from("course_teachers")
+          .select("course_id, teacher_id, is_primary, profiles:teacher_id(id, full_name, email)")
+          .in("course_id", courseIds)
+      : { data: [] as any[] }
+
+    const teachersByCourse = new Map<string, Array<{ id: string; full_name: string | null; email: string }>>()
+    for (const row of membershipsResult.data ?? []) {
+      const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles
+      if (!profile) continue
+      const list = teachersByCourse.get(row.course_id) ?? []
+      list.push({ id: profile.id, full_name: profile.full_name ?? null, email: profile.email })
+      teachersByCourse.set(row.course_id, list)
+    }
+
+    const teacherIds = Array.from(
+      new Set((membershipsResult.data ?? []).map((row: any) => row.teacher_id).filter(Boolean)),
+    ) as string[]
     const [teachersResult, enrollmentsResult, materialsResult, chunksResult, sectionsResult] =
       await Promise.all([
         teacherIds.length
@@ -272,6 +382,9 @@ export async function GET(req: Request) {
         teacher_id: course.teacher_id,
         teacher_name: teacher?.full_name ?? null,
         teacher_email: teacher?.email ?? null,
+        // The full teaching team. `teacher_id` remains the primary owner for
+        // older readers; this is what the UI uses to show co-teachers.
+        teachers: teachersByCourse.get(course.id) ?? [],
         enrolled_students: enrolCount.get(course.id) ?? 0,
         documents: materialIds.length,
         documents_ready: materialIds.filter((id) => indexedMaterialIds.has(id)).length,
@@ -309,7 +422,15 @@ export async function POST(req: Request) {
     const title = typeof body?.title === "string" ? body.title.trim() : ""
     const semester = typeof body?.semester === "string" ? body.semester.trim() : ""
     const description = typeof body?.description === "string" ? body.description.trim() : ""
-    const teacherId = typeof body?.teacherId === "string" && body.teacherId.trim() ? body.teacherId.trim() : null
+    // `teacherEmails` is the multi-teacher field. `teacherId` is still honoured
+    // so any older caller keeps working.
+    const teacherEmails: string[] = Array.isArray(body?.teacherEmails)
+      ? body.teacherEmails.filter((value: unknown) => typeof value === "string")
+      : typeof body?.teacherEmail === "string" && body.teacherEmail.trim()
+        ? [body.teacherEmail]
+        : []
+    const legacyTeacherId =
+      typeof body?.teacherId === "string" && body.teacherId.trim() ? body.teacherId.trim() : null
 
     if (!code) return NextResponse.json({ error: "Course code is required" }, { status: 400 })
     if (!title) return NextResponse.json({ error: "Course title is required" }, { status: 400 })
@@ -327,13 +448,22 @@ export async function POST(req: Request) {
 
     const supabase = createServiceRoleClient()
 
-    // Assigning a teacher is the one field that must be validated: it becomes
-    // the course's owner, and a student id here would hand a student the course.
-    if (teacherId) {
+    const resolved = await resolveTeacherEmails(supabase, teacherEmails)
+    if (resolved.error) {
+      return NextResponse.json({ error: resolved.error }, { status: 400 })
+    }
+    // An explicit legacy id wins only when no emails were supplied.
+    const teacherIds = resolved.ids.length > 0
+      ? resolved.ids
+      : legacyTeacherId ? [legacyTeacherId] : []
+
+    // The first teacher is also written to `courses.teacher_id` below, so it
+    // must be a real teacher rather than any profile.
+    if (legacyTeacherId && resolved.ids.length === 0) {
       const { data: teacher } = await supabase
         .from("profiles")
         .select("id, role")
-        .eq("id", teacherId)
+        .eq("id", legacyTeacherId)
         .maybeSingle()
 
       if (!teacher || teacher.role !== "teacher") {
@@ -348,7 +478,7 @@ export async function POST(req: Request) {
         title,
         description: description || null,
         semester: semester || null,
-        teacher_id: teacherId,
+        teacher_id: teacherIds[0] ?? null,
         academic_year: textOrNull(body?.academicYear),
         school: textOrNull(body?.school),
         credit_total: numberOrNull(body?.creditTotal),
@@ -379,13 +509,24 @@ export async function POST(req: Request) {
       }
     }
 
+    // Teaching assignments. Failure here rolls the course back too, so a course
+    // is never left in a state where `teacher_id` names someone who is not in
+    // `course_teachers`.
+    if (created) {
+      const teacherFailure = await replaceCourseTeachers(supabase, created.id, teacherIds)
+      if (teacherFailure.error) {
+        await supabase.from("courses").delete().eq("id", created.id)
+        return NextResponse.json({ error: teacherFailure.error }, { status: 500 })
+      }
+    }
+
     await logAuditEvent({
       supabase: admin.supabase as any,
       actorId: admin.user.id,
       action: "admin.course_created",
       resourceType: "course",
       resourceId: created?.id ?? null,
-      metadata: { code, title, teacherId, sections: sections.length },
+      metadata: { code, title, teacherIds, sections: sections.length },
     })
 
     return NextResponse.json({ course: created })
@@ -447,21 +588,40 @@ export async function PATCH(req: Request) {
       updateData.code = code
     }
 
-    // `teacherId: null` explicitly unassigns, which is why this checks for the
-    // key's presence rather than truthiness.
-    if (body?.teacherId !== undefined) {
-      const teacherId = typeof body.teacherId === "string" && body.teacherId.trim() ? body.teacherId.trim() : null
-      if (teacherId) {
+    // `teacherEmails: []` explicitly clears everyone; `teacherId: null` does the
+    // same for the older single-teacher shape. Presence is checked rather than
+    // truthiness so an empty array is meaningful.
+    if (body?.teacherEmails !== undefined || body?.teacherId !== undefined) {
+      const emails: string[] = Array.isArray(body?.teacherEmails)
+        ? body.teacherEmails.filter((value: unknown) => typeof value === "string")
+        : []
+      const legacyTeacherId =
+        typeof body?.teacherId === "string" && body.teacherId.trim() ? body.teacherId.trim() : null
+
+      const resolved = await resolveTeacherEmails(supabase, emails)
+      if (resolved.error) {
+        return NextResponse.json({ error: resolved.error }, { status: 400 })
+      }
+
+      const teacherIds = resolved.ids.length > 0 ? resolved.ids : legacyTeacherId ? [legacyTeacherId] : []
+
+      if (legacyTeacherId && resolved.ids.length === 0) {
         const { data: teacher } = await supabase
           .from("profiles")
           .select("id, role")
-          .eq("id", teacherId)
+          .eq("id", legacyTeacherId)
           .maybeSingle()
         if (!teacher || teacher.role !== "teacher") {
           return NextResponse.json({ error: "The assigned teacher must have the teacher role" }, { status: 400 })
         }
       }
-      updateData.teacher_id = teacherId
+
+      // `replaceCourseTeachers` also writes `courses.teacher_id`, so it must not
+      // be overwritten afterwards by `updateData`.
+      const teacherFailure = await replaceCourseTeachers(supabase, courseId, teacherIds)
+      if (teacherFailure.error) {
+        return NextResponse.json({ error: teacherFailure.error }, { status: 500 })
+      }
     }
 
     const { data: updated, error } = await supabase
