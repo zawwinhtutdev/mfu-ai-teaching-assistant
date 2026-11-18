@@ -72,10 +72,11 @@ const SCHOOLS = [
 ] as const
 
 /**
- * Radix Select cannot hold an empty string as a value, so "nothing chosen" needs
- * a sentinel — the same trick the teacher dropdown already uses.
+ * Radix Select treats an empty string as "no selection" and renders the
+ * SelectValue placeholder, which is what these two fields want — so no sentinel
+ * is needed here. (The teacher dropdown still uses one, because its "unassigned"
+ * option must be a real, selectable item rather than absence.)
  */
-const NONE = "__none__"
 
 function emptyCourse(): CourseFormValues {
   return {
@@ -170,17 +171,23 @@ export function CourseDialog({ open, onOpenChange, teachers, course, onSaved }: 
             </div>
             <div className="space-y-2">
               <Label htmlFor="semester">Semester</Label>
+              {/*
+                `value` is the raw form value, so an empty string means "nothing
+                chosen" and Radix renders the placeholder. A sentinel such as
+                "__none__" would match no item, and Radix then shows neither a
+                value nor the placeholder — the trigger collapsed to a bare box.
+              */}
               <Select
-                value={form.semester || NONE}
-                onValueChange={(value) => set("semester", value === NONE ? "" : value)}
+                value={form.semester}
+                onValueChange={(value) => set("semester", value)}
               >
-                <SelectTrigger id="semester">
-                  <SelectValue placeholder="Select" />
+                <SelectTrigger id="semester" className="w-full">
+                  <SelectValue placeholder="Select semester" />
                 </SelectTrigger>
                 <SelectContent>
                   {SEMESTERS.map((semester) => (
                     <SelectItem key={semester} value={semester}>
-                      {semester}
+                      Semester {semester}
                     </SelectItem>
                   ))}
                   {/* An existing course may hold a value outside the list; show it
@@ -205,11 +212,8 @@ export function CourseDialog({ open, onOpenChange, teachers, course, onSaved }: 
 
           <div className="space-y-2">
             <Label htmlFor="school">School</Label>
-            <Select
-              value={form.school || NONE}
-              onValueChange={(value) => set("school", value === NONE ? "" : value)}
-            >
-              <SelectTrigger id="school">
+            <Select value={form.school} onValueChange={(value) => set("school", value)}>
+              <SelectTrigger id="school" className="w-full">
                 <SelectValue placeholder="Select a school" />
               </SelectTrigger>
               <SelectContent>
