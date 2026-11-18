@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai"
 import { buildContext, type Source } from "./grounding"
-import { embedTexts as embedWithOllama, toVectorLiteral, useOllama } from "./ollama"
+import { embedTexts as embedWithOllama, toVectorLiteral, isOllamaEnabled } from "./ollama"
+import { transcribeAudio } from "./transcription"
 
 const DEFAULT_EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || "text-embedding-004"
 const EMBEDDING_DIMENSIONS = Number(process.env.GEMINI_EMBEDDING_DIMENSIONS || 768)
@@ -94,11 +95,40 @@ function splitIntoChunks(text: string, maxChars = MAX_CHUNK_CHARS, overlapChars 
   return chunks
 }
 
+/**
+ * Extract text from a PDF.
+ *
+ * `pdf-parse` v2 replaced the v1 `module.exports = fn` shape with a `PDFParse`
+ * class, so the old `pdfParse(buffer)` call threw "pdfParse is not a function"
+ * and every upload failed. Both shapes are handled here rather than pinning a
+ * version, because the dependency is hoisted by other packages.
+ */
 async function extractPdfText(buffer: Buffer) {
-  const pdfParseModule = await import("pdf-parse")
-  const pdfParse = (pdfParseModule as any).default || (pdfParseModule as any)
-  const parsed = await pdfParse(buffer)
-  return typeof parsed?.text === "string" ? normalizeWhitespace(parsed.text) : ""
+  const mod: any = await import("pdf-parse")
+
+  // v2: class-based API.
+  const PDFParseCtor = mod?.PDFParse ?? mod?.default?.PDFParse
+  if (typeof PDFParseCtor === "function") {
+    const parser = new PDFParseCtor({ data: new Uint8Array(buffer) })
+    try {
+      const result = await parser.getText()
+      const text = typeof result === "string" ? result : result?.text
+      return typeof text === "string" ? normalizeWhitespace(text) : ""
+    } finally {
+      // getText keeps the document handle open; without this the worker leaks
+      // across uploads.
+      await parser.destroy?.().catch?.(() => {})
+    }
+  }
+
+  // v1: default-exported function.
+  const legacy = mod?.default ?? mod
+  if (typeof legacy === "function") {
+    const parsed = await legacy(buffer)
+    return typeof parsed?.text === "string" ? normalizeWhitespace(parsed.text) : ""
+  }
+
+  throw new Error("Unsupported pdf-parse version: no PDFParse class or default function found")
 }
 
 /**
@@ -155,66 +185,15 @@ function isAudioFile(fileName: string, mimeType: string) {
   return [".mp3", ".m4a", ".wav", ".ogg", ".webm", ".flac", ".aac"].some((e) => ext.endsWith(e))
 }
 
-function getAudioMimeType(fileName: string, mimeType: string) {
-  if (mimeType && mimeType !== "application/octet-stream") return mimeType
-  const ext = fileName.toLowerCase().split(".").pop()
-  const mimeMap: Record<string, string> = {
-    mp3: "audio/mpeg",
-    m4a: "audio/mp4",
-    wav: "audio/wav",
-    ogg: "audio/ogg",
-    webm: "audio/webm",
-    flac: "audio/flac",
-    aac: "audio/aac",
-  }
-  return mimeMap[ext || ""] || "audio/mpeg"
-}
 
-async function transcribeAudioWithGemini(buffer: Buffer, fileName: string, mimeType: string): Promise<string> {
-  const ai = createGeminiClient()
-  const audioMime = getAudioMimeType(fileName, mimeType)
-  
-  try {
-    // Upload audio to Gemini Files API
-    const blob = new Blob([new Uint8Array(buffer)], { type: audioMime })
-    const file = new File([blob], fileName, { type: audioMime })
-    const uploadResult = await ai.files.upload({ file, config: { mimeType: audioMime } })
-    
-    if (!uploadResult?.uri) {
-      console.error("[Audio] Upload failed — no URI returned")
-      return ""
-    }
 
-    // Wait for file processing
-    let fileState = uploadResult
-    let attempts = 0
-    while (fileState.state === "PROCESSING" && attempts < 30) {
-      await new Promise((r) => setTimeout(r, 2000))
-      const status = await ai.files.get({ name: fileState.name! })
-      if (status) fileState = status as any
-      attempts++
-    }
 
-    // Transcribe
-    const result = await ai.models.generateContent({
-      model: "gemini-3.8-flash",
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: "Transcribe this audio lecture completely. Output the full transcript text only, no timestamps or speaker labels unless clearly distinct speakers exist." },
-            { fileData: { fileUri: uploadResult.uri, mimeType: audioMime } },
-          ],
-        },
-      ],
-    })
-
-    const transcript = (result as any)?.text || ""
-    return normalizeWhitespace(typeof transcript === "string" ? transcript : "")
-  } catch (error: any) {
-    console.error("[Audio] Transcription failed:", error?.message || error)
-    return ""
-  }
+async function transcribeAudioFile(buffer: Buffer, fileName: string, mimeType: string): Promise<string> {
+  // Local-first, with a clear error when nothing can run. Swallowing the
+  // failure into "" is what produced "successful" uploads with no text.
+  const { text, provider } = await transcribeAudio({ buffer, fileName, mimeType })
+  console.log(`[Audio] ${fileName} transcribed via ${provider} (${text.length} chars)`)
+  return normalizeWhitespace(text)
 }
 
 export async function extractCourseMaterialFileTexts(files: UploadedCourseMaterialFile[]) {
@@ -234,9 +213,12 @@ export async function extractCourseMaterialFileTexts(files: UploadedCourseMateri
       text = await extractOfficeText(file.buffer, "docx")
     } else if (isAudioFile(fileName, mimeType)) {
       console.log(`[Audio] Transcribing audio file: ${fileName}`)
-      text = await transcribeAudioWithGemini(file.buffer, fileName, mimeType)
-      if (text) {
-        console.log(`[Audio] Transcription complete: ${text.length} chars`)
+      try {
+        text = await transcribeAudioFile(file.buffer, fileName, mimeType)
+      } catch (error: any) {
+        // Rethrow with the file name attached. Letting this become an empty
+        // string told the teacher the audio was indexed when it was not.
+        throw new Error(`Could not transcribe ${fileName}: ${error?.message || error}`)
       }
     } else if (isTextMime(mimeType) || fileNameLooksText(fileName)) {
       text = normalizeWhitespace(file.buffer.toString("utf-8"))
@@ -285,7 +267,7 @@ async function embedTexts(
 ): Promise<number[][]> {
   if (texts.length === 0) return []
 
-  if (useOllama()) {
+  if (isOllamaEnabled()) {
     return embedWithOllama(texts)
   }
 

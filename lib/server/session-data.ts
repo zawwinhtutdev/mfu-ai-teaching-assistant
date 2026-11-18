@@ -9,7 +9,7 @@ import {
   type DemoAccount,
   type DemoRole,
 } from "@/lib/demo-auth"
-import { studentById, teacherById } from "@/lib/demo-seed"
+import { DEMO_STUDENTS, studentById, teacherById } from "@/lib/demo-seed"
 import { fetchMyCourses } from "@/lib/server/academic"
 import {
   mockCourses,
@@ -243,7 +243,14 @@ async function getCourseMaterialsReal(supabase: SupabaseClient, courseIds: strin
     return []
   }
 
-  const { data } = await supabase.from("course_materials").select("*").in("course_id", courseIds).order("created_at")
+  // Newest first: a teacher looking at their materials wants the most recent
+  // upload at the top, and the API already orders this way — without the
+  // direction here the server-rendered list disagreed with every refetch.
+  const { data } = await supabase
+    .from("course_materials")
+    .select("*")
+    .in("course_id", courseIds)
+    .order("created_at", { ascending: false })
   return (data || []) as CourseMaterial[]
 }
 
@@ -426,6 +433,22 @@ export async function getStudentCourseBySlug(courseSlug: string) {
   return getStudentCourseById(course.id)
 }
 
+/**
+ * Demo students enrolled in a course, from the seed's own enrolment data.
+ *
+ * The demo portal cannot read `course_enrollments` (the ids are seed strings,
+ * not uuids), so the roster comes from `DEMO_STUDENTS[].courseCodes`. That keeps
+ * the list consistent with what the demo student accounts actually see.
+ */
+function demoStudentsForCourse(courseCode: string) {
+  return DEMO_STUDENTS.filter((student) => student.courseCodes.includes(courseCode)).map((student) => ({
+    id: student.id,
+    email: student.email,
+    full_name: student.fullName,
+    enrolled_at: null as string | null,
+  }))
+}
+
 export async function getTeacherCourseById(courseId: string) {
   const data = await getTeacherPortalData()
   const course = data.courses.find((item: { id: string }) => item.id === courseId)
@@ -436,6 +459,7 @@ export async function getTeacherCourseById(courseId: string) {
 
   if (data.isDemo) {
     const materials = mockMaterials.filter((material) => material.course_id === course.id)
+    const enrolledStudents = demoStudentsForCourse(course.code)
 
     return {
       ...data,
@@ -449,25 +473,42 @@ export async function getTeacherCourseById(courseId: string) {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       } as ChatbotSettings,
-      studentsCount: (course as any).enrolled_students || 0,
+      studentsCount: enrolledStudents.length,
+      enrolledStudents,
     }
   }
 
-  const [materials, chatbotSettings, { count }] = await Promise.all([
+  const [materials, chatbotSettings, enrollmentRows] = await Promise.all([
     getCourseMaterialsReal(data.supabase!, [course.id]),
     getCourseChatbotSettingReal(data.supabase!, course.id),
+    // The full roster, not just a count: the course page renders a student list
+    // and previously filled it with invented names derived from the count.
     data.supabase!
       .from("course_enrollments")
-      .select("id", { count: "exact", head: true })
+      .select("student_id, enrolled_at, profiles:student_id(id, email, full_name)")
       .eq("course_id", course.id),
   ])
+
+  const enrolledStudents = (enrollmentRows.data ?? [])
+    .map((row: any) => {
+      const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles
+      if (!profile) return null
+      return {
+        id: profile.id as string,
+        email: profile.email as string,
+        full_name: (profile.full_name ?? null) as string | null,
+        enrolled_at: (row.enrolled_at ?? null) as string | null,
+      }
+    })
+    .filter(Boolean) as Array<{ id: string; email: string; full_name: string | null; enrolled_at: string | null }>
 
   return {
     ...data,
     course,
     materials,
     chatbotSettings,
-    studentsCount: count || 0,
+    studentsCount: enrolledStudents.length,
+    enrolledStudents,
   }
 }
 
