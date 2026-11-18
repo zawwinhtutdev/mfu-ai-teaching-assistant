@@ -1,10 +1,13 @@
 import { convertToModelMessages, createUIMessageStreamResponse, streamText, toUIMessageStream } from "ai"
 import { createGoogle } from "@ai-sdk/google"
+import { createOpenAI } from "@ai-sdk/openai"
 import { cookies } from "next/headers"
 import { getUserFacingChatError } from "@/lib/ai/chat-errors"
 import {
   geminiModelCandidates,
   getModelConfig,
+  hostedProvider,
+  openaiModelName,
   googleThinkingOff,
   isRetryableModelError,
   normalizeGoogleProviderModel,
@@ -731,20 +734,28 @@ Guidelines:
       })
     }
 
-    // Initialize Gemini provider
-    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY
-    if (!apiKey) {
+    // Initialize the hosted provider. Ollama was handled above; this branch is
+    // Gemini or OpenAI, chosen by AI_PROVIDER (or whichever key exists).
+    const useOpenAI = hostedProvider() === "openai"
+    const googleKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY
+    const openaiKey = process.env.OPENAI_API_KEY?.trim()
+
+    if (useOpenAI && !openaiKey) {
+      console.error("[v0] ERROR: AI_PROVIDER=openai but OPENAI_API_KEY is not set")
+      return Response.json({ error: "OpenAI API key not configured" }, { status: 500 })
+    }
+    if (!useOpenAI && !googleKey) {
       console.error("[v0] ERROR: GOOGLE_GENERATIVE_AI_API_KEY is not set!")
       return Response.json({ error: "Google Gemini API key not configured" }, { status: 500 })
     }
-    const google = createGoogle({
-      apiKey: apiKey,
-    })
+
+    const google = useOpenAI ? null : createGoogle({ apiKey: googleKey! })
+    const openai = useOpenAI ? createOpenAI({ apiKey: openaiKey! }) : null
 
     // Stream AI response
     let result
     try {
-      console.log("🤖🤖🤖 CALLING AI MODEL NOW! 🤖🤖🤖")
+      console.log(`🤖🤖🤖 CALLING AI MODEL (${useOpenAI ? "openai" : "gemini"}) 🤖🤖🤖`)
       // Route using centralized config, while supporting provider model IDs in request body.
       const providerModel = normalizeGoogleProviderModel(
         requestedModel.startsWith("google/") ? requestedModel : cfg.providerModel,
@@ -762,26 +773,25 @@ Guidelines:
         .filter(Boolean)
         .join("\n\n")
 
-      // Free-tier keys reject whole models with 503 UNAVAILABLE, so walk the
-      // candidate list until one produces output. `streamText` is lazy: the
-      // provider error only surfaces when the stream is read, which is why this
-      // pulls the first chunk before committing to a model.
-      const candidates = geminiModelCandidates(
-        providerModel.startsWith("google/") ? providerModel : undefined,
-      )
+      // OpenAI bills per token with no daily request cap, so a single model is
+      // enough; Gemini free tier rejects whole models with 503/429, hence the
+      // candidate walk there.
+      const candidates = useOpenAI
+        ? [openaiModelName()]
+        : geminiModelCandidates(providerModel.startsWith("google/") ? providerModel : undefined)
       let lastError: unknown = null
 
       for (const candidate of candidates) {
         const attempt = streamText({
-          model: google(candidate),
+          model: useOpenAI ? openai!(candidate) : google!(candidate),
           messages: modelMessages,
           instructions,
           abortSignal: req.signal,
           maxOutputTokens,
           temperature,
-          // Without this, Gemini 2.5+ spends most of maxOutputTokens on internal
-          // reasoning and the visible answer is truncated. See googleThinkingOff.
-          providerOptions: googleThinkingOff(),
+          // Gemini-only: without it, 2.5+ spends most of maxOutputTokens on
+          // hidden reasoning and the answer truncates. OpenAI rejects it.
+          ...(useOpenAI ? {} : { providerOptions: googleThinkingOff() }),
         } as any)
 
         // `streamText` resolves before the provider responds, so the 503 only
