@@ -435,12 +435,6 @@
 /* The admin nav column becomes a drawer only when it genuinely cannot fit.
    Below this width the topbar toggle and the scrim take over. */
 @media (max-width: 640px) {
-  /* The toggle must appear at exactly the width where the drawer activates.
-     `.mfp-only-mobile` flips on at 1024px, which is too early for the admin
-     chrome: between 640px and 1024px the column is inline, so a toggle there
-     would open a scrim over a sidebar that is already visible. */
-  .mfp[data-chrome="topbar"] .mfp-topbar-menu.mfp-only-mobile { display: grid; }
-
   .mfp[data-chrome="topbar"] .mfp-side--dense {
     position: fixed;
     inset: 52px auto 0 0;
@@ -572,15 +566,6 @@
 @media (max-width: 1024px) {
   .mfp-only-mobile { display: grid; }
 }
-
-/* The admin nav column stays inline from 640px to 1024px, so its toggle must
-   stay hidden across that range even though `.mfp-only-mobile` switches on at
-   1024px. This block sits before the 640px rule so the drawer's own
-   `display: grid` still wins below that width. */
-@media (max-width: 1024px) and (min-width: 641px) {
-  .mfp[data-chrome="topbar"] .mfp-topbar-menu { display: none; }
-}
-
 
 /* =====================================================================
    Three navigation archetypes — the portals must not share one sidebar.
@@ -723,16 +708,10 @@
   }
 }
 
-/* Sidebar toggle in the admin topbar, placed beside the product name. It is the
-   only control for the column: it shows X while open and a menu icon while
-   closed, so it stays in one place instead of swapping two buttons in and out. */
-.mfp-topbar-collapse { margin-left: 2px; }
-
-/* Below 641px the nav is an off-canvas drawer with its own toggle, so this
-   desktop control is hidden there. */
-@media (max-width: 640px) {
-  .mfp-topbar-collapse { display: none; }
-}
+/* Sidebar toggle, first in the admin topbar. It is the only control for the nav
+   at every width: it collapses the inline column on desktop and opens the
+   off-canvas drawer below 641px, so it must never be hidden. */
+.mfp-topbar-collapse { margin-right: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
   .mfp[data-chrome="topbar"] .mfp-side--dense { transition: none; }

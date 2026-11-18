@@ -142,6 +142,24 @@ export function PortalShell(props: PortalShellProps) {
   const rail = railItems?.length ? railItems : items.slice(0, 5)
   const brandTone = variant === "admin" ? "light" : "dark"
 
+  /**
+   * Below 641px the admin nav is an off-canvas drawer rather than an inline
+   * column, so the topbar toggle has to drive a different piece of state. This
+   * matches the breakpoint the stylesheet uses (`.mfp-admin-side-close` and the
+   * dense column are both scoped to 641px).
+   *
+   * Starts false so the server and first client render agree; the real value is
+   * applied after mount, which is also when the toggle becomes meaningful.
+   */
+  const [isNarrow, setIsNarrow] = React.useState(false)
+  React.useEffect(() => {
+    const query = window.matchMedia("(max-width: 640px)")
+    const sync = () => setIsNarrow(query.matches)
+    sync()
+    query.addEventListener("change", sync)
+    return () => query.removeEventListener("change", sync)
+  }, [])
+
   // Close the mobile drawer on Escape and lock background scroll while it is open.
   React.useEffect(() => {
     if (!mobileOpen) return
@@ -394,36 +412,44 @@ export function PortalShell(props: PortalShellProps) {
   return (
     <div className="mfp" data-variant={variant} data-chrome="topbar">
       <div className="mfp-topbar">
-        {/* The dense nav column is off-canvas below 1024px, so the topbar needs
-            its own toggle. Without this the sidebar translated itself out of
-            view and no control existed to bring it back. */}
+        {/*
+          One sidebar control, first in the bar so it sits at the very left edge
+          where a nav toggle is expected, and outside the panel it hides.
+
+          It replaces two earlier buttons: a mobile-only drawer toggle and a
+          desktop toggle after the product name. Keeping both meant the control
+          moved between widths and could be confused with the panel's own X.
+          The icon reflects state — X while the column is open, menu while it is
+          closed — so there is always a way back from one fixed position.
+        */}
         <button
           type="button"
-          className="mfp-icon-btn mfp-topbar-menu mfp-only-mobile"
-          onClick={() => setMobileOpen((v) => !v)}
-          aria-label="Toggle navigation"
-          aria-expanded={mobileOpen}
+          className="mfp-icon-btn mfp-topbar-collapse"
+          onClick={() => {
+            // Below 641px the same nav element is the off-canvas drawer, which
+            // is a different state from the inline column being collapsed.
+            if (isNarrow) setMobileOpen((open) => !open)
+            else toggleSide()
+          }}
+          aria-label={
+            isNarrow ? "Toggle navigation" : sideCollapsed ? "Show navigation" : "Hide navigation"
+          }
+          aria-expanded={isNarrow ? mobileOpen : !sideCollapsed}
+          aria-controls="mfp-dense-nav"
         >
-          {mobileOpen ? <X size={18} /> : <Menu size={18} />}
+          {isNarrow ? (
+            mobileOpen ? <X size={18} /> : <Menu size={18} />
+          ) : sideCollapsed ? (
+            <Menu size={18} />
+          ) : (
+            <X size={18} />
+          )}
         </button>
         <BrandIcon size={28} tone="light" />
         <div className="mfp-topbar-id">
           <span className="mfp-topbar-name">MFU AI</span>
           <span className="mfp-topbar-product">{productName}</span>
         </div>
-        {/* Sidebar toggle, beside the product name. One control that reflects
-            state (X = open, menu = closed) rather than two buttons that hide and
-            show, so the position never moves and there is always a way back. */}
-        <button
-          type="button"
-          className="mfp-icon-btn mfp-topbar-collapse"
-          onClick={toggleSide}
-          aria-label={sideCollapsed ? "Show navigation" : "Hide navigation"}
-          aria-expanded={!sideCollapsed}
-          aria-controls="mfp-dense-nav"
-        >
-          {sideCollapsed ? <Menu size={18} /> : <X size={18} />}
-        </button>
         <div className="mfp-head-actions">{actions}</div>
       </div>
       <div className="mfp-body">
