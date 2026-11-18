@@ -67,6 +67,63 @@ const GOOGLE_MODEL_ALIASES: Record<string, string> = {
 export const normalizeGoogleProviderModel = (providerModel: string) =>
   GOOGLE_MODEL_ALIASES[providerModel] ?? providerModel
 
+/**
+ * Ordered models to try for a request.
+ *
+ * Free-tier Gemini keys are unreliable: during testing `gemini-3.8-flash` and
+ * `gemini-3.5-flash` answered 503 UNAVAILABLE on every attempt while
+ * `gemini-2.5-flash` and `gemini-3.1-flash-lite` worked. A 503 is a transient
+ * capacity rejection, not a bad request, so retrying the same prompt on a
+ * different model usually succeeds and is far better than telling a student the
+ * assistant is broken.
+ *
+ * The requested model is always tried first; the rest are fallbacks.
+ */
+export function geminiModelCandidates(requested?: string): string[] {
+  const ordered: string[] = []
+
+  if (requested?.startsWith("google/")) {
+    ordered.push(requested.replace("google/", ""))
+  }
+
+  const configured = process.env.GEMINI_MODEL?.trim()
+  if (configured) ordered.push(configured)
+
+  // Measured as available and reliable with a free-tier key.
+  ordered.push("gemini-2.5-flash", "gemini-3.1-flash-lite")
+
+  // De-duplicate while preserving order.
+  return [...new Set(ordered.filter(Boolean))]
+}
+
+/** True when an error means "try another model" rather than "this is broken". */
+export function isRetryableModelError(error: unknown): boolean {
+  const text = collectText(error).toLowerCase()
+  return (
+    text.includes("503") ||
+    text.includes("unavailable") ||
+    text.includes("429") ||
+    text.includes("resource_exhausted") ||
+    text.includes("overloaded") ||
+    text.includes("high demand")
+  )
+}
+
+function collectText(error: unknown, depth = 0): string {
+  if (depth > 2 || error == null) return ""
+  if (typeof error === "string") return error
+  if (error instanceof Error) {
+    const nested = "cause" in error ? collectText(error.cause, depth + 1) : ""
+    return `${error.message} ${nested}`
+  }
+  if (typeof error !== "object") return String(error)
+  const value = error as Record<string, unknown>
+  return [value.message, value.statusCode, value.responseBody, value.cause]
+    .map((item) => collectText(item, depth + 1))
+    .filter(Boolean)
+    .join(" ")
+}
+
 export const MODEL_CONFIGS: ModelConfig[] = [
   {
     id: "default",
