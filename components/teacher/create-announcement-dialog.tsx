@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useRouter } from "next/navigation"
 import { Upload, X } from "lucide-react"
+import { readApiErrorMessage } from "@/lib/client/course-material-upload"
 
 interface CreateAnnouncementDialogProps {
   open: boolean
@@ -64,10 +65,10 @@ export function CreateAnnouncementDialog({ open, onOpenChange, courseId, onCreat
           method: "POST",
           body: form,
         })
-        const uploadData = await uploadResponse.json()
         if (!uploadResponse.ok) {
-          throw new Error(uploadData?.error || "Failed to upload files")
+          throw new Error(await readApiErrorMessage(uploadResponse, "Failed to upload files"))
         }
+        const uploadData = await uploadResponse.json()
 
         filesPayload = (uploadData?.files || []).map((file: any) => ({
           file_name: file?.name || "attachment",
@@ -86,10 +87,10 @@ export function CreateAnnouncementDialog({ open, onOpenChange, courseId, onCreat
           files: filesPayload,
         }),
       })
-      const data = await response.json()
       if (!response.ok) {
-        throw new Error(data?.error || "Failed to create announcement")
+        throw new Error(await readApiErrorMessage(response, "Failed to create announcement"))
       }
+      await response.json()
 
       onOpenChange(false)
       setContent("")

@@ -2,6 +2,7 @@ import { GoogleGenAI } from "@google/genai"
 import { buildContext, type Source } from "./grounding"
 import { embedTexts as embedWithOllama, toVectorLiteral, isOllamaEnabled } from "./ollama"
 import { transcribeAudio } from "./transcription"
+import { extractPdfTextFromBuffer } from "./pdf-parse-node"
 
 // `text-embedding-004` was retired and now returns 404 from the v1beta API,
 // which broke all course-material retrieval when a Gemini key was configured.
@@ -100,42 +101,6 @@ function splitIntoChunks(text: string, maxChars = MAX_CHUNK_CHARS, overlapChars 
 }
 
 /**
- * Extract text from a PDF.
- *
- * `pdf-parse` v2 replaced the v1 `module.exports = fn` shape with a `PDFParse`
- * class, so the old `pdfParse(buffer)` call threw "pdfParse is not a function"
- * and every upload failed. Both shapes are handled here rather than pinning a
- * version, because the dependency is hoisted by other packages.
- */
-async function extractPdfText(buffer: Buffer) {
-  const mod: any = await import("pdf-parse")
-
-  // v2: class-based API.
-  const PDFParseCtor = mod?.PDFParse ?? mod?.default?.PDFParse
-  if (typeof PDFParseCtor === "function") {
-    const parser = new PDFParseCtor({ data: new Uint8Array(buffer) })
-    try {
-      const result = await parser.getText()
-      const text = typeof result === "string" ? result : result?.text
-      return typeof text === "string" ? normalizeWhitespace(text) : ""
-    } finally {
-      // getText keeps the document handle open; without this the worker leaks
-      // across uploads.
-      await parser.destroy?.().catch?.(() => {})
-    }
-  }
-
-  // v1: default-exported function.
-  const legacy = mod?.default ?? mod
-  if (typeof legacy === "function") {
-    const parsed = await legacy(buffer)
-    return typeof parsed?.text === "string" ? normalizeWhitespace(parsed.text) : ""
-  }
-
-  throw new Error("Unsupported pdf-parse version: no PDFParse class or default function found")
-}
-
-/**
  * Text extraction for Office formats.
  *
  * The upload dialog advertises `.docx`/`.pptx`, but nothing extracted them, so
@@ -210,7 +175,7 @@ export async function extractCourseMaterialFileTexts(files: UploadedCourseMateri
     let text = ""
 
     if (isPdfFile(fileName, mimeType)) {
-      text = await extractPdfText(file.buffer)
+      text = normalizeWhitespace(await extractPdfTextFromBuffer(file.buffer))
     } else if (lowerName.endsWith(".pptx")) {
       text = await extractOfficeText(file.buffer, "pptx")
     } else if (lowerName.endsWith(".docx")) {

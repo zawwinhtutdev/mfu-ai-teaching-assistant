@@ -21,6 +21,7 @@ import {
   getUserGeminiFileSearchStoreName,
 } from "@/lib/ai/gemini-file-search"
 import { retrieveCourseRagContext } from "@/lib/ai/course-rag"
+import { extractPdfTextFromBuffer } from "@/lib/ai/pdf-parse-node"
 import { createLocalChatResponse, shouldUseLocalChatService } from "@/lib/ai/local-chat"
 import { DEMO_EMAIL_COOKIE, DEMO_ROLE_COOKIE, getDemoAccountByRole } from "@/lib/demo-auth"
 import { getLatestReadyDemoStoreName, readDemoDocumentsCookie, type DemoDocumentRecord, DEMO_DOCUMENTS_COOKIE } from "@/lib/demo-documents"
@@ -102,13 +103,6 @@ function toAsyncIterableStream<T>(source: AsyncIterable<T>) {
   })
 }
 
-async function extractPdfTextFromBuffer(pdfBuffer: Buffer) {
-  const pdfParseModule = await import("pdf-parse")
-  const pdfParse = (pdfParseModule as any).default || (pdfParseModule as any)
-  const result = await pdfParse(pdfBuffer)
-  return typeof result?.text === "string" ? result.text.trim() : ""
-}
-
 async function loadPdfTextFallbackByObjectKey(objectKey: string) {
   const readUrl = await getDocumentReadUrl(objectKey, 300)
   const response = await fetch(readUrl)
@@ -116,7 +110,7 @@ async function loadPdfTextFallbackByObjectKey(objectKey: string) {
     throw new Error(`Failed to download PDF from storage (${response.status})`)
   }
   const buffer = Buffer.from(await response.arrayBuffer())
-  return extractPdfTextFromBuffer(buffer)
+  return (await extractPdfTextFromBuffer(buffer)).trim()
 }
 
 export async function POST(req: Request) {
