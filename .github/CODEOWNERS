@@ -1,9 +1,9 @@
 # Default owner for everything in the repository.
-* @zawwinhuttt
+* @zawwinhtutdev
 
 # Database policy changes deserve an explicit review.
-/supabase/migrations/ @zawwinhuttt
+/supabase/migrations/ @zawwinhtutdev
 
 # Keep deployment and security docs reviewed too.
-/docs/DEPLOY.md @zawwinhuttt
-/SECURITY.md @zawwinhuttt
+/docs/DEPLOY.md @zawwinhtutdev
+/SECURITY.md @zawwinhtutdev
