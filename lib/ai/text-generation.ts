@@ -9,10 +9,11 @@
 
 import { generateText as aiGenerateText, Output } from "ai"
 import { createGoogle } from "@ai-sdk/google"
+import { createOpenAI } from "@ai-sdk/openai"
 import type { z } from "zod"
 
 import { streamChat, isOllamaEnabled } from "@/lib/ai/ollama"
-import { geminiModelName, googleThinkingOff } from "@/lib/ai/models"
+import { geminiModelName, googleThinkingOff, hostedProvider, openaiModelName } from "@/lib/ai/models"
 
 /** Collect a streamed completion into one string. */
 async function ollamaComplete(prompt: string, system?: string): Promise<string> {
@@ -26,14 +27,27 @@ async function ollamaComplete(prompt: string, system?: string): Promise<string> 
   return text.trim()
 }
 
-function geminiModel() {
+function providerModel() {
+  if (hostedProvider() === "openai") {
+    const apiKey = process.env.OPENAI_API_KEY?.trim()
+    if (!apiKey) {
+      throw new Error("AI_PROVIDER=openai but OPENAI_API_KEY is not set.")
+    }
+    return createOpenAI({ apiKey })(openaiModelName())
+  }
+
   const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY
   if (!apiKey) {
     throw new Error(
-      "No AI provider available: start Ollama (AI_PROVIDER=ollama) or set GOOGLE_GENERATIVE_AI_API_KEY.",
+      "No AI provider available: start Ollama (AI_PROVIDER=ollama), set OPENAI_API_KEY, or set GOOGLE_GENERATIVE_AI_API_KEY.",
     )
   }
   return createGoogle({ apiKey })(geminiModelName())
+}
+
+/** Gemini-only tuning; OpenAI would reject unknown provider options. */
+function providerOptions() {
+  return hostedProvider() === "gemini" ? googleThinkingOff() : undefined
 }
 
 /** Free-text completion. */
@@ -42,13 +56,14 @@ export async function completeText(prompt: string, options: { system?: string } 
     return ollamaComplete(prompt, options.system)
   }
 
+  const tuning = providerOptions()
   const { text } = await aiGenerateText({
-    model: geminiModel(),
+    model: providerModel(),
     prompt,
     ...(options.system ? { instructions: options.system } : {}),
     // Structured output (quiz/flashcard JSON) is especially sensitive to a
     // truncated budget: a cut-off object is unparseable rather than partial.
-    providerOptions: googleThinkingOff(),
+    ...(tuning ? { providerOptions: tuning } : {}),
   } as any)
 
   return text.trim()
@@ -68,12 +83,13 @@ export async function completeStructured<T>(
   options: { system?: string } = {},
 ): Promise<T> {
   if (!isOllamaEnabled()) {
+    const tuning = providerOptions()
     const { output } = await aiGenerateText({
-      model: geminiModel(),
+      model: providerModel(),
       output: Output.object({ schema }),
       prompt,
       ...(options.system ? { instructions: options.system } : {}),
-      providerOptions: googleThinkingOff(),
+      ...(tuning ? { providerOptions: tuning } : {}),
     } as any)
     return output as T
   }
