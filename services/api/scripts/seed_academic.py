@@ -31,12 +31,12 @@ STUDENTS = [
     # previous invented addresses (kanya.wong@mfu.ac.th) meant a real student
     # signing in got 403 "No account found for this caller" and an empty course
     # list. IDs keep the enrollment map below stable.
-    ("student-1", "6631503078@lamduan.mfu.ac.th", "Kanya Wong", 3),
-    ("student-2", "6631503085@lamduan.mfu.ac.th", "Niran Chai", 3),
-    ("student-3", "6631503092@lamduan.mfu.ac.th", "Pim Srisuk", 2),
-    ("student-4", "6631503101@lamduan.mfu.ac.th", "Thanakorn Roj", 4),
-    ("student-5", "6631503118@lamduan.mfu.ac.th", "Araya Kitt", 2),
-    ("student-6", "6631503125@lamduan.mfu.ac.th", "Krit Phan", 4),
+    ("student-1", "6531503078@lamduan.mfu.ac.th", "Kanya Wong", 3),
+    ("student-2", "6531503085@lamduan.mfu.ac.th", "Niran Chai", 3),
+    ("student-3", "6531503092@lamduan.mfu.ac.th", "Pim Srisuk", 2),
+    ("student-4", "6531503101@lamduan.mfu.ac.th", "Thanakorn Roj", 4),
+    ("student-5", "6531503118@lamduan.mfu.ac.th", "Araya Kitt", 2),
+    ("student-6", "6531503125@lamduan.mfu.ac.th", "Krit Phan", 4),
 ]
 
 COURSES = [

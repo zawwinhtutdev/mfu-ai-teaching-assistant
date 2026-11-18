@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://aiassistant-mfu.vercel.app/docs
+    about: Architecture, grounding, roles, deployment and troubleshooting.
+  - name: Security report
+    url: https://github.com/zawwinhtutdev/mfu-ai-teaching-assistant/security/advisories/new
+    about: Report a vulnerability privately. Do not open a public issue.
+  - name: Deployment guide
+    url: https://github.com/zawwinhtutdev/mfu-ai-teaching-assistant/blob/main/docs/DEPLOY.md
+    about: Vercel + Supabase setup, environment variables and Google SSO.

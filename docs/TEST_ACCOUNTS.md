@@ -32,12 +32,60 @@ Courses they own (from the service seed):
 
 | Name | Email | Password | Lands on |
 | --- | --- | --- | --- |
-| Kanya Wong | `6631503078@lamduan.mfu.ac.th` | `demo1234` | `/studentportal/mycourses` |
-| Niran Chai | `6631503085@lamduan.mfu.ac.th` | `demo1234` | `/studentportal/mycourses` |
-| Pim Srisuk | `6631503092@lamduan.mfu.ac.th` | `demo1234` | `/studentportal/mycourses` |
-| Thanakorn Roj | `6631503101@lamduan.mfu.ac.th` | `demo1234` | `/studentportal/mycourses` |
-| Araya Kitt | `6631503118@lamduan.mfu.ac.th` | `demo1234` | `/studentportal/mycourses` |
-| Krit Phan | `6631503125@lamduan.mfu.ac.th` | `demo1234` | `/studentportal/mycourses` |
+| Kanya Wong | `6531503078@lamduan.mfu.ac.th` | `demo1234` | `/studentportal/mycourses` |
+| Niran Chai | `6531503085@lamduan.mfu.ac.th` | `demo1234` | `/studentportal/mycourses` |
+| Pim Srisuk | `6531503092@lamduan.mfu.ac.th` | `demo1234` | `/studentportal/mycourses` |
+| Thanakorn Roj | `6531503101@lamduan.mfu.ac.th` | `demo1234` | `/studentportal/mycourses` |
+| Araya Kitt | `6531503118@lamduan.mfu.ac.th` | `demo1234` | `/studentportal/mycourses` |
+| Krit Phan | `6531503125@lamduan.mfu.ac.th` | `demo1234` | `/studentportal/mycourses` |
+
+
+## Design Concept class (1001143)
+
+A second seeded class, mirrored from the Google Classroom course
+`[2/2568] 1001143 Design Concept`. It exists so the teacher, student and admin
+portals all have a realistic class to exercise.
+
+- **Course:** `1001143` Design Concept — semester `2/2568`, academic year `2568`,
+  3 credits, School of Information Technology
+- **Section:** 2 (Lecture) — Wed 13:00–16:00, room E4-201, capacity 40
+- **Teachers:** Dr. Anan Suwan (primary), Dr. Malee Chaiyaporn (co-teacher)
+- **Enrolled:** these 30 students plus the six demo students above (36 total)
+
+Shared password: `demo1234`
+
+| Name | Email |
+| --- | --- |
+| Somsak Chaiyaporn | `6531503126@lamduan.mfu.ac.th` |
+| Nattapong Srisuk | `6531503127@lamduan.mfu.ac.th` |
+| Pimchanok Rattanaphan | `6531503128@lamduan.mfu.ac.th` |
+| Chanakan Thongkam | `6531503129@lamduan.mfu.ac.th` |
+| Natthawut Sricharoen | `6531503130@lamduan.mfu.ac.th` |
+| Kodchakorn Jaidee | `6531503131@lamduan.mfu.ac.th` |
+| Thanida Wongkham | `6531503132@lamduan.mfu.ac.th` |
+| Peerapat Inthasorn | `6531503133@lamduan.mfu.ac.th` |
+| Suphitcha Maneerat | `6531503134@lamduan.mfu.ac.th` |
+| Anucha Boonmee | `6531503135@lamduan.mfu.ac.th` |
+| Chalisa Phromma | `6531503136@lamduan.mfu.ac.th` |
+| Thanawat Khamkaew | `6531503137@lamduan.mfu.ac.th` |
+| Waranya Sae-Lim | `6531503138@lamduan.mfu.ac.th` |
+| Kritsada Panyawai | `6531503139@lamduan.mfu.ac.th` |
+| Nalinee Chuenjai | `6531503140@lamduan.mfu.ac.th` |
+| Siriporn Thongdee | `6531503141@lamduan.mfu.ac.th` |
+| Adisak Ruenrom | `6531503142@lamduan.mfu.ac.th` |
+| Benjaporn Kaewmanee | `6531503143@lamduan.mfu.ac.th` |
+| Chaiwat Sathit | `6531503144@lamduan.mfu.ac.th` |
+| Duangjai Phuttharak | `6531503145@lamduan.mfu.ac.th` |
+| Ekkachai Boonsong | `6531503146@lamduan.mfu.ac.th` |
+| Fah Chaiyasit | `6531503147@lamduan.mfu.ac.th` |
+| Gunn Chaiyapruek | `6531503148@lamduan.mfu.ac.th` |
+| Hataichanok Prasertsri | `6531503149@lamduan.mfu.ac.th` |
+| Itthipon Srisuwan | `6531503150@lamduan.mfu.ac.th` |
+| Jarupan Meechai | `6531503151@lamduan.mfu.ac.th` |
+| Kanokporn Saelim | `6531503152@lamduan.mfu.ac.th` |
+| Lertpong Wattana | `6531503153@lamduan.mfu.ac.th` |
+| Manatsanan Sriwong | `6531503154@lamduan.mfu.ac.th` |
+| Naphat Chaiyasit | `6531503155@lamduan.mfu.ac.th` |
 
 ## Admin
 

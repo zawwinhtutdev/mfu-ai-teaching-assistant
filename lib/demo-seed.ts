@@ -73,12 +73,12 @@ export const DEMO_TEACHERS: SeedTeacher[] = [
  * its course list from.
  */
 export const DEMO_STUDENTS: SeedStudent[] = [
-  { id: "student-1", fullName: "Kanya Wong", email: "6631503078@lamduan.mfu.ac.th", year: 3, courseCodes: ["CSB321", "CSD322", "CSM324"] },
-  { id: "student-2", fullName: "Niran Chai", email: "6631503085@lamduan.mfu.ac.th", year: 3, courseCodes: ["CSB321", "CSD322"] },
-  { id: "student-3", fullName: "Pim Srisuk", email: "6631503092@lamduan.mfu.ac.th", year: 2, courseCodes: ["CSD323", "GEN311"] },
-  { id: "student-4", fullName: "Thanakorn Roj", email: "6631503101@lamduan.mfu.ac.th", year: 4, courseCodes: ["CSD323", "CSM324", "AI-EDU"] },
-  { id: "student-5", fullName: "Araya Kitt", email: "6631503118@lamduan.mfu.ac.th", year: 2, courseCodes: ["CSD322", "CSM324"] },
-  { id: "student-6", fullName: "Krit Phan", email: "6631503125@lamduan.mfu.ac.th", year: 4, courseCodes: ["CSB321", "GEN311"] },
+  { id: "student-1", fullName: "Kanya Wong", email: "6531503078@lamduan.mfu.ac.th", year: 3, courseCodes: ["CSB321", "CSD322", "CSM324"] },
+  { id: "student-2", fullName: "Niran Chai", email: "6531503085@lamduan.mfu.ac.th", year: 3, courseCodes: ["CSB321", "CSD322"] },
+  { id: "student-3", fullName: "Pim Srisuk", email: "6531503092@lamduan.mfu.ac.th", year: 2, courseCodes: ["CSD323", "GEN311"] },
+  { id: "student-4", fullName: "Thanakorn Roj", email: "6531503101@lamduan.mfu.ac.th", year: 4, courseCodes: ["CSD323", "CSM324", "AI-EDU"] },
+  { id: "student-5", fullName: "Araya Kitt", email: "6531503118@lamduan.mfu.ac.th", year: 2, courseCodes: ["CSD322", "CSM324"] },
+  { id: "student-6", fullName: "Krit Phan", email: "6531503125@lamduan.mfu.ac.th", year: 4, courseCodes: ["CSB321", "GEN311"] },
 ]
 
 export function teacherById(id: string): SeedTeacher | undefined {
