@@ -256,7 +256,7 @@ export function PortalShell(props: PortalShellProps) {
   const drawer = (
     <>
       <div className="mfp-scrim" data-open={mobileOpen} onClick={() => setMobileOpen(false)} aria-hidden />
-      <aside className="mfp-drawer" data-open={mobileOpen} aria-label={productName} inert={!mobileOpen}>
+      <aside className="mfp-drawer" id="mfp-more-drawer" data-open={mobileOpen} aria-label={productName} inert={!mobileOpen}>
         <div className="mfp-brandblock">
           <BrandIcon size={30} tone={brandTone as "light" | "dark"} />
           <div className="mfp-brandblock-text">
@@ -328,6 +328,25 @@ export function PortalShell(props: PortalShellProps) {
             )
           })}
           <div className="mfp-rail-spacer" />
+          {/*
+            The rail carries five destinations, but the portal has more than
+            five pages (reminders, documents, analytics, agent builder). Those
+            were reachable only through the drawer, and the drawer's toggle is
+            `.mfp-only-mobile`, so on desktop there was no way to open it and
+            those pages had no link at all. This button opens the same drawer at
+            every width.
+          */}
+          <button
+            type="button"
+            className="mfp-rail-btn"
+            onClick={() => setMobileOpen(true)}
+            aria-label="More sections"
+            aria-expanded={mobileOpen}
+            aria-controls="mfp-more-drawer"
+          >
+            <Menu size={20} />
+            <span className="mfp-rail-label">More</span>
+          </button>
           <span className="mfp-rail-label mfp-rail-caption">{variant}</span>
         </aside>
 

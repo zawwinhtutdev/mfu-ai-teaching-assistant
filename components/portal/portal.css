@@ -99,6 +99,40 @@
 .mfp-scrim,
 .mfp-drawer { display: none; }
 
+/* The student rail only carries five links, so the drawer is the only route to
+   reminders, documents, analytics and the agent builder. It is opened by a
+   "More" button in the rail, which exists at every width — not only mobile. */
+.mfp[data-chrome="rail"] .mfp-drawer {
+  display: flex;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 50;
+  flex-direction: column;
+  width: 272px;
+  max-width: 84vw;
+  height: 100dvh;
+  padding: 16px 12px 24px;
+  background: var(--p-side);
+  border-right: 1px solid var(--p-line);
+  box-shadow: var(--p-shadow-menu);
+  transform: translateX(-105%);
+  transition: transform 0.22s var(--p-ease);
+}
+.mfp[data-chrome="rail"] .mfp-drawer[data-open="true"] { transform: none; }
+
+.mfp[data-chrome="rail"] .mfp-scrim {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background: rgba(20, 22, 30, 0.38);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s var(--p-ease);
+}
+.mfp[data-chrome="rail"] .mfp-scrim[data-open="true"] { opacity: 1; pointer-events: auto; }
+
 /* The sidebar is inline on desktop, so a close button would be meaningless.
    `display: none` here would lose to `.mfp-icon-btn`'s later `display: grid`,
    so the hidden state is expressed with the same specificity class. */
