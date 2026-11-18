@@ -186,28 +186,6 @@ export default function ManageCoursesPage() {
               }}
             />
           </div>
-          <button
-            type="button"
-            onClick={() => setCreateOpen(true)}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 7,
-              height: 40,
-              padding: "0 16px",
-              borderRadius: 999,
-              border: "none",
-              background: TEXT,
-              color: "#fff",
-              fontSize: 14,
-              fontWeight: 600,
-              whiteSpace: "nowrap",
-              cursor: "pointer",
-            }}
-          >
-            <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
-            New course
-          </button>
         </div>
       </div>
 
@@ -559,6 +537,40 @@ export default function ManageCoursesPage() {
           </span>
         </div>
       </div>
+
+      {/*
+        Floating action button, pinned to the viewport rather than the page.
+        Creating a course is the primary action here and the table can be long,
+        so the control must stay reachable without scrolling back to the top.
+        It sits above the pager and clears the sidebar's own bottom edge.
+      */}
+      <button
+        type="button"
+        onClick={() => setCreateOpen(true)}
+        style={{
+          position: "fixed",
+          right: 24,
+          bottom: 24,
+          zIndex: 30,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          height: 44,
+          padding: "0 20px",
+          borderRadius: 999,
+          border: "none",
+          background: TEXT,
+          color: "#fff",
+          fontSize: 14,
+          fontWeight: 600,
+          whiteSpace: "nowrap",
+          cursor: "pointer",
+          boxShadow: "0 6px 20px rgba(16, 18, 28, 0.28)",
+        }}
+      >
+        <span style={{ fontSize: 17, lineHeight: 1 }}>+</span>
+        New course
+      </button>
 
       <CourseDialog
         open={createOpen}
