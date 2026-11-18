@@ -727,21 +727,49 @@
    collapsing it there would open an empty off-canvas panel. */
 @media (min-width: 641px) {
   .mfp[data-chrome="topbar"] .mfp-side--dense {
-    transition: width 0.2s var(--p-ease), padding 0.2s var(--p-ease), border-color 0.2s var(--p-ease);
+    transition: width 0.2s var(--p-ease), padding 0.2s var(--p-ease);
     overflow: hidden;
   }
   .mfp[data-chrome="topbar"] .mfp-side--dense[data-collapsed="true"] {
     width: 0;
     padding-left: 0;
     padding-right: 0;
-    /* The 1px border is outside `width`, so leaving it would hide the column
-       but still reserve a visible 1px stripe down the page. */
+    /* The 1px border is outside the element width, so leaving it would hide
+       the column but still reserve a visible stripe down the page. */
     border-right-width: 0;
   }
 }
 
-/* The collapse toggle is a desktop control; narrower screens use the drawer. */
-.mfp-topbar-collapse { display: block; }
+/* Header row inside the admin column: brand, label, and the close button.
+   Mirrors `.mfp-brandblock` used by the teacher and student sidebars so the
+   three portals share one close affordance. */
+.mfp-side-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 6px 12px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--p-line);
+}
+.mfp-side-head-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--p-tertiary);
+  white-space: nowrap;
+}
+
+/* The in-panel X only closes the inline desktop column; below 641px the same
+   element is the drawer, which already has its own close button. */
+.mfp-admin-side-close { display: none; }
+@media (min-width: 641px) {
+  .mfp-admin-side-close { display: inline-flex; }
+}
+
+/* The topbar reopen button appears only once the column is hidden, so the two
+   controls never sit on screen together. */
+.mfp-topbar-collapse[data-hidden="true"] { display: none; }
 @media (max-width: 640px) {
   .mfp-topbar-collapse { display: none; }
 }
