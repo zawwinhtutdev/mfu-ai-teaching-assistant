@@ -9431,6 +9431,13 @@ html .ui-button.ui-state-disabled:active {
   max-width: 100%;
   height: auto;
 }
+.td_about.td_style_1 .td_about_thumb_2 img.td_thumb_cutout {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.18));
+}
 .td_about.td_style_1 .td_about_year {
   position: absolute;
   -webkit-writing-mode: vertical-lr;
