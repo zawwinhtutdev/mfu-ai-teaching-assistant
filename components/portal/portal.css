@@ -718,6 +718,37 @@
 .mfp[data-chrome="topbar"] .mfp-body { flex: 1 1 auto; }
 .mfp-side--dense { width: 232px; }
 .mfp-content--dense { padding: 20px 24px 40px; }
+
+/* Collapsible admin column. The width animates to zero rather than the element
+   being `display: none`d, so the content does not jump while the transition
+   runs; `overflow: hidden` keeps the labels from bleeding out mid-animation.
+
+   Scoped to desktop widths: below 641px the same <nav> is the drawer, and
+   collapsing it there would open an empty off-canvas panel. */
+@media (min-width: 641px) {
+  .mfp[data-chrome="topbar"] .mfp-side--dense {
+    transition: width 0.2s var(--p-ease), padding 0.2s var(--p-ease), border-color 0.2s var(--p-ease);
+    overflow: hidden;
+  }
+  .mfp[data-chrome="topbar"] .mfp-side--dense[data-collapsed="true"] {
+    width: 0;
+    padding-left: 0;
+    padding-right: 0;
+    /* The 1px border is outside `width`, so leaving it would hide the column
+       but still reserve a visible 1px stripe down the page. */
+    border-right-width: 0;
+  }
+}
+
+/* The collapse toggle is a desktop control; narrower screens use the drawer. */
+.mfp-topbar-collapse { display: block; }
+@media (max-width: 640px) {
+  .mfp-topbar-collapse { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mfp[data-chrome="topbar"] .mfp-side--dense { transition: none; }
+}
 .mfp-page-head--tight { margin-bottom: 14px; }
 
 /* The admin nav column spans the viewport, not the content, so its pinned

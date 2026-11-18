@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname, useSearchParams } from "next/navigation"
-import { Menu, X } from "lucide-react"
+import { Menu, PanelLeftClose, PanelLeftOpen, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { BrandIcon } from "@/components/brand-icon"
 import "./portal.css"
@@ -82,6 +82,9 @@ function isActive(pathname: string, search: URLSearchParams, item: PortalNavItem
   return true
 }
 
+/** Remembered across visits, so a collapsed console stays collapsed. */
+const SIDE_COLLAPSED_KEY = "mfp.admin.side.collapsed"
+
 export function PortalShell(props: PortalShellProps) {
   const { variant, chrome, productName, title, crumbs, nav, actions, railItems, extra, extraTop, contextChip, onNavigate, children } = props
   const pathname = usePathname() || ""
@@ -98,6 +101,36 @@ export function PortalShell(props: PortalShellProps) {
    * section without fighting the user's last click.
    */
   const [toggled, setToggled] = React.useState<Record<string, boolean>>({})
+
+  /**
+   * Desktop collapse for the admin nav column.
+   *
+   * Separate from `mobileOpen`, which drives the drawer on narrow screens: the
+   * desktop column is inline, so hiding it is a layout choice the user expects
+   * to persist, not a modal state that resets on navigation. Starts expanded and
+   * is restored from storage in an effect so server and client markup agree.
+   */
+  const [sideCollapsed, setSideCollapsed] = React.useState(false)
+
+  React.useEffect(() => {
+    try {
+      setSideCollapsed(window.localStorage.getItem(SIDE_COLLAPSED_KEY) === "true")
+    } catch {
+      // Storage can be unavailable (private mode); expanded is a safe default.
+    }
+  }, [])
+
+  const toggleSide = () => {
+    setSideCollapsed((current) => {
+      const next = !current
+      try {
+        window.localStorage.setItem(SIDE_COLLAPSED_KEY, String(next))
+      } catch {
+        // Ignore: the in-memory toggle still works for this session.
+      }
+      return next
+    })
+  }
   const isExpanded = (item: PortalNavItem) => {
     const explicit = toggled[item.href]
     if (explicit !== undefined) return explicit
@@ -375,6 +408,18 @@ export function PortalShell(props: PortalShellProps) {
         >
           {mobileOpen ? <X size={18} /> : <Menu size={18} />}
         </button>
+        {/* Desktop collapse. The mobile toggle above is hidden above 640px, so
+            without this the column could not be dismissed on a wide screen. */}
+        <button
+          type="button"
+          className="mfp-icon-btn mfp-topbar-collapse"
+          onClick={toggleSide}
+          aria-label={sideCollapsed ? "Show navigation" : "Hide navigation"}
+          aria-expanded={!sideCollapsed}
+          aria-controls="mfp-dense-nav"
+        >
+          {sideCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+        </button>
         <BrandIcon size={28} tone="light" />
         <div className="mfp-topbar-id">
           <span className="mfp-topbar-name">MFU AI</span>
@@ -385,7 +430,14 @@ export function PortalShell(props: PortalShellProps) {
       </div>
       <div className="mfp-body">
         <div className="mfp-scrim" data-open={mobileOpen} onClick={() => setMobileOpen(false)} aria-hidden />
-        <nav className="mfp-side mfp-side--dense" data-open={mobileOpen} aria-label="Sections">
+        <nav
+          id="mfp-dense-nav"
+          className="mfp-side mfp-side--dense"
+          data-open={mobileOpen}
+          data-collapsed={sideCollapsed}
+          aria-label="Sections"
+          aria-hidden={sideCollapsed ? true : undefined}
+        >
           <div className="mfp-side-scroll">{navList(true)}</div>
           {extra ? <div className="mfp-side-footer">{extra}</div> : null}
         </nav>
