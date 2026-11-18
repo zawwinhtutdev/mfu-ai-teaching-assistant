@@ -11,6 +11,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useRouter } from "next/navigation"
 import { Upload, X } from "lucide-react"
+import {
+  MAX_INLINE_MATERIAL_UPLOAD_BYTES,
+  readApiErrorMessage,
+  uploadCourseMaterialFilesToStorage,
+} from "@/lib/client/course-material-upload"
 
 interface UploadMaterialDialogProps {
   open: boolean
@@ -50,21 +55,57 @@ export function UploadMaterialDialog({ open, onOpenChange, courseId, onUploaded 
     setError(null)
 
     try {
-      const formData = new FormData()
-      formData.append("title", title.trim())
-      formData.append("content", content.trim())
-      formData.append("materialType", materialType)
-      selectedFiles.forEach((file) => formData.append("files", file))
+      const trimmedTitle = title.trim()
+      const trimmedContent = content.trim()
+      const totalFileBytes = selectedFiles.reduce((sum, file) => sum + file.size, 0)
 
-      const response = await fetch(`/api/courses/${courseId}/materials`, {
-        method: "POST",
-        body: formData,
-      })
+      let response: Response
 
-      const data = await response.json()
-      if (!response.ok) {
-        throw new Error(data?.error || "Failed to upload material")
+      if (selectedFiles.length > 0) {
+        const storageFiles = await uploadCourseMaterialFilesToStorage(courseId, selectedFiles)
+
+        if (storageFiles) {
+          response = await fetch(`/api/courses/${courseId}/materials`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: trimmedTitle,
+              content: trimmedContent,
+              materialType,
+              storageFiles,
+            }),
+          })
+        } else if (totalFileBytes > MAX_INLINE_MATERIAL_UPLOAD_BYTES) {
+          throw new Error(
+            "This file is too large for a direct upload (about 4 MB max). Sign in with your university account, or use a smaller PDF.",
+          )
+        } else {
+          const formData = new FormData()
+          formData.append("title", trimmedTitle)
+          formData.append("content", trimmedContent)
+          formData.append("materialType", materialType)
+          selectedFiles.forEach((file) => formData.append("files", file))
+          response = await fetch(`/api/courses/${courseId}/materials`, {
+            method: "POST",
+            body: formData,
+          })
+        }
+      } else {
+        const formData = new FormData()
+        formData.append("title", trimmedTitle)
+        formData.append("content", trimmedContent)
+        formData.append("materialType", materialType)
+        response = await fetch(`/api/courses/${courseId}/materials`, {
+          method: "POST",
+          body: formData,
+        })
       }
+
+      if (!response.ok) {
+        throw new Error(await readApiErrorMessage(response, "Failed to upload material"))
+      }
+
+      await response.json()
 
       onOpenChange(false)
       setTitle("")
@@ -129,7 +170,7 @@ export function UploadMaterialDialog({ open, onOpenChange, courseId, onUploaded 
                 <span className="text-sm text-gray-600 dark:text-gray-400">
                   {selectedFiles.length > 0 
                     ? `${selectedFiles.length} file${selectedFiles.length > 1 ? 's' : ''} selected`
-                    : "Choose files to upload (PDF/TXT recommended for AI indexing)"}
+                    : "Choose files (PDF/TXT for AI indexing; up to 50 MB when signed in)"}
                 </span>
               </Label>
               {selectedFiles.length > 0 && (

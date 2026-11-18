@@ -1,14 +1,53 @@
 import { NextResponse } from "next/server"
 import { extractCourseMaterialFileTexts, indexCourseMaterialContent } from "@/lib/ai/course-rag"
+
+/** PDF extraction and RAG indexing can exceed the default serverless window. */
+export const maxDuration = 120
 import { logAuditEvent } from "@/lib/server/audit-log"
 import { assertCourseAccess, clientForPrincipal, resolvePrincipal } from "@/lib/server/principal"
 
 const ALLOWED_MATERIAL_TYPES = new Set(["lecture", "document", "video", "other"])
 
-function toMaterialType(value: FormDataEntryValue | null) {
+function toMaterialType(value: FormDataEntryValue | string | null | undefined) {
   if (typeof value !== "string") return "document"
   const normalized = value.trim().toLowerCase()
   return ALLOWED_MATERIAL_TYPES.has(normalized) ? normalized : "document"
+}
+
+type MaterialFileBuffer = { fileName: string; mimeType: string; buffer: Buffer }
+
+type StorageMaterialFileRef = {
+  path: string
+  fileName: string
+  mimeType: string
+  publicUrl?: string
+}
+
+async function loadMaterialFilesFromStorage(
+  supabase: any,
+  courseId: string,
+  refs: StorageMaterialFileRef[],
+): Promise<MaterialFileBuffer[]> {
+  const loaded: MaterialFileBuffer[] = []
+
+  for (const ref of refs) {
+    if (!ref.path || !ref.path.startsWith(`${courseId}/`)) {
+      throw new Error("Invalid storage path for this course")
+    }
+
+    const { data, error } = await supabase.storage.from("knowledge").download(ref.path)
+    if (error || !data) {
+      throw new Error(error?.message || `Could not read ${ref.fileName || "uploaded file"}`)
+    }
+
+    loaded.push({
+      fileName: ref.fileName || "upload",
+      mimeType: ref.mimeType || "application/octet-stream",
+      buffer: Buffer.from(await data.arrayBuffer()),
+    })
+  }
+
+  return loaded
 }
 
 /**
@@ -73,23 +112,41 @@ export async function POST(
 
     const supabase = await clientForPrincipal(principal)
 
-    const form = await req.formData()
-    const title = String(form.get("title") || "").trim()
-    const manualContent = String(form.get("content") || "").trim()
-    const materialType = toMaterialType(form.get("materialType"))
-    const files = form.getAll("files").filter((item): item is File => item instanceof File)
+    const contentType = req.headers.get("content-type") || ""
+    let title = ""
+    let manualContent = ""
+    let materialType = "document"
+    let uploadedFiles: MaterialFileBuffer[] = []
+    let presetFileUrl: string | null = null
+
+    if (contentType.includes("application/json")) {
+      const body = await req.json()
+      title = String(body?.title || "").trim()
+      manualContent = String(body?.content || "").trim()
+      materialType = toMaterialType(body?.materialType)
+      const storageFiles = Array.isArray(body?.storageFiles)
+        ? (body.storageFiles as StorageMaterialFileRef[])
+        : []
+      uploadedFiles = await loadMaterialFilesFromStorage(supabase, course.id, storageFiles)
+      presetFileUrl = storageFiles[0]?.publicUrl?.trim() || null
+    } else {
+      const form = await req.formData()
+      title = String(form.get("title") || "").trim()
+      manualContent = String(form.get("content") || "").trim()
+      materialType = toMaterialType(form.get("materialType"))
+      const files = form.getAll("files").filter((item): item is File => item instanceof File)
+      uploadedFiles = await Promise.all(
+        files.map(async (file) => ({
+          fileName: file.name,
+          mimeType: file.type || "application/octet-stream",
+          buffer: Buffer.from(await file.arrayBuffer()),
+        })),
+      )
+    }
 
     if (!title) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 })
     }
-
-    const uploadedFiles = await Promise.all(
-      files.map(async (file) => ({
-        fileName: file.name,
-        mimeType: file.type || "application/octet-stream",
-        buffer: Buffer.from(await file.arrayBuffer()),
-      })),
-    )
 
     const extractedParts = await extractCourseMaterialFileTexts(uploadedFiles)
 
@@ -111,7 +168,7 @@ export async function POST(
     // Keep the original file so it can be opened again. Before this, the PDF was
     // read for text and thrown away: `file_url` stayed null and the card showed
     // extracted text with no way back to the source document.
-    const fileUrl = await storeMaterialFile(supabase, course.id, uploadedFiles)
+    const fileUrl = presetFileUrl ?? (await storeMaterialFile(supabase, course.id, uploadedFiles))
 
     const { data: insertedMaterial, error: insertError } = await supabase
       .from("course_materials")
