@@ -113,6 +113,41 @@ local model. Pass `--require-ai` to make it fatal. `deploy.sh` runs preflight
 automatically; set `SKIP_PREFLIGHT=1` only if the services are unreachable from
 the build host.
 
+### Google sign-in on the hosted project
+
+Google credentials are configured per Supabase project, not in this repo's
+env. Exporting `SUPABASE_AUTH_EXTERNAL_GOOGLE_*` on a laptop only tells local
+Supabase about them; the hosted project has its own copy, so a deploy can be
+healthy while `/login` shows a disabled "Google SSO" button.
+
+1. **Google Cloud Console → APIs & Services → Credentials** → the "Web
+   application" OAuth client → *Authorized redirect URIs* → add
+   `https://<project-ref>.supabase.co/auth/v1/callback` (keep the local
+   `http://127.0.0.1:54321/auth/v1/callback` entry).
+2. **Supabase Dashboard → Authentication → Providers → Google** → enable the
+   provider and paste the same client ID and client secret.
+3. **Authentication → URL Configuration**:
+   - Site URL: `https://ata.mfu.ac.th`
+   - Redirect URLs: add `https://ata.mfu.ac.th/auth/callback`; while
+     testing over plain HTTP also add `http://178.128.121.247/auth/callback`.
+4. If the OAuth consent screen is still in **Testing** mode, add every Google
+   account that must sign in under *Test users* (or publish the app at
+   **Publishing status**), otherwise Google answers "Access blocked".
+
+Verify without a browser:
+
+```bash
+curl -s https://ata.mfu.ac.th/api/auth/google/status
+{"enabled":true,"reason":"ok"}
+```
+
+- `reason:provider_not_configured` — step 1 or 2 is incomplete.
+- `reason:policy_disabled` — an administrator switched off `allow_google_sso`
+  in the Admin Console.
+
+The login page disables the button and shows a short note instead of letting
+the click fail; reload it after the status endpoint reports `enabled:true`.
+
 ## 4. Deploy
 
 ```bash
