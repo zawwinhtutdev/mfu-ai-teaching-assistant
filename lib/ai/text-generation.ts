@@ -12,7 +12,7 @@ import { createGoogle } from "@ai-sdk/google"
 import type { z } from "zod"
 
 import { streamChat, isOllamaEnabled } from "@/lib/ai/ollama"
-import { geminiModelName } from "@/lib/ai/models"
+import { geminiModelName, googleThinkingOff } from "@/lib/ai/models"
 
 /** Collect a streamed completion into one string. */
 async function ollamaComplete(prompt: string, system?: string): Promise<string> {
@@ -46,6 +46,9 @@ export async function completeText(prompt: string, options: { system?: string } 
     model: geminiModel(),
     prompt,
     ...(options.system ? { instructions: options.system } : {}),
+    // Structured output (quiz/flashcard JSON) is especially sensitive to a
+    // truncated budget: a cut-off object is unparseable rather than partial.
+    providerOptions: googleThinkingOff(),
   } as any)
 
   return text.trim()
@@ -70,6 +73,7 @@ export async function completeStructured<T>(
       output: Output.object({ schema }),
       prompt,
       ...(options.system ? { instructions: options.system } : {}),
+      providerOptions: googleThinkingOff(),
     } as any)
     return output as T
   }
