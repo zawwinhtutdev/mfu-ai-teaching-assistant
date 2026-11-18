@@ -118,9 +118,11 @@ async function persistQuiz(params: {
       title: quiz.title,
       questions: quiz.questions,
       created_by: principal.userId,
-      // A generated quiz is a draft for the teacher to review; a student's
-      // practice quiz is private to them and needs no review step.
-      is_published: !isTeacher,
+      // A teacher reviewing generated questions is the review step, so the quiz
+      // is published immediately and can be pulled back with Unpublish. Saving
+      // it as a draft left it invisible to the class with no way to release it,
+      // because nothing in the UI could flip the flag.
+      is_published: true,
       student_id: isTeacher ? null : principal.userId,
     })
     .select("id")

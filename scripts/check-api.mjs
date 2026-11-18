@@ -99,6 +99,8 @@ const PROBES = {
     { method: "GET", path: "/api/courses/course-ai-edu/chatbot-settings", ok: [403], name: "no cross-teacher access" },
     // The gradebook reads across a whole course, so it must be teacher-only.
     { method: "GET", path: `/api/courses/${COURSE_SEED_ID}/submissions`, ok: [200], name: "gradebook" },
+    // Teachers manage quizzes: drafts visible, publish controlled.
+    { method: "GET", path: `/api/courses/${COURSE_SEED_ID}/quizzes`, ok: [200], name: "course quizzes" },
   ],
   student: [
     { method: "GET", path: "/api/portal-data", ok: [200] },
@@ -120,6 +122,11 @@ const PROBES = {
     { method: "GET", path: "/api/courses/course-ai-edu/chatbot-settings", ok: [403], name: "no cross-course access" },
     // The gradebook exposes every student's work, so a student must be refused.
     { method: "GET", path: `/api/courses/${COURSE_SEED_ID}/submissions`, ok: [403], name: "student cannot read gradebook" },
+    { method: "GET", path: `/api/courses/${COURSE_SEED_ID}/quizzes`, ok: [200], name: "course quizzes" },
+    // A quiz answer key must not be reachable before submitting.
+    { method: "POST", path: "/api/quizzes/00000000-0000-4000-8000-000000000000/attempt", body: { answers: {} }, ok: [404], name: "attempt requires a real quiz" },
+    // Only a teacher may publish.
+    { method: "PATCH", path: `/api/courses/${COURSE_SEED_ID}/quizzes`, body: { quizId: "x", isPublished: true }, ok: [403], name: "student cannot publish a quiz" },
     { method: "PUT", path: `/api/courses/${COURSE_SEED_ID}/chatbot-settings`, body: { tone: "friendly" }, ok: [403], name: "student cannot edit settings" },
   ],
   admin: [
