@@ -1,0 +1,315 @@
+{
+  "generatedAt": "2026-11-17T21:54:27.251Z",
+  "provider": "ollama:qwen2.5:7b",
+  "embeddingModel": "nomic-embed-text",
+  "summary": {
+    "cases": 23,
+    "answerAccuracyPct": 100,
+    "refusalAccuracyPct": 100,
+    "citationValidityPct": 100,
+    "p50Ms": 980,
+    "p95Ms": 2517,
+    "errors": 0
+  },
+  "rows": [
+    {
+      "id": "csb321-instructor",
+      "expect": "answer",
+      "refused": false,
+      "citations": {
+        "present": true,
+        "valid": true
+      },
+      "correct": true,
+      "sources": 2,
+      "latency": 1766,
+      "answer": "The instructor for CSB321 Software Business Entrepreneurship is Dr. Anan Suwan [1]."
+    },
+    {
+      "id": "csb321-credits",
+      "expect": "answer",
+      "refused": false,
+      "citations": {
+        "present": true,
+        "valid": true
+      },
+      "correct": true,
+      "sources": 2,
+      "latency": 1063,
+      "answer": "This course, CSB321 Software Business Entrepreneurship, is worth 3 credits. [1]"
+    },
+    {
+      "id": "csb321-class-time",
+      "expect": "answer",
+      "refused": false,
+      "citations": {
+        "present": true,
+        "valid": true
+      },
+      "correct": true,
+      "sources": 2,
+      "latency": 1087,
+      "answer": "The class meets on Tuesday and Thursday from 09:00-10:30 [1]."
+    },
+    {
+      "id": "csb321-team-size",
+      "expect": "answer",
+      "refused": false,
+      "citations": {
+        "present": true,
+        "valid": true
+      },
+      "correct": true,
+      "sources": 2,
+      "latency": 576,
+      "answer": "Each project team consists of four students. [1]"
+    },
+    {
+      "id": "csb321-topics",
+      "expect": "answer",
+      "refused": false,
+      "citations": {
+        "present": true,
+        "valid": true
+      },
+      "correct": true,
+      "sources": 2,
+      "latency": 1218,
+      "answer": "The course covers topics such as customer discovery, business models, pricing, validation experiments, and pitching to investors [1]."
+    },
+    {
+      "id": "csb321-canvas-due",
+      "expect": "answer",
+      "refused": false,
+      "citations": {
+        "present": true,
+        "valid": true
+      },
+      "correct": true,
+      "sources": 2,
+      "latency": 761,
+      "answer": "The Business Model Canvas assignment is due on 20 November [1]."
+    },
+    {
+      "id": "csb321-canvas-points",
+      "expect": "answer",
+      "refused": false,
+      "citations": {
+        "present": true,
+        "valid": true
+      },
+      "correct": true,
+      "sources": 2,
+      "latency": 668,
+      "answer": "The Canvas assignment is worth 20 points. [1]"
+    },
+    {
+      "id": "csb321-canvas-blocks",
+      "expect": "answer",
+      "refused": false,
+      "citations": {
+        "present": true,
+        "valid": true
+      },
+      "correct": true,
+      "sources": 2,
+      "latency": 2693,
+      "answer": "The nine blocks of the Business Model Canvas are:\n1. Customer Segments\n2. Value Propositions\n3. Channels\n4. Customer Relationships\n5. Revenue Streams\n6. Key Resources\n7. Key Activities\n8. Key Partners"
+    },
+    {
+      "id": "csb321-refuse-phone",
+      "expect": "refusal",
+      "refused": true,
+      "citations": {
+        "present": false,
+        "valid": false
+      },
+      "correct": true,
+      "sources": 2,
+      "latency": 492,
+      "answer": "The course materials do not cover this."
+    },
+    {
+      "id": "csb321-refuse-exam",
+      "expect": "refusal",
+      "refused": true,
+      "citations": {
+        "present": false,
+        "valid": false
+      },
+      "correct": true,
+      "sources": 2,
+      "latency": 494,
+      "answer": "The course materials do not cover this."
+    },
+    {
+      "id": "csb321-refuse-parking",
+      "expect": "refusal",
+      "refused": true,
+      "citations": {
+        "present": false,
+        "valid": false
+      },
+      "correct": true,
+      "sources": 2,
+      "latency": 411,
+      "answer": "The course materials do not cover this."
+    },
+    {
+      "id": "csd323-litreview-count",
+      "expect": "answer",
+      "refused": false,
+      "citations": {
+        "present": true,
+        "valid": true
+      },
+      "correct": true,
+      "sources": 1,
+      "latency": 1274,
+      "answer": "The literature review should cite 12-15 papers, as stated in the seminar guide [1]."
+    },
+    {
+      "id": "csd323-session-format",
+      "expect": "answer",
+      "refused": false,
+      "citations": {
+        "present": true,
+        "valid": true
+      },
+      "correct": true,
+      "sources": 1,
+      "latency": 1223,
+      "answer": "In each seminar session, one team presents a paper, and discussants prepare questions to discuss the paper [1]."
+    },
+    {
+      "id": "csd322-auth",
+      "expect": "answer",
+      "refused": false,
+      "citations": {
+        "present": true,
+        "valid": true
+      },
+      "correct": true,
+      "sources": 1,
+      "latency": 1865,
+      "answer": "Authentication is enforced at the edge before requests reach application code, as part of the platform architecture layers. This ensures that only authenticated requests can proceed to the application"
+    },
+    {
+      "id": "csd322-layers",
+      "expect": "answer",
+      "refused": false,
+      "citations": {
+        "present": true,
+        "valid": true
+      },
+      "correct": true,
+      "sources": 1,
+      "latency": 2202,
+      "answer": "Platform architecture layers include edge, application, data, and platform services. These layers manage stateless request handling, ensure idempotent operations, and enforce authentication at the edg"
+    },
+    {
+      "id": "csd322-refuse-grades",
+      "expect": "refusal",
+      "refused": true,
+      "citations": {
+        "present": false,
+        "valid": false
+      },
+      "correct": true,
+      "sources": 1,
+      "latency": 482,
+      "answer": "The course materials do not cover this."
+    },
+    {
+      "id": "csm324-hedging",
+      "expect": "answer",
+      "refused": false,
+      "citations": {
+        "present": true,
+        "valid": true
+      },
+      "correct": true,
+      "sources": 1,
+      "latency": 2105,
+      "answer": "Hedging language in formal English for academic writing refers to the use of phrases that soften statements to express uncertainty or reduce the strength of a claim, thereby making the writing more ca"
+    },
+    {
+      "id": "csm324-submission",
+      "expect": "answer",
+      "refused": false,
+      "citations": {
+        "present": true,
+        "valid": true
+      },
+      "correct": true,
+      "sources": 1,
+      "latency": 680,
+      "answer": "Weekly writing tasks are submitted through the course workspace [1]."
+    },
+    {
+      "id": "gen311-assessment",
+      "expect": "answer",
+      "refused": false,
+      "citations": {
+        "present": true,
+        "valid": true
+      },
+      "correct": true,
+      "sources": 1,
+      "latency": 922,
+      "answer": "This course is assessed through a group presentation and a reflective essay [1]."
+    },
+    {
+      "id": "gen311-scope",
+      "expect": "answer",
+      "refused": false,
+      "citations": {
+        "present": true,
+        "valid": true
+      },
+      "correct": true,
+      "sources": 1,
+      "latency": 980,
+      "answer": "Global citizenship covers intercultural communication, the sustainable development goals, and civic engagement. [1]"
+    },
+    {
+      "id": "csa411-focus",
+      "expect": "answer",
+      "refused": false,
+      "citations": {
+        "present": true,
+        "valid": true
+      },
+      "correct": true,
+      "sources": 1,
+      "latency": 2517,
+      "answer": "This course focuses on automated test design and tooling, with an emphasis on AI-assisted test generation and test maintenance. It covers topics such as test case prioritization, flaky test diagnosis,"
+    },
+    {
+      "id": "csd323-refuse-tuition",
+      "expect": "refusal",
+      "refused": true,
+      "citations": {
+        "present": false,
+        "valid": false
+      },
+      "correct": true,
+      "sources": 1,
+      "latency": 695,
+      "answer": "The course materials do not cover this."
+    },
+    {
+      "id": "gen311-refuse-wifi",
+      "expect": "refusal",
+      "refused": true,
+      "citations": {
+        "present": false,
+        "valid": false
+      },
+      "correct": true,
+      "sources": 1,
+      "latency": 580,
+      "answer": "The course materials do not cover this."
+    }
+  ]
+}

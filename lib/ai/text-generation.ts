@@ -11,7 +11,7 @@ import { generateText as aiGenerateText, Output } from "ai"
 import { createGoogle } from "@ai-sdk/google"
 import type { z } from "zod"
 
-import { streamChat, useOllama } from "@/lib/ai/ollama"
+import { streamChat, isOllamaEnabled } from "@/lib/ai/ollama"
 
 /** Collect a streamed completion into one string. */
 async function ollamaComplete(prompt: string, system?: string): Promise<string> {
@@ -37,7 +37,7 @@ function geminiModel() {
 
 /** Free-text completion. */
 export async function completeText(prompt: string, options: { system?: string } = {}) {
-  if (useOllama()) {
+  if (isOllamaEnabled()) {
     return ollamaComplete(prompt, options.system)
   }
 
@@ -63,7 +63,7 @@ export async function completeStructured<T>(
   schema: z.ZodType<T>,
   options: { system?: string } = {},
 ): Promise<T> {
-  if (!useOllama()) {
+  if (!isOllamaEnabled()) {
     const { output } = await aiGenerateText({
       model: geminiModel(),
       output: Output.object({ schema }),

@@ -202,8 +202,12 @@ export function toVectorLiteral(values: number[]): string {
  * Mirrors `shouldUseLocalChatService` in local-chat.ts: an explicit
  * `AI_PROVIDER` always wins, and the unset default picks Ollama when no Gemini
  * key exists. Adding a key later restores cloud behaviour with no code change.
+ *
+ * Named `isOllamaEnabled`, not `useOllama`: the `use` prefix made ESLint treat
+ * this plain predicate as a React hook and report a rules-of-hooks violation at
+ * every non-component call site.
  */
-export function useOllama(): boolean {
+export function isOllamaEnabled(): boolean {
   const provider = (process.env.AI_PROVIDER ?? "").trim().toLowerCase()
   if (provider === "gemini") return false
   if (provider === "ollama" || provider === "stub") return true
