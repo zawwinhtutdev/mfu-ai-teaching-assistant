@@ -187,7 +187,7 @@ export function CourseDialog({ open, onOpenChange, teachers, course, onSaved }: 
                 <SelectContent>
                   {SEMESTERS.map((semester) => (
                     <SelectItem key={semester} value={semester}>
-                      Semester {semester}
+                      {semester}
                     </SelectItem>
                   ))}
                   {/* An existing course may hold a value outside the list; show it
