@@ -50,3 +50,6 @@ services/api/.venv
 .local-demo/
 *.pid
 .local-shots/
+
+# Supabase CLI scratch files
+supabase/.temp/
