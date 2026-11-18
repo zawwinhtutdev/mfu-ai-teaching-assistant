@@ -158,14 +158,26 @@ else
   esac
 
   # A key can be valid for a project where the configured model is unavailable.
-  # The API returns entries like {"name": "models/gemini-3.8-flash"}, so match
+  # The API returns entries like {"name": "models/gemini-2.5-flash"}, so match
   # the full name with its trailing quote — a bare substring test would also
-  # match a longer id such as "gemini-3.8-flash-lite".
+  # match a longer id such as "gemini-2.5-flash-lite".
   MODEL=$(get GEMINI_MODEL)
-  MODEL=${MODEL:-gemini-3.8-flash}
+  MODEL=${MODEL:-gemini-2.5-flash}
   if [ "$ai_status" = "200" ] && [ -s /tmp/preflight-ai.json ]; then
     if grep -q "models/${MODEL}\"" /tmp/preflight-ai.json; then
-      pass "model '$MODEL' is available to this key"
+      # Listing is not proof: free-tier keys list models that then answer 503
+      # or 429. Actually generate to distinguish "available" from "works".
+      gen_status=$(curl -s -o /tmp/preflight-gen.json -w '%{http_code}' --max-time 25 \
+        -X POST "https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${AI_KEY}" \
+        -H "Content-Type: application/json" \
+        -d '{"contents":[{"role":"user","parts":[{"text":"Say OK"}]}],"generationConfig":{"maxOutputTokens":300,"thinkingConfig":{"thinkingBudget":0}}}')
+      case "$gen_status" in
+        200) pass "model '$MODEL' generated a response" ;;
+        503) fail "model '$MODEL' is listed but returns 503 UNAVAILABLE — set GEMINI_MODEL to a working model" ;;
+        429) warn "model '$MODEL' is quota-exhausted (429) — chat will fall back to another model" ;;
+        *) fail "model '$MODEL' generation returned HTTP $gen_status" ;;
+      esac
+      rm -f /tmp/preflight-gen.json
     else
       warn "model '$MODEL' was not in this key's model list — set GEMINI_MODEL to one that is"
     fi
