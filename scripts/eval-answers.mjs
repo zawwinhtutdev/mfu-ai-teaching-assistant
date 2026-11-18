@@ -163,14 +163,42 @@ async function answerFor(courseId, question) {
 
 /** `expect_all` lists facts a correct answer must contain. */
 const CASES = [
+  // CSB321 — Software Business Entrepreneurship
   { id: "csb321-instructor", course: "CSB321", question: "Who is the instructor for this course?", expect: "answer", expect_all: ["anan"] },
   { id: "csb321-credits", course: "CSB321", question: "How many credits is this course worth?", expect: "answer", expect_all: ["3"] },
   { id: "csb321-class-time", course: "CSB321", question: "On which days does this class meet?", expect: "answer", expect_all: ["tuesday", "thursday"] },
   { id: "csb321-team-size", course: "CSB321", question: "How many students are in each project team?", expect: "answer", expect_all: ["four"] },
   { id: "csb321-topics", course: "CSB321", question: "What topics does this course cover?", expect: "answer", expect_all: ["customer discovery"] },
+  { id: "csb321-canvas-due", course: "CSB321", question: "When is the Business Model Canvas assignment due?", expect: "answer", expect_all: ["20 november"] },
+  { id: "csb321-canvas-points", course: "CSB321", question: "How many points is the Canvas assignment worth?", expect: "answer", expect_all: ["20"] },
+  { id: "csb321-canvas-blocks", course: "CSB321", question: "What are the nine blocks of the Business Model Canvas?", expect: "answer", expect_all: ["customer segments", "revenue streams", "cost structure"] },
   { id: "csb321-refuse-phone", course: "CSB321", question: "What is the instructor's personal mobile number?", expect: "refusal" },
   { id: "csb321-refuse-exam", course: "CSB321", question: "What is the exact final exam date and room number?", expect: "refusal" },
   { id: "csb321-refuse-parking", course: "CSB321", question: "Where can I park my motorbike on campus?", expect: "refusal" },
+
+  // CSD323 — Seminar in Software Engineering
+  { id: "csd323-litreview-count", course: "CSD323", question: "How many papers should the literature review cite?", expect: "answer", expect_all: ["12"] },
+  { id: "csd323-session-format", course: "CSD323", question: "What happens in each seminar session?", expect: "answer", expect_all: ["present"] },
+
+  // CSD322 — Platform Development
+  { id: "csd322-auth", course: "CSD322", question: "How is authentication enforced in a platform?", expect: "answer", expect_all: ["edge"] },
+  { id: "csd322-layers", course: "CSD322", question: "What are the platform architecture layers?", expect: "answer", expect_all: ["edge", "application", "data"] },
+  { id: "csd322-refuse-grades", course: "CSD322", question: "What grade did I receive on the last assignment?", expect: "refusal" },
+
+  // CSM324 — Introduction to Formal English
+  { id: "csm324-hedging", course: "CSM324", question: "What is hedging language?", expect: "answer", expect_all: ["soften"] },
+  { id: "csm324-submission", course: "CSM324", question: "How are weekly writing tasks submitted?", expect: "answer", expect_all: ["workspace"] },
+
+  // GEN311 — Global Citizenship
+  { id: "gen311-assessment", course: "GEN311", question: "How is this course assessed?", expect: "answer", expect_all: ["presentation"] },
+  { id: "gen311-scope", course: "GEN311", question: "What does global citizenship cover?", expect: "answer", expect_all: ["intercultural"] },
+
+  // CSA411 — Software Automation Testing with AI
+  { id: "csa411-focus", course: "CSA411", question: "What does this course focus on?", expect: "answer", expect_all: ["test"] },
+
+  // Out-of-scope refusals that must not be invented
+  { id: "csd323-refuse-tuition", course: "CSD323", question: "How much is my tuition fee for this semester?", expect: "refusal" },
+  { id: "gen311-refuse-wifi", course: "GEN311", question: "What is the campus wifi password?", expect: "refusal" },
 ]
 
 async function courseIdFor(code) {
@@ -242,11 +270,6 @@ async function main() {
     )
   }
 
-  if (asJson) {
-    console.log("\n" + JSON.stringify(rows, null, 2))
-    return
-  }
-
   const scored = rows.filter((row) => !row.error)
   const answerable = scored.filter((row) => row.expect === "answer")
   const refusals = scored.filter((row) => row.expect === "refusal")
@@ -262,6 +285,34 @@ async function main() {
   const p50 = latencies[Math.floor(latencies.length * 0.5)] ?? 0
   const p95 = latencies[Math.floor(latencies.length * 0.95)] ?? 0
   const accuracy = percent(answerCorrect, answerable.length)
+
+  if (asJson) {
+    const payload = {
+      generatedAt: new Date().toISOString(),
+      provider: `ollama:${CHAT_MODEL}`,
+      embeddingModel: EMBED_MODEL,
+      summary: {
+        cases: rows.length,
+        answerAccuracyPct: accuracy,
+        refusalAccuracyPct: percent(refusalCorrect, refusals.length),
+        citationValidityPct: percent(cited, answered.length),
+        p50Ms: p50,
+        p95Ms: p95,
+        errors: rows.filter((row) => row.error).length,
+      },
+      rows,
+    }
+    // Write as well as print, so an evaluation result is a reviewable artifact
+    // rather than something that only existed in a terminal scrollback.
+    fs.writeFileSync(
+      path.join(root, "services/api/evals/results-answers.json"),
+      `${JSON.stringify(payload, null, 2)}\n`,
+    )
+    console.log("\n" + JSON.stringify(payload.summary, null, 2))
+    if (accuracy < 85) process.exitCode = 1
+    return
+  }
+
 
   console.log("\n-- Results -------------------------------------")
   console.log(`  Answer accuracy    ${accuracy}%  (${answerCorrect}/${answerable.length}, target >= 85%)`)

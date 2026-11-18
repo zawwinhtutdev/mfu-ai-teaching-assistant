@@ -36,6 +36,8 @@ next-env.d.ts
 
 # local verification artifacts
 .local-shots
+# ad-hoc UI screenshots from manual verification runs
+shots/
 
 # python service
 services/api/.venv
