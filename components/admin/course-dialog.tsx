@@ -43,6 +43,40 @@ interface CourseDialogProps {
 
 const UNASSIGNED = "__unassigned__"
 
+/** Semesters a course can run in. Stored as a string, like the rest of the form. */
+const SEMESTERS = ["1", "2", "3"] as const
+
+/**
+ * MFU schools, in the order the university lists them.
+ *
+ * A fixed list rather than free text: the value is shown to students and used
+ * for filtering, so "School of Science" and "school of science" must not become
+ * two different schools.
+ */
+const SCHOOLS = [
+  "School of Liberal Arts",
+  "School of Science",
+  "School of Management",
+  "School of Applied Digital Technology",
+  "School of Agro-Industry",
+  "School of Law",
+  "School of Cosmetic Science",
+  "School of Health Science",
+  "School of Nursing",
+  "School of Anti-Aging and Regenerative Medicine",
+  "School of Medicine",
+  "School of Dentistry",
+  "School of Social Innovation",
+  "School of Sinology",
+  "School of Integrative Medicine",
+] as const
+
+/**
+ * Radix Select cannot hold an empty string as a value, so "nothing chosen" needs
+ * a sentinel — the same trick the teacher dropdown already uses.
+ */
+const NONE = "__none__"
+
 function emptyCourse(): CourseFormValues {
   return {
     code: "",
@@ -136,11 +170,26 @@ export function CourseDialog({ open, onOpenChange, teachers, course, onSaved }: 
             </div>
             <div className="space-y-2">
               <Label htmlFor="semester">Semester</Label>
-              <Input
-                id="semester"
-                value={form.semester}
-                onChange={(e) => set("semester", e.target.value)}
-              />
+              <Select
+                value={form.semester || NONE}
+                onValueChange={(value) => set("semester", value === NONE ? "" : value)}
+              >
+                <SelectTrigger id="semester">
+                  <SelectValue placeholder="Select" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SEMESTERS.map((semester) => (
+                    <SelectItem key={semester} value={semester}>
+                      {semester}
+                    </SelectItem>
+                  ))}
+                  {/* An existing course may hold a value outside the list; show it
+                      rather than silently blanking the field on edit. */}
+                  {form.semester && !SEMESTERS.includes(form.semester as any) ? (
+                    <SelectItem value={form.semester}>{form.semester}</SelectItem>
+                  ) : null}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -156,11 +205,26 @@ export function CourseDialog({ open, onOpenChange, teachers, course, onSaved }: 
 
           <div className="space-y-2">
             <Label htmlFor="school">School</Label>
-            <Input
-              id="school"
-              value={form.school}
-              onChange={(e) => set("school", e.target.value)}
-            />
+            <Select
+              value={form.school || NONE}
+              onValueChange={(value) => set("school", value === NONE ? "" : value)}
+            >
+              <SelectTrigger id="school">
+                <SelectValue placeholder="Select a school" />
+              </SelectTrigger>
+              <SelectContent>
+                {SCHOOLS.map((school) => (
+                  <SelectItem key={school} value={school}>
+                    {school}
+                  </SelectItem>
+                ))}
+                {/* Same reason as semester: editing a course whose school is not
+                    in the list must not lose the stored value. */}
+                {form.school && !SCHOOLS.includes(form.school as any) ? (
+                  <SelectItem value={form.school}>{form.school}</SelectItem>
+                ) : null}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
