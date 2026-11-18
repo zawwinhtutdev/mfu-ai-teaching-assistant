@@ -2,7 +2,7 @@ import { convertToModelMessages, createUIMessageStreamResponse, streamText, toUI
 import { createGoogle } from "@ai-sdk/google"
 import { cookies } from "next/headers"
 import { getUserFacingChatError } from "@/lib/ai/chat-errors"
-import { geminiModelName, getModelConfig, normalizeGoogleProviderModel } from "@/lib/ai/models"
+import { geminiModelName, getModelConfig, googleThinkingOff, normalizeGoogleProviderModel } from "@/lib/ai/models"
 import { createClient } from "@/lib/supabase/server"
 import { getDocumentReadUrl } from "@/lib/storage/spaces"
 import { trackApiError } from "@/lib/server/observability"
@@ -134,6 +134,15 @@ export async function POST(req: Request) {
 
     const userId = principal?.userId || studentId || ""
     const userRole = principal?.role || "student"
+
+    // Anonymous callers are refused before any provider call is made. The
+    // route used to answer them, which was harmless against a local model but
+    // became billable abuse the moment a paid API key was configured: a probe
+    // with no session got a 200 and a real completion. The rate limiter keys on
+    // a user id, so an anonymous caller would also have shared one bucket.
+    if (!principal) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 })
+    }
 
     console.log("[v0] Using userId:", userId, "role:", userRole, "demo:", principal?.isDemo)
 
@@ -731,6 +740,9 @@ Guidelines:
         abortSignal: req.signal,
         maxOutputTokens,
         temperature,
+        // Without this, Gemini 2.5+ spends most of maxOutputTokens on internal
+        // reasoning and the visible answer is truncated. See googleThinkingOff.
+        providerOptions: googleThinkingOff(),
       } as any)
       console.log("✅ AI model call initiated successfully")
     } catch (streamError) {
