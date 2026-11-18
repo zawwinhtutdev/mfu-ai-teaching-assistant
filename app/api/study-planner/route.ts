@@ -98,16 +98,24 @@ export async function POST(req: Request) {
         .join("\n")
 
       // Provider-agnostic: local model by default, Gemini only if configured.
+      // The date must be supplied explicitly. Asked only for "YYYY-MM-DD", the
+      // model guessed from its training data and returned 2023 dates on a 2026
+      // course, which made every generated task look years overdue.
+      const today = new Date()
+      const endDate = new Date(today.getTime() + 7 * 86400000)
+      const iso = (date: Date) => date.toISOString().slice(0, 10)
+
       const text = await completeText(
         `You are a study planner AI. Generate a personalized 7-day study plan for the course "${course?.title || "Unknown"}" (${course?.code || ""}).
 
+Today's date is ${iso(today)} (${today.toUTCString().slice(0, 16)}).
 Course materials:
 ${materialList || "No materials uploaded yet"}
 
 Generate exactly 5-7 study tasks as a JSON array. Each item should have:
 - title: concise task name
 - description: brief actionable description (1-2 sentences)
-- due_date: YYYY-MM-DD format, spread across next 7 days starting from today
+- due_date: YYYY-MM-DD between ${iso(today)} and ${iso(endDate)}. Never use a past year.
 - priority: "low", "medium", or "high"
 
 Only output the JSON array, no markdown or explanation.`,
@@ -121,12 +129,22 @@ Only output the JSON array, no markdown or explanation.`,
         }
 
         const tasks = JSON.parse(jsonMatch[0])
+        // Even with today's date in the prompt a model can repeat an old year,
+        // so clamp anything clearly in the past onto the 7-day window rather
+        // than storing a plan that reads as years overdue.
+        const floor = iso(today)
+        const clampDate = (value: unknown): string | null => {
+          const raw = typeof value === "string" ? value.slice(0, 10) : ""
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null
+          return raw < floor ? floor : raw
+        }
+
         const insertData = tasks.map((task: any) => ({
           user_id: principal.userId,
           course_id: body.courseId,
           title: String(task.title || "Study Task"),
           description: String(task.description || ""),
-          due_date: task.due_date || null,
+          due_date: clampDate(task.due_date),
           priority: ["low", "medium", "high"].includes(task.priority) ? task.priority : "medium",
           ai_generated: true,
         }))

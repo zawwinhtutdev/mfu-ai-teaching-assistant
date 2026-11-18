@@ -66,7 +66,12 @@ export interface Quiz {
 export interface QuizQuestion {
   question: string
   options: string[]
-  correct_answer: number
+  /**
+   * Absent for a student taking a quiz: the list endpoint strips the key so the
+   * answers cannot be read from the response before submitting. Present when a
+   * teacher reviews, and when the quiz is mock data.
+   */
+  correct_answer?: number
 }
 
 export interface StudyReminder {
