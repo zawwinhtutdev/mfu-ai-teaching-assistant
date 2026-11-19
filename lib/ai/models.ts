@@ -64,6 +64,26 @@ const GOOGLE_MODEL_ALIASES: Record<string, string> = {
   "google/gemini-2.5-pro": "google/gemini-2.5-flash",
 }
 
+/**
+ * Which hosted provider to use when Ollama is not selected.
+ *
+ * `AI_PROVIDER=openai` wins, otherwise Gemini. Ordering matters because the
+ * Gemini free tier caps at 20 requests per day *per model*, which a live demo or
+ * a class can exhaust in minutes; OpenAI bills per token instead.
+ */
+export function hostedProvider(): "openai" | "gemini" {
+  const configured = (process.env.AI_PROVIDER || "").trim().toLowerCase()
+  if (configured === "openai") return "openai"
+  if (configured === "gemini") return "gemini"
+  // auto: prefer whichever key actually exists.
+  if (process.env.OPENAI_API_KEY?.trim()) return "openai"
+  return "gemini"
+}
+
+export function openaiModelName(): string {
+  return process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini"
+}
+
 export const normalizeGoogleProviderModel = (providerModel: string) =>
   GOOGLE_MODEL_ALIASES[providerModel] ?? providerModel
 

@@ -255,6 +255,21 @@ async function main() {
     process.exit(1)
   }
 
+  // `.env.local` is loaded first and never overrides values already in the
+  // environment, so running this after a deploy silently seeds the *local*
+  // database while the hosted project stays empty. Refuse rather than write to
+  // the wrong place.
+  if (url.includes("localhost") || url.includes("127.0.0.1")) {
+    console.error(
+      [
+        `Refusing to seed a local database (${url}).`,
+        "This script seeds the hosted project; load its config first:",
+        "  set -a && . ./.env.production && set +a && node scripts/seed-course-content.mjs",
+      ].join("\n"),
+    )
+    process.exit(1)
+  }
+
   // Service role: seeding is an administrative action, and FAQ/assignment
   // writes would otherwise be blocked by the teacher-ownership policies.
   const supabase = createClient(url, key, { auth: { persistSession: false } })

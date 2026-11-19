@@ -209,7 +209,10 @@ export function toVectorLiteral(values: number[]): string {
  */
 export function isOllamaEnabled(): boolean {
   const provider = (process.env.AI_PROVIDER ?? "").trim().toLowerCase()
-  if (provider === "gemini") return false
+  if (provider === "gemini" || provider === "openai") return false
   if (provider === "ollama" || provider === "stub") return true
-  return !process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim()
+  // auto: only fall back to a local model when no hosted key is configured.
+  const hasHostedKey =
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim()
+  return !hasHostedKey
 }

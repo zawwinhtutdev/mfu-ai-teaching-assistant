@@ -17,6 +17,26 @@ const noticeStyle: React.CSSProperties = {
   marginBottom: 20,
 }
 
+type GoogleSsoStatus = "checking" | "enabled" | "provider_missing" | "policy_disabled" | "unavailable"
+
+// Shown under the SSO button when it cannot be offered. The status endpoint
+// distinguishes "provider not configured on the Supabase project" from "an
+// admin turned the policy off", because the fixes are different.
+const googleSsoNotices: Record<Exclude<GoogleSsoStatus, "checking" | "enabled">, string> = {
+  provider_missing: "Google sign-in isn't available yet — please use your MFU email and password.",
+  policy_disabled:
+    "Google sign-in has been turned off by the administrator — please use your MFU email and password.",
+  unavailable: "Google sign-in is temporarily unavailable — please use your MFU email and password.",
+}
+
+const googleSsoNoteStyle: React.CSSProperties = {
+  marginTop: -8,
+  marginBottom: 24,
+  fontSize: 15,
+  lineHeight: 1.5,
+  color: "#6b7280",
+}
+
 const oauthErrorMessages: Record<string, string> = {
   oauth_failed: "Google sign-in could not be completed. Please try again.",
   university_email_required: getEmailDomainError(),
@@ -34,8 +54,8 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [acceptTerms, setAcceptTerms] = useState(false)
   const [resetSuccess, setResetSuccess] = useState(false)
-  // null = still checking, so the button does not flash "unavailable" on load.
-  const [googleEnabled, setGoogleEnabled] = useState<boolean | null>(null)
+  // "checking" avoids flashing "unavailable" during the first render.
+  const [googleSso, setGoogleSso] = useState<GoogleSsoStatus>("checking")
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search)
@@ -46,16 +66,26 @@ export default function LoginPage() {
       setError(oauthErrorMessages[oauthError] || "Google sign-in could not be completed. Please try again.")
     }
 
-    // Ask the server whether Google is actually configured, so the button can
-    // be hidden rather than failing after a click.
+    // Ask the server whether Google is actually configured, so the button is
+    // only offered when clicking it can actually work.
     let cancelled = false
     fetch("/api/auth/google/status", { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((payload) => {
-        if (!cancelled) setGoogleEnabled(payload?.enabled === true)
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null)
+        if (cancelled) return
+
+        if (response.ok && payload?.enabled === true) {
+          setGoogleSso("enabled")
+        } else if (payload?.reason === "provider_not_configured") {
+          setGoogleSso("provider_missing")
+        } else if (payload?.reason === "policy_disabled") {
+          setGoogleSso("policy_disabled")
+        } else {
+          setGoogleSso("unavailable")
+        }
       })
       .catch(() => {
-        if (!cancelled) setGoogleEnabled(false)
+        if (!cancelled) setGoogleSso("unavailable")
       })
 
     return () => {
@@ -67,12 +97,20 @@ export default function LoginPage() {
     // Google SSO goes straight to the Google account chooser. Terms acceptance
     // is collected on the provider side, so it must not block this button.
     setError(null)
+
+    // The button is disabled in these states, so this is only reachable via
+    // keyboard/automation — still answer with the same explanation.
+    if (googleSso !== "enabled") {
+      setError(
+        googleSso === "checking"
+          ? "Google sign-in is still being checked. Please try again in a moment."
+          : googleSsoNotices[googleSso],
+      )
+      return
+    }
+
     setIsLoading(true)
     try {
-      if (!googleEnabled) {
-        throw new Error("Google SSO is not configured yet. Please use email login for now.")
-      }
-
       await fetch("/api/demo-auth/logout", { method: "POST" })
       const supabase = createClient()
       const origin = window.location.origin
@@ -232,12 +270,14 @@ export default function LoginPage() {
                         <button
                           type="button"
                           onClick={handleSsoLogin}
-                          disabled={isLoading || googleEnabled !== true}
+                          disabled={isLoading || googleSso !== "enabled"}
+                          aria-describedby={googleSso === "checking" || googleSso === "enabled" ? undefined : "google-sso-note"}
                           title={
-                            googleEnabled === true
+                            googleSso === "enabled"
                               ? undefined
-                              : "Google sign-in is not configured on this environment"
+                              : "Google sign-in is not available on this environment"
                           }
+                          style={googleSso === "enabled" ? undefined : { opacity: 0.55, cursor: "not-allowed" }}
                           className="td_btn td_style_1 td_radius_10 td_medium"
                         >
                           <span className="td_btn_in td_heading_color td_white_bg">
@@ -245,6 +285,12 @@ export default function LoginPage() {
                           </span>
                         </button>
                       </div>
+
+                      {googleSso !== "checking" && googleSso !== "enabled" ? (
+                        <p id="google-sso-note" role="status" style={googleSsoNoteStyle}>
+                          {googleSsoNotices[googleSso]}
+                        </p>
+                      ) : null}
                     </form>
 
                     <p className="td_form_card_text td_fs_20 td_medium td_heading_color td_mb_20">
