@@ -45,7 +45,7 @@ discussions) and when an individual is officially representing the project.
 ## Reporting
 
 If you experience or witness unacceptable behaviour, report it privately to the
-maintainer at **[@zawwinhuttt](https://github.com/zawwinhuttt)**. All reports will
+maintainer at **[@zawwinhtutdev](https://github.com/zawwinhtutdev)**. All reports will
 be reviewed and investigated promptly and fairly, and the privacy and security
 of the reporter will be respected.
 

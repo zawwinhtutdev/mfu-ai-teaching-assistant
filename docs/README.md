@@ -13,7 +13,7 @@ cover deploying, configuring, testing and understanding the project.
 | [design-portals.md](design-portals.md) | Portal information architecture and UX decisions |
 | [chat-shell.md](chat-shell.md) | Chat shell layout, streaming and conversation model |
 | [VPS_SETUP.md](VPS_SETUP.md) | Self-hosted Docker/Caddy deployment notes |
-| [assets/](assets) | Screenshots, banner and social preview used by the README |
+| [assets/](assets) | Screenshots, banner and social preview; upload `assets/social-preview.png` under GitHub **Settings → Social preview** |
 
 Historical design notes and prototypes live in [archive/](archive) and are kept
 for context, not as current documentation.
