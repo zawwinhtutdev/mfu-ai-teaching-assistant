@@ -128,6 +128,20 @@ else
   fail "SUPABASE_SERVICE_ROLE_KEY is empty"
 fi
 
+# Google SSO is optional, but when the hosted project has no Google provider the
+# login page disables its button. Local Google credentials only configure local
+# Supabase, so this is easy to miss before a deploy. Warning, not failure:
+# email/password login still works without it.
+if [ -n "$SUPABASE_URL" ] && [ -n "$ANON_KEY" ]; then
+  google_provider=$(curl -s --max-time 10 -H "apikey: $ANON_KEY" \
+    "${SUPABASE_URL%/}/auth/v1/settings" | grep -o '"google": *true' | head -1 || true)
+  if [ -n "$google_provider" ]; then
+    pass "Google SSO provider is enabled"
+  else
+    warn "Google SSO provider is not enabled on the hosted project — the login page will disable 'Google SSO' (see docs/DEPLOY.md)"
+  fi
+fi
+
 echo
 echo "ai"
 
