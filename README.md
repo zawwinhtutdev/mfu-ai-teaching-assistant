@@ -120,9 +120,15 @@ flowchart LR
       U[Student · Teacher · Admin<br/>Next.js App Router]
     end
 
-    subgraph Vercel
+    subgraph Vercel["Vercel — hosted production"]
       R[Route handlers<br/>/api/chat · /api/courses/...]
       P[RAG pipeline<br/>chunk → embed → retrieve → generate → verify]
+    end
+
+    subgraph VPS["VPS — self-hosted (Docker + Caddy)"]
+      C[Caddy :443<br/>TLS · reverse proxy]
+      W[web :3000<br/>same Next.js app + RAG]
+      C --> W
     end
 
     subgraph Supabase
@@ -135,18 +141,27 @@ flowchart LR
     GH[GitHub Actions<br/>reminders · keep-alive] --> R
 
     U --> R
+    U -.->|self-host| C
     R --> P
     P --> DB
     P --> AI
     R --> AU
     R --> ST
+    W -.-> DB
+    W -.-> AU
+    W -.-> ST
+    W -.-> AI
 ```
 
 The browser never talks to the database directly and never decides what it may
-read. Production runs the Next.js app on Vercel against Supabase Cloud; the
-reference FastAPI pipeline in [`services/api`](services/api) is still used for
-evaluation and self-hosted experiments, but it is **not** on the production
-request path.
+read. **Both hosts run the same Next.js app** and point at the same Supabase
+project: Vercel is the hosted production path, while the VPS
+([`docker-compose.prod.yml`](docker-compose.prod.yml), with Caddy terminating
+TLS) is the self-hosted alternative — one or the other serves a given origin,
+not both in one request. Dashed edges mark the self-host path. GitHub Actions
+call whichever origin `APP_BASE_URL` names. The reference FastAPI pipeline in
+[`services/api`](services/api) is still used for evaluation, but it is **not**
+on either request path.
 
 ### Tech stack
 
