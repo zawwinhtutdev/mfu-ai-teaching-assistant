@@ -553,7 +553,7 @@ export async function getTeacherAnalyticsByCourseId(courseId: string) {
     const totalStudents = (courseData.course as any).enrolled_students || 0
 
     const enrollments = Array.from({ length: totalStudents }).map((_, index) => {
-      const studentNumber = 6631503101 + index
+      const studentNumber = 6531503101 + index
       return {
         id: `demo-enrollment-${courseId}-${index + 1}`,
         course_id: courseId,

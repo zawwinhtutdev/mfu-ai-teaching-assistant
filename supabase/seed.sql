@@ -52,12 +52,12 @@ begin
     ('anan.suwan@mfu.ac.th',      'Dr. Anan Suwan',        'teacher'),
     ('malee.chaiyaporn@mfu.ac.th','Dr. Malee Chaiyaporn',  'teacher'),
     ('somchai.prasert@mfu.ac.th', 'Ajarn Somchai Prasert', 'teacher'),
-    ('6631503078@lamduan.mfu.ac.th', 'Kanya Wong',         'student'),
-    ('6631503085@lamduan.mfu.ac.th', 'Niran Chai',         'student'),
-    ('6631503092@lamduan.mfu.ac.th', 'Pim Srisuk',         'student'),
-    ('6631503101@lamduan.mfu.ac.th', 'Thanakorn Roj',      'student'),
-    ('6631503118@lamduan.mfu.ac.th', 'Araya Kitt',         'student'),
-    ('6631503125@lamduan.mfu.ac.th', 'Krit Phan',          'student'),
+    ('6531503078@lamduan.mfu.ac.th', 'Kanya Wong',         'student'),
+    ('6531503085@lamduan.mfu.ac.th', 'Niran Chai',         'student'),
+    ('6531503092@lamduan.mfu.ac.th', 'Pim Srisuk',         'student'),
+    ('6531503101@lamduan.mfu.ac.th', 'Thanakorn Roj',      'student'),
+    ('6531503118@lamduan.mfu.ac.th', 'Araya Kitt',         'student'),
+    ('6531503125@lamduan.mfu.ac.th', 'Krit Phan',          'student'),
     ('admin@mfu.ac.th',           'MFU Admin',             'teacher')
   ) as seed(email, full_name, role)
   where not exists (select 1 from auth.users u where u.email = seed.email);
@@ -81,12 +81,12 @@ begin
   select id into v_teacher_anan   from public.profiles where lower(email) = 'anan.suwan@mfu.ac.th';
   select id into v_teacher_malee  from public.profiles where lower(email) = 'malee.chaiyaporn@mfu.ac.th';
   select id into v_teacher_somchai from public.profiles where lower(email) = 'somchai.prasert@mfu.ac.th';
-  select id into v_student_kanya     from public.profiles where lower(email) = '6631503078@lamduan.mfu.ac.th';
-  select id into v_student_niran     from public.profiles where lower(email) = '6631503085@lamduan.mfu.ac.th';
-  select id into v_student_pim       from public.profiles where lower(email) = '6631503092@lamduan.mfu.ac.th';
-  select id into v_student_thanakorn from public.profiles where lower(email) = '6631503101@lamduan.mfu.ac.th';
-  select id into v_student_araya     from public.profiles where lower(email) = '6631503118@lamduan.mfu.ac.th';
-  select id into v_student_krit      from public.profiles where lower(email) = '6631503125@lamduan.mfu.ac.th';
+  select id into v_student_kanya     from public.profiles where lower(email) = '6531503078@lamduan.mfu.ac.th';
+  select id into v_student_niran     from public.profiles where lower(email) = '6531503085@lamduan.mfu.ac.th';
+  select id into v_student_pim       from public.profiles where lower(email) = '6531503092@lamduan.mfu.ac.th';
+  select id into v_student_thanakorn from public.profiles where lower(email) = '6531503101@lamduan.mfu.ac.th';
+  select id into v_student_araya     from public.profiles where lower(email) = '6531503118@lamduan.mfu.ac.th';
+  select id into v_student_krit      from public.profiles where lower(email) = '6531503125@lamduan.mfu.ac.th';
   select id into v_admin             from public.profiles where lower(email) = 'admin@mfu.ac.th';
 
   -- ─────────────────────────────────────────────

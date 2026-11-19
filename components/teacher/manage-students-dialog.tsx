@@ -170,8 +170,8 @@ export function ManageStudentsDialog({ open, onOpenChange, courseId, enrolledStu
               <Textarea
                 id="studentEmails"
                 placeholder={`Enter email addresses (one per line or comma-separated):
-6631503101@lamduan.mfu.ac.th
-6631503102@lamduan.mfu.ac.th`}
+6531503101@lamduan.mfu.ac.th
+6531503102@lamduan.mfu.ac.th`}
                 value={studentEmails}
                 onChange={(e) => setStudentEmails(e.target.value)}
                 rows={4}
