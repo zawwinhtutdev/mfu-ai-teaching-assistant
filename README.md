@@ -85,9 +85,6 @@ On top of the portals:
 - **Built-in documentation.** The app ships a searchable documentation site at [`/docs`](https://aiassistant-mfu.vercel.app/docs).
 - **A real demo class.** Seeded design gives 3 teachers, 37 students and an admin, including the 36-student **Design Concept (1001143)** course — see [demo accounts](#-demo-accounts).
 
-<img src="docs/assets/teacher-analytics.png" alt="Teacher analytics — query trends, course activity and most common questions" width="100%">
-<p align="center"><sub><b>Instructor analytics</b> — query trends, course activity, and the questions the course material does not answer yet.</sub></p>
-
 ## 🧠 How an answer is grounded
 
 ```mermaid
