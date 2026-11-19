@@ -50,7 +50,7 @@ loadEnvFile(".env.local")
 
 const ACCOUNTS = {
   teacher: { email: "anan.suwan@mfu.ac.th" },
-  student: { email: "6631503078@lamduan.mfu.ac.th" },
+  student: { email: "6531503078@lamduan.mfu.ac.th" },
   admin: { email: "admin@mfu.ac.th" },
 }
 const PASSWORD = "demo1234"

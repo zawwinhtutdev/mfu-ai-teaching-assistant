@@ -1,478 +1,354 @@
+<div align="center">
+
+<img src="docs/assets/banner.webp" alt="MFU AI Teaching Assistant — course-grounded learning intelligence" width="100%" />
+
 # MFU AI Teaching Assistant
 
-A course-scoped RAG assistant for university teaching: teachers upload PDFs into
-the courses they own, students ask questions about the courses they are enrolled
-in, and every answer is cited or refused.
+**Ask your course. Learn with evidence.**
 
-![Teacher portal — course-scoped document RAG](docs/assets/teacher-documents-rag.png)
+A course-scoped RAG teaching assistant built for Mae Fah Luang University.
+Teachers upload material into the courses they own, students ask questions about
+the courses they are enrolled in, and every answer is either grounded in a cited
+source or refused.
 
-Built as a full-stack replacement for a TypeScript/Supabase prototype: the web
-app stays Next.js, and retrieval, documents, and access control now live in a
-Python service backed by PostgreSQL + pgvector and local models via Ollama.
+<p>
+  <a href="https://github.com/zawwinhtutdev/mfu-ai-teaching-assistant/actions/workflows/ci.yml"><img src="https://github.com/zawwinhtutdev/mfu-ai-teaching-assistant/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <img src="https://img.shields.io/badge/Next.js-16.4-000000?style=flat-square&logo=nextdotjs&logoColor=white" alt="Next.js 16">
+  <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=0B1120" alt="React 19">
+  <img src="https://img.shields.io/badge/TypeScript-6-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white" alt="Tailwind CSS">
+  <img src="https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?style=flat-square&logo=supabase&logoColor=white" alt="Supabase">
+</p>
+<p>
+  <img src="https://img.shields.io/badge/AI-Gemini%20%7C%20OpenAI-8E75B2?style=flat-square&logo=openai&logoColor=white" alt="AI providers">
+  <img src="https://img.shields.io/badge/Deployed_on-Vercel-000000?style=flat-square&logo=vercel&logoColor=white" alt="Vercel">
+  <img src="https://img.shields.io/badge/License-MIT-yellow?style=flat-square" alt="MIT license">
+  <img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square" alt="PRs welcome">
+</p>
+
+<p>
+  <a href="https://aiassistant-mfu.vercel.app">🔗 <b>Live demo</b></a> &nbsp;·&nbsp;
+  <a href="docs/TEST_ACCOUNTS.md">🔑 <b>Demo accounts</b></a> &nbsp;·&nbsp;
+  <a href="docs/DEPLOY.md">🚀 <b>Deploy</b></a> &nbsp;·&nbsp;
+  <a href="https://aiassistant-mfu.vercel.app/docs">📖 <b>Docs</b></a> &nbsp;·&nbsp;
+  <a href="https://github.com/zawwinhtutdev/mfu-ai-teaching-assistant/issues/new/choose">🐛 <b>Report a bug</b></a>
+</p>
+
+</div>
 
 ---
 
-## Why
+## Why this exists
 
-Most "chat with your PDF" demos answer from any file in one big pile. That does
-not survive contact with a university:
+Most "chat with your PDF" demos answer from one shared pile of documents. That
+does not survive contact with a university:
 
-- A student in CSD322 must not read CSB321's exam memo.
-- An answer about a deadline must point at the page it came from.
-- A model that has not read the material should say so instead of inventing it.
+- **Courses are isolation boundaries.** A student in CSD322 must never retrieve
+  material from CSB321, even if they ask for it directly.
+- **Answers need evidence.** A claim about a deadline or an API must point at the
+  page it came from.
+- **No evidence should mean no answer.** A model that has not read the material
+  should say so instead of inventing something plausible.
 
-This project makes those three properties structural rather than hopeful: access
-is enforced in the service, retrieval is scoped to one course, and answers carry
-citations that are verified after generation.
+Those properties are structural here, not prompt suggestions: access is checked
+server-side on every request, retrieval is scoped to a single course, and
+citations are verified and repaired after generation.
 
-## What it does
+## 🖼️ Product tour
 
-| Role | Can do |
+| Course-scoped document RAG | Grounded, cited chat |
+| :---: | :---: |
+| <img src="docs/assets/teacher-documents-rag.png" alt="Teacher document RAG workspace" width="100%"> | <img src="docs/assets/chat.png" alt="Grounded chat interface" width="100%"> |
+| **Teacher:** upload a PDF into a course you teach, then ask questions answered only from its contents. | **Student:** answers stream with citations — or an explicit refusal when the material does not cover the question. |
+
+| Student portal | Teacher portal | Admin console |
+| :---: | :---: | :---: |
+| <img src="docs/assets/portal-student.png" alt="Student portal" width="100%"> | <img src="docs/assets/portal-teacher.png" alt="Teacher portal" width="100%"> | <img src="docs/assets/portal-admin.png" alt="Admin console" width="100%"> |
+| **Students** see only enrolled courses, deadlines, reminders and study tools. | **Teachers** see only their courses, rosters, materials and analytics. | **Admins** manage people, courses, policies, privacy and audit logs. |
+
+## 🚀 Features
+
+| Role | What they can do |
 | --- | --- |
-| **Teacher** | See only their courses, upload material into them, post assignments with deadlines, read analytics, manage course assistant settings |
-| **Student** | See only enrolled courses, read uploaded material, ask grounded questions with citations, see assignment deadlines |
-| **Admin** | Platform overview: people, courses, enrollments, documents, indexed chunks |
+| 👩‍🏫 **Teacher** | Manage only the courses they teach (incl. multi-teacher courses), upload PDFs and materials, post assignments and deadlines, review analytics on unanswered questions, tune the course assistant, manage announcements and FAQs. |
+| 🎓 **Student** | Access only enrolled courses, read course materials, ask grounded questions with citations, track deadlines and reminders, use flashcard/quiz/study-planner tools, review chat history. |
+| 🛠️ **Admin** | Platform overview, user and role management, course and enrollment management, system policies, privacy and consent controls, audit log, notification operations. |
 
-Behaviour worth highlighting:
+On top of the portals:
 
-- **Course selector drives everything.** The document list, the chat, and the
-  citations all follow the selected course; switching clears the conversation.
-- **Enrollment is a database row, not a UI filter.** Requesting another course's
-  chat or assignments returns `403` even if the URL is edited by hand.
-- **Retrieval is scoped by the caller, not by the request.** The course is
-  authorised before retrieval runs, and an unauthorised request is refused
-  outright rather than falling through to a wider search.
-- **Refusal over guessing.** If retrieval finds nothing relevant, the assistant
-  replies *"The course materials do not cover this."* — and the refusal is
-  recorded, so teachers can see which questions their material does not answer.
-- **Citations are repaired.** When a small local model attaches a claim to the
-  wrong source number, the marker is rewritten to the passage that actually
-  supports it, and the change is reported.
-- **Deadlines create reminders.** Releasing an assignment schedules one reminder
-  per enrolled student ahead of the due date. Re-running the scheduler is
-  idempotent, so the daily job cannot produce duplicates.
-- **Consent gates logging, not answers.** A student who withdraws AI-processing
-  consent still gets answers; their questions are simply not stored.
-- **Per-course dedupe.** The same PDF in two courses is two documents, so each
-  course owns its copy.
+- **Server-enforced RBAC.** Roles live in `public.profiles.role` and are enforced with Supabase Row Level Security plus a middleware route guard. Editing a URL does not bypass access control.
+- **Course-scoped retrieval.** The course is authorized *before* retrieval runs; an unauthorized request is refused instead of falling through to a wider search.
+- **Verified citations.** Every claim carries a source marker, and markers that point at the wrong passage are repaired after generation; changes are reported, never silent.
+- **Refusal over guessing.** With no relevant evidence the assistant replies *"The course materials do not cover this."*, and the refusal is logged so teachers can see the gaps.
+- **Google SSO.** Google OIDC through Supabase, with role derived from the MFU email domain (`@lamduan.mfu.ac.th` → student, `@mfu.ac.th` → teacher, admin allowlist) and rejection for any other domain.
+- **Deadline reminders.** Publishing an assignment schedules one reminder per enrolled student. The daily scheduler is idempotent, so reruns cannot duplicate reminders.
+- **Built-in documentation.** The app ships a searchable documentation site at [`/docs`](https://aiassistant-mfu.vercel.app/docs).
+- **A real demo class.** Seeded design gives 3 teachers, 37 students and an admin, including the 36-student **Design Concept (1001143)** course — see [demo accounts](#-demo-accounts).
 
-## Architecture
+<img src="docs/assets/teacher-analytics.png" alt="Teacher analytics — query trends, course activity and most common questions" width="100%">
+<p align="center"><sub><b>Instructor analytics</b> — query trends, course activity, and the questions the course material does not answer yet.</sub></p>
 
-Retrieval and generation both run inside the Next.js server, against the same
-Supabase database the portal pages read. There is no second database, so a
-course id means exactly one thing.
+## 🧠 How an answer is grounded
 
 ```mermaid
 flowchart LR
-    subgraph Browser
-      UI[Next.js App Router<br/>teacher / student / admin]
-    end
-
-    subgraph Web["Next.js server"]
-      R[Route handlers<br/>/api/chat · /api/courses/:id/assignments]
-      P[RAG pipeline<br/>chunk → embed → retrieve → build context → generate → repair]
-      S[Assignment reminder scheduler]
-    end
-
-    subgraph Data
-      PG[(Supabase PostgreSQL<br/>+ pgvector<br/>profiles · courses · enrollments<br/>course_materials · course_material_chunks<br/>faqs · assignments · study_reminders)]
-      O[Ollama<br/>qwen2.5:7b<br/>nomic-embed-text]
-    end
-
-    UI -->|fetch / SSE| R
-    R --> P
-    R --> S
-    P --> PG
-    P --> O
-    S --> PG
+    A([Question]) --> B[Authorize<br/>course access]
+    B --> C[Retrieve<br/>pgvector + keyword]
+    C --> D[Rank & dedupe<br/>FAQs first]
+    D --> E[Generate<br/>strict grounding]
+    E --> F[Verify & repair<br/>citations]
+    F --> G{Evidence?}
+    G -- yes --> H([Cited answer])
+    G -- no --> I([Refuse: not covered])
 ```
 
-The browser never talks to the database and never decides what it may read.
-Every course-scoped request is re-checked server-side by `assertCourseAccess`,
-which understands both course codes and UUIDs so demo sessions and real
-sessions take the same path.
+1. **Authorize first.** The caller's role and enrollment are checked before retrieval, so an unauthorized course never reaches the vector index.
+2. **Extract and index.** PDFs are parsed page by page; DOCX/PPTX text comes from the OOXML runs. Controls are stripped, then text is chunked (~1,400 chars with 220 overlap) and embedded into `vector(768)`.
+3. **Retrieve.** Cosine similarity through `match_course_material_chunks`, fused with keyword search and scoped to one course. Teacher-authored FAQs rank ahead of material chunks.
+4. **Build context.** Chunks are deduplicated, numbered `[1]…[n]`, and capped by a character budget that stops adding sources instead of truncating one.
+5. **Generate.** A strict grounding prompt produces an answer only from the supplied passages; no sources means the refusal is emitted without spending a model call.
+6. **Verify.** Streaming and citation checking pull in opposite directions, so the visible text streams first and the persisted text is corrected afterwards — markers another passage supports better are rewritten, duplicates collapse, and every change is reported.
+7. **Refuse.** If nothing relevant is retrieved, the assistant refuses and records the gap for instructor analytics.
 
-### Why there is no separate API service
+More detail: [How answers are grounded](https://aiassistant-mfu.vercel.app/docs/core/how-answers-are-grounded).
 
-An earlier version had a FastAPI service with its own Postgres. Courses were
-UUIDs in Supabase and slugs (`course-csb321`) in that second database, so every
-course-scoped chat request was rejected with `403` before retrieval ran. The
-pipeline was ported into the web app instead: one process, one database, no id
-translation. `services/api` remains in the repository as the reference
-implementation and evaluation harness, but it is not on the request path.
+## 🏗️ Architecture
 
-## Tech stack
+```mermaid
+flowchart LR
+    subgraph Client
+      U[Student · Teacher · Admin<br/>Next.js App Router]
+    end
+
+    subgraph Vercel
+      R[Route handlers<br/>/api/chat · /api/courses/...]
+      P[RAG pipeline<br/>chunk → embed → retrieve → generate → verify]
+    end
+
+    subgraph Supabase
+      DB[(PostgreSQL + pgvector<br/>profiles · courses · enrollments<br/>materials · chunks · FAQs)]
+      AU[Auth<br/>email/password · Google OIDC]
+      ST[Storage<br/>avatars · course files]
+    end
+
+    AI[Gemini / OpenAI<br/>or local Ollama]
+    GH[GitHub Actions<br/>reminders · keep-alive] --> R
+
+    U --> R
+    R --> P
+    P --> DB
+    P --> AI
+    R --> AU
+    R --> ST
+```
+
+The browser never talks to the database directly and never decides what it may
+read. Production runs the Next.js app on Vercel against Supabase Cloud; the
+reference FastAPI pipeline in [`services/api`](services/api) is still used for
+evaluation and self-hosted experiments, but it is **not** on the production
+request path.
+
+### Tech stack
 
 | Layer | Choice |
 | --- | --- |
-| Web | Next.js 16 (App Router, Turbopack), React 19, TypeScript, Tailwind CSS 4, shadcn/Radix |
-| Data | Supabase PostgreSQL + pgvector (`match_course_material_chunks`, `match_faqs`) |
-| Models | Ollama: `qwen2.5:7b` (chat) and `nomic-embed-text` (768-dim embeddings); Gemini optional |
-| Streaming | AI SDK UI message stream: `start → text-delta → text-end → finish` |
-| Packaging | Docker Compose, or local processes via `scripts/dev.sh` |
+| **Web** | Next.js 16.4 (App Router, Turbopack), React 19, TypeScript 6, Tailwind CSS 4, Radix/shadcn UI |
+| **Data** | Supabase PostgreSQL + pgvector; Row Level Security on every user-facing table |
+| **Auth** | Supabase Auth — email/password plus Google OIDC; roles derived from the university email domain |
+| **AI** | Vercel AI SDK 7 → OpenAI or Google Gemini; optional fully local Ollama (`qwen2.5:7b` + `nomic-embed-text`) |
+| **Retrieval** | pgvector cosine similarity + keyword fusion, FAQ priority, citation repair |
+| **Deploy** | Vercel + Supabase Cloud (production); Docker/Caddy self-host path; GitHub Actions scheduled jobs |
+| **Quality** | `tsc --noEmit`, ESLint, GitHub Actions CI, 96 pytest tests for the reference pipeline, answer-accuracy evals |
 
-## How an answer is produced
+## ⚡ Quick start
 
-1. **Extract** — PDF text page by page, `.docx`/`.pptx` by reading the OOXML text
-   runs out of the zip, audio via transcription. Control characters are stripped
-   so the text can be stored safely (`0x00` in a parser dump is a real failure
-   mode).
-2. **Chunk** — ~1,400 characters with 220 overlap, split on paragraph or sentence
-   boundaries so a chunk does not end mid-sentence.
-3. **Embed** — one 768-dim vector per chunk via `nomic-embed-text`, unit
-   normalised. The width matches the `vector(768)` column, so no schema change is
-   needed when swapping between Ollama and Gemini embeddings.
-4. **Retrieve** — cosine similarity through `match_course_material_chunks`,
-   scoped to one course the caller is authorised for. FAQ answers are searched
-   too and rank ahead of material chunks, because a teacher wrote them on purpose.
-5. **Build context** — chunks are deduplicated (Jaccard ≥ 0.8), numbered `[1]…[n]`,
-   and capped by a character budget. The budget stops adding sources rather than
-   truncating one, because a half-supplied chunk produces citations that look
-   supported but are not.
-6. **Generate** — the passages go into a prompt with a strict grounding rule and a
-   fixed refusal sentence. No sources means the refusal is emitted without
-   spending a model call.
-7. **Repair** — streaming and citation checking pull in opposite directions, so
-   the user sees deltas as they are generated and the persisted text is corrected
-   afterwards: any marker another passage supports better is rewritten, and
-   duplicate markers collapse. Every change is reported, never silent.
+### Prerequisites
 
-The context budget is 6,000 characters. It was 2,400 until an evaluation run
-showed ordinary questions refusing because only two chunks ever reached the
-model — the single highest-impact fix in the project.
+- **Node.js 22+**
+- **Docker** and the **Supabase CLI** for the local database/auth stack
+- Optional: **Ollama** for fully local models, or a Gemini/OpenAI API key for hosted models
 
-## Quickstart
-
-### Authentication (real RBAC)
-
-Signup and login run against a local Supabase stack. Roles are stored in
-`public.profiles.role` and enforced by RLS plus a route guard in middleware.
+### Run locally
 
 ```bash
-supabase start          # API :54321, DB :54322, Studio :54323, Mail :54324
-supabase db reset       # re-apply migrations + seed demo content
-```
-
-`.env.local` already points at the stack. Seeded accounts all use password
-`demo1234`:
-
-| Role | Email |
-| --- | --- |
-| Admin | `admin@mfu.ac.th` |
-| Teacher | `anan.suwan@mfu.ac.th`, `malee.chaiyaporn@mfu.ac.th`, `somchai.prasert@mfu.ac.th` |
-| Student | `6631503078@lamduan.mfu.ac.th`, `6631503085@lamduan.mfu.ac.th`, and four more |
-
-New signups get a real `profiles` row via the `on_auth_user_created` trigger and
-land in a portal populated with the same demo courses, enrollments, and
-materials the old mock data showed.
-
-**Role is derived from the email address, never chosen by the user.**
-
-MFU issues distinct address patterns per population, and both domains are
-controlled by the university's Google Workspace, so the address a person
-authenticates with is proof of who they are:
-
-| Address pattern | Role |
-| --- | --- |
-| `<studentID>@lamduan.mfu.ac.th` | `student` |
-| `<firstname.last>@mfu.ac.th` | `teacher` |
-| anything in `ADMIN_EMAILS` (default `admin@mfu.ac.th`) | `admin` |
-| any other domain | **rejected** at insert |
-
-The rule lives in `public.role_for_email()`
-(`supabase/migrations/20261231000100_role_from_email.sql`) and is applied by the
-signup trigger. This holds for **both** password signup and Google sign-in, so
-teachers can self-provision with no admin step.
-
-Admin is checked first because `admin@mfu.ac.th` sits on the teacher domain.
-Because a fallback is exactly how the previous version let anyone claim
-"teacher", an unrecognised address is rejected rather than defaulted.
-
-The signup form previews the outcome live as the user types (`lib/auth/role-from-email.ts`)
-but never sends a role — the database decides. An admin can still change a role
-in the Admin Console, and the change is audited.
-
-### Email confirmation
-
-Email confirmation is **enabled**, matching production behaviour. After signing
-up, the user sees "Check Your Email" and must open the link before they can log
-in. Locally, no real email is sent — Supabase captures every message in Mailpit:
-
-- Mailpit inbox: <http://localhost:54324>
-- Open the message, click the confirmation link, and you are signed in and
-  redirected to the portal for your role.
-
-The link redirects through `/auth/callback`, which exchanges the PKCE code,
-creates the session, and routes by role from `public.profiles`. Because the flow
-uses PKCE, **the link must be opened in the same browser that signed up** — the
-code verifier lives in that browser's storage. Opening it elsewhere returns
-`?error=oauth_failed`.
-
-Seeded accounts (below) are pre-confirmed, so they skip this step.
-
-On Vercel, add the deployment URL to the hosted project's redirect allow-list
-and configure a real SMTP provider under Authentication → Emails.
-
-### Google sign-in
-
-The login page offers "Google SSO" whenever two conditions hold: Supabase has
-Google credentials configured, and the admin policy `allow_google_sso` is on.
-Otherwise the button is disabled with an explanatory tooltip — it never fails
-after a click.
-
-**1. Create a Google OAuth client.** At
-[console.cloud.google.com](https://console.cloud.google.com) → APIs & Services →
-Credentials → *Create OAuth client ID* → **Web application**. Register the
-**Supabase** callback as the redirect URI, not the app:
-
-```
-http://127.0.0.1:54321/auth/v1/callback          # local
-https://<project-ref>.supabase.co/auth/v1/callback   # hosted
-```
-
-**2. Export the credentials** before starting Supabase (see
-`.envrc.private.example`):
-
-```bash
-export SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID="...apps.googleusercontent.com"
-export SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET="..."
-supabase stop && supabase start
-```
-
-`supabase/config.toml` substitutes these into `[auth.external.google]`. Without
-them the provider still reports as enabled but Google returns
-`invalid_client`, so the button is the only thing that tells you they are
-missing — check `/api/auth/google/status`.
-
-**3. On Vercel**, set the same pair in the hosted Supabase project under
-Authentication → Providers → Google.
-
-Behaviour worth knowing:
-
-- Only `@mfu.ac.th` addresses are accepted. A database trigger enforces this on
-  insert, and `/auth/callback` re-checks before creating a session.
-- Google sign-in always creates a **student**. A teacher must be promoted to
-  `teacher` in the Admin Console — Google never conveys a role.
-- If someone already registered with a password, signing in with Google using
-  the same address is rejected with an `account_exists` message rather than
-  silently merging, because Supabase automatic linking is off.
-- The display name falls back through `full_name` → `name` → the email local
-  part, since Google sends a different metadata key than the signup form.
-
-### Docker
-
-```bash
-cp .env.example .env.local     # fill in what you have; demo auth needs very little
-docker compose up --build
-```
-
-Web on <http://localhost:3000>, API on <http://localhost:8000/docs>.
-
-### Local processes
-
-```bash
-# database (the db service is behind the "platform" profile)
-docker compose --profile platform up -d db
-
-# api
-cd services/api
-python3 -m venv .venv
-.venv/bin/pip install -r requirements-dev.txt
-.venv/bin/alembic upgrade head
-PYTHONPATH=. .venv/bin/python scripts/seed_academic.py
-PYTHONPATH=. .venv/bin/python scripts/seed_documents.py
-ALLOW_INSECURE_DEV_AUTH=true ENVIRONMENT=local \
-  DATABASE_URL="postgresql+asyncpg://ata:ata-local-dev@127.0.0.1:5432/ata" \
-  AI_PROVIDER=ollama OLLAMA_MODEL=qwen2.5:7b \
-  .venv/bin/python -m uvicorn app.main:app --port 8000
-
-# web
+git clone https://github.com/zawwinhtutdev/mfu-ai-teaching-assistant.git
+cd mfu-ai-teaching-assistant
 npm install
+
+cp .env.example .env.local
+supabase start
+supabase db reset          # applies migrations + seed demo content
+
+# Paste the API URL and anon key printed by `supabase status` into .env.local
 npm run dev
 ```
 
-Or the shortcut that starts both and prints the links:
+Open **http://localhost:3000** and sign in with any demo account below.
+
+**AI provider** — set one of these in `.env.local`:
 
 ```bash
-./scripts/dev.sh start     # start | stop | restart | status
-./scripts/dev.sh seed      # academic rows + demo course PDFs (idempotent)
-```
+# Hosted (recommended for a quick start)
+AI_PROVIDER=gemini
+GOOGLE_GENERATIVE_AI_API_KEY=...
 
-### Local models
+# or OpenAI
+AI_PROVIDER=openai
+OPENAI_API_KEY=...
 
-```bash
+# or local models (nothing leaves the machine)
+AI_PROVIDER=ollama
 ollama pull qwen2.5:7b
 ollama pull nomic-embed-text
 ```
 
-With `AI_PROVIDER=ollama` nothing leaves the machine. Set
-`AI_PROVIDER=gemini` plus `GOOGLE_GENERATIVE_AI_API_KEY` to use a cloud model
-instead; `AI_PROVIDER=stub` gives deterministic fakes for tests.
+There is also a helper for starting/stopping the local stack:
 
-## Demo accounts
-
-Demo auth is cookie-based (`mfu_demo_role`, `mfu_demo_email`) and only active
-when `ALLOW_INSECURE_DEV_AUTH=true`.
-
-| Email | Password | Role | Courses |
-| --- | --- | --- | --- |
-| `anan.suwan@mfu.ac.th` | `demo1234` | Teacher | CSB321, CSD323 |
-| `malee.chaiyaporn@mfu.ac.th` | `demo1234` | Teacher | CSD322, CSA411 |
-| `somchai.prasert@mfu.ac.th` | `demo1234` | Teacher | CSM324, GEN311, AI-EDU |
-| `6631503078@lamduan.mfu.ac.th` | `demo1234` | Student | CSB321, CSD322, CSM324 |
-| `6631503092@lamduan.mfu.ac.th` | `demo1234` | Student | CSD323, GEN311 |
-| `admin@mfu.ac.th` | `demo1234` | Admin | all |
-
-Sign in at `/login` with any of these — they are ordinary Supabase accounts, not
-a special demo path. The full list, including how to reset a password or add an
-account the normal way, is in [docs/TEST_ACCOUNTS.md](docs/TEST_ACCOUNTS.md).
-
-## Configuration
-
-Set in `.env.local` (web) or the environment. The web app reads these directly;
-`services/api` (the reference implementation) reads them through
-`pydantic-settings`.
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `AI_PROVIDER` | `auto` | `ollama`, `gemini`, or `auto` (Ollama when no Gemini key exists) |
-| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama endpoint |
-| `OLLAMA_MODEL` | `qwen2.5:7b` | Chat model, used for chat, summaries, quizzes and flashcards |
-| `OLLAMA_EMBEDDING_MODEL` | `nomic-embed-text` | Embedding model (must stay 768-dim for the schema) |
-| `ALLOW_INSECURE_DEV_AUTH` | `false` | Enables the demo cookie principal |
-| `COURSE_RAG_CHUNK_CHARS` / `..._OVERLAP_CHARS` | `1400` / `220` | Chunking |
-| `COURSE_RAG_MAX_CONTEXT_CHARS` | `22000` | Character budget sent to the model |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | — | Only for `AI_PROVIDER=gemini` |
-| `RESEND_API_KEY` | — | Email delivery for reminders |
-| `NOTIFICATION_FROM_EMAIL` | `MFU AI Assistant <no-reply@…>` | Sender address |
-| `NOTIFICATIONS_DRY_RUN` | `false` | Log instead of sending, without a provider key |
-| `LINE_CHANNEL_ACCESS_TOKEN` | — | LINE Messaging API delivery |
-| `REMINDER_LEAD_HOURS` | `24` | How far ahead of a deadline to remind |
-| `CRON_SECRET` | — | Bearer token for `/api/notifications/process` |
-| `DATA_RETENTION_DAYS` | `30` | Log retention window, also shown on `/privacy` |
-| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | — | Supabase project |
-| `SUPABASE_SERVICE_ROLE_KEY` | — | Server-side privileged reads (demo sessions, cron) |
-
-## Project layout
-
-```
-app/                     Next.js routes (portals, chat, docs, API handlers)
-components/              UI: knowledge console, portals, chat, docs shell
-content/docs/            Documentation pages (Markdown)
-lib/                     Session, academic helpers, demo auth, docs config
-services/api/            FastAPI service
-  app/routers/           chat, documents, search, health
-  app/rag/               ingest, chunking, retrieval, fusion, citations, pipeline
-  app/academic.py        people / courses / enrollments + access checks
-  migrations/            Alembic
-  scripts/               seed_academic.py, seed_documents.py
-  tests/                 87 tests
-scripts/                 dev.sh, smoke checks, latency baseline
-docs/                    assets, archive
+```bash
+./scripts/dev.sh start     # start | stop | restart | status
+./scripts/dev.sh seed      # seed academic rows + demo course PDFs (idempotent)
 ```
 
-## API
+### Deploy
 
-| Method | Path | Notes |
-| --- | --- | --- |
-| `POST` | `/v1/chat` | SSE answer (`sources → start → delta → done`); requires course access |
-| `GET` | `/v1/me` , `/v1/me/courses` | Caller identity and visible courses |
-| `GET` | `/v1/courses/{id}` | Course detail, access checked |
-| `GET` | `/v1/documents?course_id=` | Course documents, scoped to the caller |
-| `POST` | `/v1/documents` | Teacher-only upload into a course they teach, 25 MB PDF |
-| `DELETE` | `/v1/documents/{id}` | Teacher of that course only; removes document and chunks |
-| `POST` | `/v1/search` | Hybrid search inside the caller's course scope |
-| `GET` | `/v1/stats` | Platform counters |
-| `GET` | `/health`, `/ready` | Liveness, readiness |
+The production setup is **Vercel** (web) + **Supabase Cloud** (database, auth, storage).
+Step-by-step instructions — including Google OAuth configuration and URL
+allow-lists — are in [docs/DEPLOY.md](docs/DEPLOY.md). Self-hosting (Docker/Caddy)
+is covered in [docs/VPS_SETUP.md](docs/VPS_SETUP.md).
 
-## Evaluation
+## 👥 Demo accounts
 
-A 25-question set (answerable, borderline, unanswerable) runs against three
-retrieval settings and reports recall, refusal accuracy, citation validity,
-citation support, and latency.
+Every seeded account is a **real Supabase auth user** with the shared password
+**`demo1234`**. Sign in at [aiassistant-mfu.vercel.app/login](https://aiassistant-mfu.vercel.app/login).
 
-Latest run on a laptop with `qwen2.5:7b`:
+| Role | Accounts |
+| --- | --- |
+| 🛠️ **Admin** | `admin@mfu.ac.th` |
+| 👩‍🏫 **Teachers** | `anan.suwan@mfu.ac.th` · `malee.chaiyaporn@mfu.ac.th` · `somchai.prasert@mfu.ac.th` |
+| 🎓 **Students** | `6531503078@lamduan.mfu.ac.th` · `6531503085@lamduan.mfu.ac.th` · `6531503092@lamduan.mfu.ac.th` · `6531503101@lamduan.mfu.ac.th` · `6531503118@lamduan.mfu.ac.th` · `6531503125@lamduan.mfu.ac.th` · 30 more (`6531503126`–`6531503155`) |
+
+The full list, roles and course enrollments live in
+[docs/TEST_ACCOUNTS.md](docs/TEST_ACCOUNTS.md). The demo data includes a real
+36-student course — **1001143 Design Concept** — taught by two teachers, so the
+teacher, student and admin portals all have something realistic to show.
+
+> These are public demo accounts for the demo deployment. Do not store personal
+> or sensitive data in the demo environment.
+
+## 🧪 Tests, evaluation & CI
+
+Every push and pull request runs the [CI workflow](.github/workflows/ci.yml):
+TypeScript type-check, ESLint, a production build, the FastAPI test suite, and a
+Docker smoke test.
+
+```bash
+npm run type-check         # tsc --noEmit
+npm run lint               # ESLint
+npm run test:roadmap       # structural smoke checks
+npm run eval:answers       # answer-accuracy evaluation against the live pipeline
+
+cd services/api && .venv/bin/python -m pytest -q   # 96 tests
+```
+
+Latest reference-pipeline evaluation on a laptop with local `qwen2.5:7b`:
 
 | Metric | Result |
 | --- | --- |
-| Answer accuracy | 100% (5/5, target ≥ 85%) |
-| Refusal accuracy | 100% (3/3) |
+| Answer accuracy | 100% (5/5 answered, target ≥ 85%) |
+| Refusal accuracy | 100% (3/3 unanswerable refused) |
 | Citation validity | 100% (5/5 answered) |
-| Latency | p50 ≈ 0.7 s, p95 ≈ 2.1 s |
+| Latency | p50 ≈ 0.7 s · p95 ≈ 2.1 s |
 
-Answer accuracy is measured by `npm run eval:answers`, which checks the facts a
-correct answer must contain rather than scoring the prose. It is a small set (8
-cases on one course), so treat it as a regression guard rather than a claim about
-the system in general: recall, refusal and citation validity were the metrics
-that caught real bugs, and they are reported separately so a failure names the
-part that broke.
+These are small, course-specific regression checks — not a claim about general
+model quality. Recall, refusal and citation validity were the metrics that caught
+real bugs, so they are reported separately rather than hidden in one score.
 
-Citation support (whether the cited passage actually supports the claim, as
-opposed to whether the marker is well-formed) sits around 80% after repair; the
-remaining cases are claims spread across two passages that one citation cannot
-represent. Prompt variants (quote-first, two-step) were tried and did **not** beat
-the baseline, so the default stays `top_k=5` + citation repair.
+## 📚 Documentation
 
-## Testing
+The app ships its own searchable documentation at
+[**aiassistant-mfu.vercel.app/docs**](https://aiassistant-mfu.vercel.app/docs)
+(sources in [`content/docs`](content/docs)).
 
-```bash
-npm run type-check          # tsc --noEmit
-npm run test:roadmap        # structural smoke checks
-npm run eval:answers        # answer accuracy against the live pipeline
-npm run reindex             # rebuild chunk embeddings (idempotent)
+<img src="docs/assets/grounded-answers.png" alt="In-app documentation — how answers are grounded" width="100%">
 
-cd services/api && .venv/bin/python -m pytest -q   # reference pipeline, 87 tests
+| Document | What it covers |
+| --- | --- |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | Vercel + Supabase deployment, environment variables, Google SSO, verification |
+| [docs/TEST_ACCOUNTS.md](docs/TEST_ACCOUNTS.md) | Every demo account, course enrollments, password reset |
+| [docs/design-portals.md](docs/design-portals.md) | Portal information architecture and UX decisions |
+| [docs/chat-shell.md](docs/chat-shell.md) | Chat shell layout, streaming and conversation model |
+| [docs/VPS_SETUP.md](docs/VPS_SETUP.md) | Self-hosted Docker/Caddy notes |
+| [docs/README.md](docs/README.md) | Documentation index |
+| [content/docs](content/docs) | In-app docs source: architecture, grounding, roles, study tools, campus guide |
+
+<details>
+<summary><b>Repository layout</b></summary>
+
+```text
+app/                 Next.js routes — portals, chat, docs, API handlers
+components/          UI: chat shell, portals, document RAG, docs, admin
+content/docs/        In-app documentation source (Markdown)
+lib/                 Auth, session, AI providers, retrieval, RAG helpers
+supabase/            Migrations, seed data, local Supabase config
+services/api/        FastAPI reference pipeline + evaluation harness (96 tests)
+scripts/             dev.sh, smoke checks, preflight, reindex, latency baseline
+docs/                Project docs, deployment runbooks, screenshots
 ```
 
-The access-control behaviour is verified through the API: a student not enrolled
-in a course receives `403` for chat and for assignments, and a student asking
-about a course they are enrolled in receives a cited answer.
+</details>
 
-## Documentation
-
-The app ships its own documentation at `/docs` (sources in `content/docs/`):
-
-- Platform architecture
-- How answers are grounded
-- Local AI models
-- Roles and access
-- Document RAG workspace (teacher and student views)
-
-![Documentation — how answers are grounded](docs/assets/grounded-answers.png)
-
-## Known limitations
-
-- **Citations are text, not links.** They carry filename and section, but do not
-  open the PDF at that page yet.
-- **No OCR.** Scanned PDFs produce no extractable text; `.docx` and `.pptx` are
-  parsed as XML, so text in embedded images is not seen.
-- **Email and LINE delivery need credentials.** Without `RESEND_API_KEY` (or
-  `NOTIFICATIONS_DRY_RUN=true`) queued email jobs fail with an explicit error
-  rather than pretending to send. LINE needs `LINE_CHANNEL_ACCESS_TOKEN` and a
-  linked LINE user id.
-- **Single-node ingestion.** Good for a course, not for a faculty.
-- **No LMS sync, SAML, or AES-256 at rest.** `/api/lms` is a stub; SSO is Google
-  OIDC only; encryption at rest is whatever the host provides.
-- Demo auth is intentionally insecure and must stay behind
-  `ALLOW_INSECURE_DEV_AUTH`.
-
-## Roadmap
+## 🗺️ Roadmap
 
 - [x] Persist questions and answers with feedback
 - [x] Instructor analytics on unanswered questions
 - [x] Deadline-driven assignment reminders
 - [x] Consent capture and a published privacy notice
+- [x] Multi-teacher courses with co-teacher visibility
+- [x] Google SSO with server-derived roles
 - [ ] Clickable citations that open the source page
-- [ ] Per-course unique constraints on document titles
 - [ ] OCR fallback for scanned material and image-only slides
 - [ ] LMS (Moodle/Canvas) roster and assignment sync
+- [ ] Per-course unique constraints on document titles
 
-## Credits
+## ⚠️ Known limitations
 
-Coursework project for the AI for Delivery portfolio; the original prototype was
-a TypeScript/Supabase app, and this repository replaces its backend with the
-Python service described above.
+- **Citations are text, not links.** They carry filename and section but do not open the PDF at that page yet.
+- **No OCR.** Scanned PDFs produce no extractable text; text inside images in DOCX/PPTX is not seen.
+- **Email/LINE delivery needs credentials.** Without `RESEND_API_KEY` or `LINE_CHANNEL_ACCESS_TOKEN`, queued notifications fail loudly rather than pretending to send.
+- **Single-node ingestion.** Designed for a course, not a whole faculty.
+- **No LMS sync or SAML.** `/api/lms` is a stub; SSO is Google OIDC only.
+- **Demo auth is intentionally insecure** where enabled and must stay behind `ALLOW_INSECURE_DEV_AUTH`.
 
-## License
+## 🤝 Contributing
 
-MIT — see [LICENSE](LICENSE).
+Contributions, issues and feature requests are welcome. Please read
+[CONTRIBUTING.md](CONTRIBUTING.md) and our
+[Code of Conduct](CODE_OF_CONDUCT.md) first. For security issues, see
+[SECURITY.md](SECURITY.md) and report privately.
+
+- 🐛 [Report a bug](https://github.com/zawwinhtutdev/mfu-ai-teaching-assistant/issues/new?template=bug_report.yml)
+- 💡 [Request a feature](https://github.com/zawwinhtutdev/mfu-ai-teaching-assistant/issues/new?template=feature_request.yml)
+- 🔧 [Open a pull request](https://github.com/zawwinhtutdev/mfu-ai-teaching-assistant/compare)
+
+## 🔐 Security
+
+Please do **not** open a public issue for a vulnerability. Use GitHub's
+[private vulnerability reporting](https://github.com/zawwinhtutdev/mfu-ai-teaching-assistant/security/advisories/new)
+or the contact in [SECURITY.md](SECURITY.md).
+
+## 🙏 Acknowledgements
+
+Built at **Mae Fah Luang University** as a course-scoped AI teaching assistant
+project. Thanks to the open-source teams behind Next.js, React, Supabase,
+Vercel AI SDK, shadcn/ui, Radix UI, Tailwind CSS and the FastAPI reference
+pipeline, and to everyone who tested the portals with real course material.
+
+## 📄 License
+
+[MIT](LICENSE) © 2026 Zaw Win Htut
+
+---
+
+<div align="center">
+  <sub>If this project helped you, consider giving it a ⭐ — it helps others find it.</sub>
+</div>
