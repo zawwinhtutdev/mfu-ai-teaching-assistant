@@ -61,6 +61,12 @@ export async function GET(req: Request) {
     const { data: conversations, error } = await conversationsQuery.order("updated_at", { ascending: false })
 
     if (error) {
+      // Rollout fallback: the column may not exist yet, in which case the
+      // course has no scoped history rather than a broken page.
+      if (scopedCourseId && /course_id/i.test(error.message || "")) {
+        console.warn("[conversations] conversations.course_id is missing; returning no course sessions")
+        return NextResponse.json({ conversations: [] })
+      }
       console.error("[v0] Error fetching conversations:", error)
       return NextResponse.json({ error: "Failed to fetch conversations" }, { status: 500 })
     }
@@ -156,7 +162,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const { data: conversation, error } = await supabase
+    let { data: conversation, error } = await supabase
       .from("conversations")
       .insert({
         user_id: user.id,
@@ -165,6 +171,15 @@ export async function POST(req: Request) {
       })
       .select("*")
       .single()
+
+    if (error && requestedCourseId && /course_id/i.test(error.message || "")) {
+      console.warn("[conversations] conversations.course_id is missing; creating an unscoped session")
+      ;({ data: conversation, error } = await supabase
+        .from("conversations")
+        .insert({ user_id: user.id, title })
+        .select("*")
+        .single())
+    }
 
     if (error || !conversation) {
       console.error("[v0] Error creating conversation:", error)

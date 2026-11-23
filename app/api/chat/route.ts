@@ -246,17 +246,27 @@ export async function POST(req: Request) {
       const title =
         firstUserMessage?.parts?.find((p: any) => p.type === "text")?.text?.substring(0, 50) || "New Conversation"
 
-      const { data: newConversation, error } = await supabase
+      const scopedCourseId = UUID_REGEX.test(typeof courseId === "string" ? courseId.trim() : "")
+        ? courseId.trim()
+        : null
+      const baseConversation = { user_id: userId, title }
+      // Course-scoped sessions power the per-course history list; the generic
+      // /chat app leaves this null. During rollout the production database may
+      // not have the column yet, so fall back to the unscoped insert instead of
+      // breaking chat entirely.
+      let { data: newConversation, error } = await supabase
         .from("conversations")
-        .insert({
-          user_id: userId,
-          title,
-          // Course-scoped sessions power the per-course history list; the
-          // generic /chat app leaves this null.
-          course_id: UUID_REGEX.test(typeof courseId === "string" ? courseId.trim() : "") ? courseId.trim() : null,
-        })
+        .insert({ ...baseConversation, course_id: scopedCourseId })
         .select()
         .single()
+      if (error && scopedCourseId && /course_id/i.test(error.message || "")) {
+        console.warn("[chat] conversations.course_id is missing; creating an unscoped session")
+        ;({ data: newConversation, error } = await supabase
+          .from("conversations")
+          .insert(baseConversation)
+          .select()
+          .single())
+      }
 
       if (error) {
         console.error("[v0] Error creating conversation:", error)
