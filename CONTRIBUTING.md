@@ -1,8 +1,8 @@
 # Contributing
 
 Thanks for taking the time to improve **MFU AI Teaching Assistant**! This guide
-covers the development workflow, testing expectations and the conventions used in
-this repository.
+covers the development workflow, testing expectations, commit style and the
+conventions used in this repository.
 
 ## Getting started
 
@@ -10,6 +10,8 @@ this repository.
 2. Use Node.js 22+ and the Supabase CLI (Docker required for the local stack).
 3. Copy `.env.example` to `.env.local` and fill in the local Supabase URL/keys.
 4. Run the app with `npm run dev` and sign in with a demo account.
+5. `npm install` installs the commit-message hook automatically. If it was skipped,
+   run `npm run hooks:install`.
 
 ## Workflow
 
@@ -25,18 +27,30 @@ this repository.
    ```
 
 4. Open a pull request and describe the problem, the change and how you verified it.
-   Link the issue it closes.
+   Link the issue it closes. PRs are **squash-merged**, so the PR title becomes the
+   commit on `main` and must follow the commit convention.
 
 ## Commit style
 
-This project uses conventional commit prefixes, e.g.:
+This project uses [Conventional Commits](https://www.conventionalcommits.org/)
+and a batched history. See **[docs/COMMIT_CONVENTIONS.md](docs/COMMIT_CONVENTIONS.md)**
+for the full guide, scopes and examples.
+
+Quick version:
 
 ```text
-feat: add clickable citations in the chat source list
-fix: reject expired PKCE codes in /auth/callback
-docs: document the Google SSO redirect allow-list
-chore: bump AI SDK to the latest patch
+feat(courses): allow several teachers on one course
+fix(auth): explain disabled Google SSO instead of failing silently
+docs(deploy): document the hosted Supabase redirect allow-list
+chore(deps): upgrade Next.js to 16.4.6
 ```
+
+- Imperative subject, ≤ 72 characters, scope where it applies.
+- One logical change per commit; **aim for 4–8 commits per active day**.
+- Squash WIP/fixup commits locally before pushing.
+- Do not commit secrets, generated files or formatting-only churn.
+
+The commit-message CI job checks pull-request commits and titles.
 
 ## Database and RLS changes
 

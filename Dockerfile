@@ -5,6 +5,9 @@ FROM node:24-alpine AS deps
 WORKDIR /app
 RUN apk add --no-cache libc6-compat
 COPY package.json package-lock.json ./
+# The "prepare" script installs the local commit hook; the file must exist
+# before npm ci runs its lifecycle scripts.
+COPY scripts/install-git-hooks.mjs ./scripts/install-git-hooks.mjs
 RUN npm ci
 
 # ---------- build ----------

@@ -178,6 +178,40 @@ expectContains(
   "a teacher may read profiles only for students in their own courses",
 )
 
+// Adding a student must not depend on that student having signed in already.
+// The dialog previously looked profiles up from the browser, where RLS hides
+// every un-enrolled account, so it reported "No student accounts found" even
+// for real students. The server route resolves addresses and stores an
+// invitation when there is no account yet.
+expectFile(
+  "supabase/migrations/20261119004000_course_invitations.sql",
+  "pending course invitations",
+)
+expectContains(
+  "supabase/migrations/20261119004000_course_invitations.sql",
+  /create table if not exists public\.course_invitations/,
+  "course invitations must be persisted",
+)
+expectContains(
+  "supabase/migrations/20261119004000_course_invitations.sql",
+  /delete from public\.course_invitations/,
+  "signup must claim pending invitations",
+)
+expectFile(
+  "app/api/teacher/courses/[courseId]/students/route.ts",
+  "teacher roster management API",
+)
+expectContains(
+  "components/teacher/manage-students-dialog.tsx",
+  /api\/teacher\/courses/,
+  "the roster dialog must use the authorized server route",
+)
+expectContains(
+  "components/teacher/manage-students-dialog.tsx",
+  /pendingInvitations/,
+  "the roster dialog must show pending invitations",
+)
+
 // Profile pictures: `profiles.avatar_url` existed but nothing could populate it
 // — no bucket, no endpoint, no UI.
 expectFile("supabase/migrations/20261118007000_avatar_storage.sql", "avatar storage bucket")
