@@ -11,13 +11,17 @@ import {
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const courseId = new URL(req.url).searchParams.get("courseId")?.trim() || ""
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const scopedCourseId = uuidPattern.test(courseId) ? courseId : ""
+
     const cookieStore = await cookies()
     const demoRole = cookieStore.get(DEMO_ROLE_COOKIE)?.value
     const demoEmail = cookieStore.get(DEMO_EMAIL_COOKIE)?.value
 
-    if (isDemoRole(demoRole)) {
+    if (isDemoRole(demoRole) && !scopedCourseId) {
       const demoAccount = getDemoAccountByRole(demoRole)
 
       if (demoAccount && demoEmail?.toLowerCase() === demoAccount.email.toLowerCase()) {
@@ -48,12 +52,13 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Fetch conversations for the current user
-    const { data: conversations, error } = await supabase
+    // Fetch conversations for the current user (optionally scoped to a course)
+    let conversationsQuery = supabase
       .from("conversations")
       .select("*")
       .eq("user_id", user.id)
-      .order("updated_at", { ascending: false })
+    if (scopedCourseId) conversationsQuery = conversationsQuery.eq("course_id", scopedCourseId)
+    const { data: conversations, error } = await conversationsQuery.order("updated_at", { ascending: false })
 
     if (error) {
       console.error("[v0] Error fetching conversations:", error)
@@ -74,12 +79,16 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}))
     const title = buildDemoConversationTitle(body?.title)
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const requestedCourseId = typeof body?.courseId === "string" && uuidPattern.test(body.courseId.trim())
+      ? body.courseId.trim()
+      : ""
 
     const cookieStore = await cookies()
     const demoRole = cookieStore.get(DEMO_ROLE_COOKIE)?.value
     const demoEmail = cookieStore.get(DEMO_EMAIL_COOKIE)?.value
 
-    if (isDemoRole(demoRole)) {
+    if (isDemoRole(demoRole) && !requestedCourseId) {
       const demoAccount = getDemoAccountByRole(demoRole)
       if (!demoAccount || demoEmail?.toLowerCase() !== demoAccount.email.toLowerCase()) {
         return NextResponse.json({ error: "Unauthorized demo session" }, { status: 401 })
@@ -125,11 +134,34 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    if (requestedCourseId) {
+      const { data: course } = await supabase
+        .from("courses")
+        .select("id, teacher_id")
+        .eq("id", requestedCourseId)
+        .maybeSingle()
+      if (!course) {
+        return NextResponse.json({ error: "Course not found" }, { status: 404 })
+      }
+      if (course.teacher_id !== user.id) {
+        const { data: enrollment } = await supabase
+          .from("course_enrollments")
+          .select("id")
+          .eq("course_id", requestedCourseId)
+          .eq("student_id", user.id)
+          .maybeSingle()
+        if (!enrollment) {
+          return NextResponse.json({ error: "You do not have access to this course" }, { status: 403 })
+        }
+      }
+    }
+
     const { data: conversation, error } = await supabase
       .from("conversations")
       .insert({
         user_id: user.id,
         title,
+        course_id: requestedCourseId || null,
       })
       .select("*")
       .single()
