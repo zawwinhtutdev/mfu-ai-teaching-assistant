@@ -238,7 +238,7 @@ expectContains(
   "uploaded materials must be stored, not just parsed",
 )
 expectContains(
-  "components/student/material-card.tsx",
+  "components/student/materials-list.tsx",
   /material\.file_url/,
   "a student must be able to open the uploaded file",
 )
