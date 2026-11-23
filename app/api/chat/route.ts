@@ -20,7 +20,7 @@ import {
   getGeminiFileSearchContext,
   getUserGeminiFileSearchStoreName,
 } from "@/lib/ai/gemini-file-search"
-import { retrieveCourseRagContext } from "@/lib/ai/course-rag"
+import { extractCourseMaterialFileTexts, retrieveCourseRagContext } from "@/lib/ai/course-rag"
 import { extractPdfTextFromBuffer } from "@/lib/ai/pdf-parse-node"
 import { createLocalChatResponse, shouldUseLocalChatService } from "@/lib/ai/local-chat"
 import { DEMO_EMAIL_COOKIE, DEMO_ROLE_COOKIE, getDemoAccountByRole } from "@/lib/demo-auth"
@@ -113,6 +113,57 @@ async function loadPdfTextFallbackByObjectKey(objectKey: string) {
   return (await extractPdfTextFromBuffer(buffer)).trim()
 }
 
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+const MAX_ATTACHMENT_TEXT_CHARS = 12_000
+const MAX_ATTACHMENT_FILES = 3
+
+/**
+ * Read the text of attached documents so the model can actually use them.
+ *
+ * Images already travel as image parts. Everything else used to reach the model
+ * only as the sentence "the user attached files", with no contents — so the
+ * assistant answered "there are no files attached" whenever a PDF was sent.
+ * Extract the text here and hand it over with the prompt.
+ */
+async function extractAttachmentParts(attachments: any[]) {
+  const parts: Array<{ source: string; text: string }> = []
+
+  for (const attachment of attachments.slice(0, MAX_ATTACHMENT_FILES)) {
+    const name = typeof attachment?.name === "string" && attachment.name ? attachment.name : "attachment"
+    const type = String(attachment?.type || "")
+    const url = typeof attachment?.url === "string" ? attachment.url : ""
+
+    if (!url || !/^https?:\/\//i.test(url)) continue
+    if (type.startsWith("image/")) continue
+
+    const looksExtractable =
+      /pdf|word|presentation|officedocument|text|markdown|csv/i.test(type) ||
+      /\.(pdf|docx|pptx|txt|md|csv)$/i.test(name)
+    if (!looksExtractable) continue
+
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(15_000) })
+      if (!response.ok) {
+        console.warn(`[Chat] attachment fetch failed (${response.status}) for ${name}`)
+        continue
+      }
+      const buffer = Buffer.from(await response.arrayBuffer())
+      if (buffer.byteLength > MAX_ATTACHMENT_BYTES) {
+        parts.push({ source: name, text: `[Attached file ${name} is ${Math.round(buffer.byteLength / 1024 / 1024)} MB, too large to read inline.]` })
+        continue
+      }
+      const extracted = await extractCourseMaterialFileTexts([
+        { fileName: name, mimeType: type || "application/octet-stream", buffer },
+      ])
+      parts.push(...extracted)
+    } catch (error: any) {
+      console.warn(`[Chat] attachment extraction failed for ${name}:`, error?.message || error)
+    }
+  }
+
+  return parts
+}
+
 export async function POST(req: Request) {
   try {
     console.log("🚀🚀🚀 CHAT API CALLED - NEW MESSAGE SENT! 🚀🚀🚀")
@@ -195,14 +246,27 @@ export async function POST(req: Request) {
       const title =
         firstUserMessage?.parts?.find((p: any) => p.type === "text")?.text?.substring(0, 50) || "New Conversation"
 
-      const { data: newConversation, error } = await supabase
+      const scopedCourseId = UUID_REGEX.test(typeof courseId === "string" ? courseId.trim() : "")
+        ? courseId.trim()
+        : null
+      const baseConversation = { user_id: userId, title }
+      // Course-scoped sessions power the per-course history list; the generic
+      // /chat app leaves this null. During rollout the production database may
+      // not have the column yet, so fall back to the unscoped insert instead of
+      // breaking chat entirely.
+      let { data: newConversation, error } = await supabase
         .from("conversations")
-        .insert({
-          user_id: userId,
-          title,
-        })
+        .insert({ ...baseConversation, course_id: scopedCourseId })
         .select()
         .single()
+      if (error && scopedCourseId && /course_id/i.test(error.message || "")) {
+        console.warn("[chat] conversations.course_id is missing; creating an unscoped session")
+        ;({ data: newConversation, error } = await supabase
+          .from("conversations")
+          .insert(baseConversation)
+          .select()
+          .single())
+      }
 
       if (error) {
         console.error("[v0] Error creating conversation:", error)
@@ -421,8 +485,27 @@ Guidelines:
       .filter((a: any) => typeof a === 'object' ? (a.type?.startsWith('image/') && a.url && /^https?:\/\//.test(a.url)) : false)
       .map((a: any) => ({ type: "image", image: a.url }))
 
+    const attachmentNames = attArray
+      .map((a: any) => (typeof a?.name === "string" ? a.name.trim() : ""))
+      .filter(Boolean)
+    const attachmentTextParts = await extractAttachmentParts(attArray)
+    const attachmentText = attachmentTextParts
+      .map((part) => `--- ${part.source} ---\n${part.text}`)
+      .join("\n\n")
+      .slice(0, MAX_ATTACHMENT_TEXT_CHARS)
+
     const attachmentNote = attArray.length
-      ? `The user attached files. Analyze images if provided and reference document links when helpful.`
+      ? [
+          `The user attached ${attArray.length} file(s)${attachmentNames.length ? `: ${attachmentNames.join(", ")}` : ""}.`,
+          "Analyze images when provided and reference the attached documents in your answer.",
+          attachmentText
+            ? `Extracted text from the attached documents (truncated if long):\n\n${attachmentText}`
+            : attachmentTextParts.length === 0 && !imageParts.length
+              ? "No text could be extracted from those files; say so plainly and ask for a different format."
+              : "",
+        ]
+          .filter(Boolean)
+          .join("\n\n")
       : ""
 
     const requestedDocId = typeof ragDocumentId === "string" ? ragDocumentId.trim() : ""

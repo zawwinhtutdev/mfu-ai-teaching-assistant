@@ -150,11 +150,13 @@ export async function POST(
 
     const extractedParts = await extractCourseMaterialFileTexts(uploadedFiles)
 
-    if (!manualContent && extractedParts.length === 0) {
+    // A file whose text we cannot read — legacy .ppt/.doc, images, video — is
+    // still worth publishing: students can open it, and only AI quoting needs
+    // text. Refusing it outright made "upload a PowerPoint" fail even though the
+    // teacher had attached one, so only an empty submission is rejected.
+    if (!manualContent && extractedParts.length === 0 && uploadedFiles.length === 0) {
       return NextResponse.json(
-        {
-          error: "Provide material content or upload at least one readable file (PDF/TXT/Markdown/CSV/JSON)",
-        },
+        { error: "Provide material content or attach at least one file" },
         { status: 400 },
       )
     }
@@ -163,7 +165,19 @@ export async function POST(
       .map((part) => `Source file: ${part.source}\n${part.text}`)
       .join("\n\n")
 
-    const combinedContent = [manualContent, extractedText].filter(Boolean).join("\n\n").trim()
+    const unreadableFiles = uploadedFiles.filter(
+      (file) => !extractedParts.some((part) => part.source === file.fileName),
+    )
+    const unindexedNote = unreadableFiles.length
+      ? `Attached ${unreadableFiles.length === 1 ? "file" : "files"}: ${unreadableFiles
+          .map((file) => file.fileName)
+          .join(", ")}. No text could be extracted from this format, so the AI assistant cannot quote it; students can still open the file.`
+      : ""
+
+    const combinedContent = [manualContent, extractedText, unindexedNote]
+      .filter(Boolean)
+      .join("\n\n")
+      .trim()
 
     // Keep the original file so it can be opened again. Before this, the PDF was
     // read for text and thrown away: `file_url` stayed null and the card showed

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { BarChart3, Check, Copy, MoreHorizontal, Settings, Users } from "lucide-react"
+import { BarChart3, Check, Copy, MoreHorizontal, Settings } from "lucide-react"
 import type { Course } from "@/lib/types"
 import {
   DropdownMenu,
@@ -22,7 +22,6 @@ export function TeacherCourseCard({ course }: TeacherCourseCardProps) {
   const courseCode = course.code || "N/A"
   const courseTitle = course.title || "Untitled Course"
   const courseDescription = (course as any).description || ""
-  const enrolledStudents = (course as any).enrolled_students || 0
   const initial = courseTitle.trim().charAt(0).toUpperCase() || "C"
   const href = `/teacherportal/mycourses/${course.id}`
 
@@ -131,11 +130,6 @@ export function TeacherCourseCard({ course }: TeacherCourseCardProps) {
           {courseDescription}
         </p>
       ) : null}
-
-      <div className="mt-3 flex items-center gap-1.5" style={{ fontSize: 12.5, color: "var(--p-muted)" }}>
-        <Users size={15} style={{ color: "var(--p-tertiary)" }} />
-        {enrolledStudents} {enrolledStudents === 1 ? "student" : "students"}
-      </div>
 
       <div
         className="mt-4 flex items-center gap-2 pt-4"

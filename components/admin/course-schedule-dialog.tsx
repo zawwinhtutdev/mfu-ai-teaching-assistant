@@ -14,7 +14,7 @@
  * silently dropped, so a typo does not look like a missing class.
  */
 
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react"
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from "react"
 import { SectionStudentsBlock, type EnrollmentCatalog } from "@/components/admin/section-students-block"
 import {
   Dialog,
@@ -129,14 +129,6 @@ export const CourseSchedulePanel = forwardRef<
     void loadEnrollment()
     onEnrollmentChanged?.()
   }, [loadEnrollment, onEnrollmentChanged])
-
-  const sectionNoById = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const row of rows) {
-      if (row.id) map.set(row.id, row.section_no)
-    }
-    return map
-  }, [rows])
 
   useEffect(() => {
     void load()
@@ -388,10 +380,8 @@ export const CourseSchedulePanel = forwardRef<
                       sectionNo={row.section_no.trim()}
                       capacity={Number.parseInt(row.capacity, 10) || 0}
                       catalog={catalog}
-                      sectionNoById={sectionNoById}
                       onChanged={refreshStudents}
                       onAssignBySectionNo={assignStudentToSection}
-                      onBulkAssignToSection={assignStudentsToSection}
                     />
                   ) : null}
                 </div>

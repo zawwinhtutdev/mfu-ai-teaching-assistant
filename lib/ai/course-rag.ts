@@ -3,6 +3,7 @@ import { buildContext, type Source } from "./grounding"
 import { embedTexts as embedWithOllama, toVectorLiteral, isOllamaEnabled } from "./ollama"
 import { transcribeAudio } from "./transcription"
 import { extractPdfTextFromBuffer } from "./pdf-parse-node"
+import { cleanExtractedText } from "@/lib/text/extracted-text"
 
 // `text-embedding-004` was retired and now returns 404 from the v1beta API,
 // which broke all course-material retrieval when a Gemini key was configured.
@@ -194,7 +195,7 @@ export async function extractCourseMaterialFileTexts(files: UploadedCourseMateri
     }
 
     if (text) {
-      parts.push({ source: fileName, text })
+      parts.push({ source: fileName, text: cleanExtractedText(text) })
     } else {
       // Silence here is how a teacher ends up with an "uploaded" material that
       // answers nothing. Name the file so the cause is obvious.

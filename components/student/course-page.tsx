@@ -1,16 +1,49 @@
 "use client"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { MessageSquare, BookOpen, Brain, FileText, Bell, Bot, MoreVertical, Clipboard, Calendar, CalendarClock } from "lucide-react"
+import { MessageSquare, BookOpen, Brain, FileText, Bell, Bot, MoreVertical, Clipboard, Calendar, CalendarClock, ChevronDown, Check } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import type { Course, CourseMaterial, ChatbotSettings } from "@/lib/types"
 import { AIChatbot } from "./ai-chatbot"
-import { MaterialCard } from "./material-card"
+import { MaterialsList } from "./materials-list"
 import { FlashcardsView } from "./flashcards-view"
 import { QuizzesView } from "./quizzes-view"
 import { StudyPlannerView } from "./study-planner-view"
 import { SurveyWidget } from "./survey-widget"
 import { AssignmentsPanel } from "@/components/shared/assignments-panel"
 import { useEffect, useState } from "react"
+
+/** Shown when the teacher has not uploaded anything yet, and as a hint after the list. */
+function MaterialsPlaceholder({ compact = false }: { compact?: boolean }) {
+  return (
+    <div
+      className={`flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-muted/20 text-center ${
+        compact ? "px-4 py-6" : "px-6 py-12"
+      }`}
+    >
+      <BookOpen className="h-8 w-8 text-muted-foreground" />
+      <p className="text-sm font-medium">Teaching materials</p>
+      <p className="max-w-md text-xs text-muted-foreground">
+        Materials uploaded by your teacher will appear here.
+      </p>
+    </div>
+  )
+}
+
+const AI_VIEWS = [
+  { value: "chat", label: "AI Chat", icon: MessageSquare },
+  { value: "flashcards", label: "Flashcards", icon: Brain },
+  { value: "quizzes", label: "Quizzes", icon: FileText },
+  { value: "planner", label: "Planner", icon: Calendar },
+] as const
+
+type AiView = (typeof AI_VIEWS)[number]["value"]
 
 interface CoursePageProps {
   course: Course
@@ -43,24 +76,10 @@ interface AnnouncementFeedItem {
 
 export function CoursePage({ course, materials, chatbotSettings, studentId }: CoursePageProps) {
   const [liveAnnouncements, setLiveAnnouncements] = useState<AnnouncementFeedItem[]>([])
+  // Which AI surface is showing. The four used to be a second tab row inside the
+  // AI Assistant panel; a dropdown keeps the page header to one row.
+  const [aiView, setAiView] = useState<AiView>("chat")
   const [isAnnouncementsLoading, setIsAnnouncementsLoading] = useState(false)
-  // Summaries already stored for this student, so a reload does not lose them.
-  const [summaries, setSummaries] = useState<Record<string, string>>({})
-
-  useEffect(() => {
-    let cancelled = false
-    fetch(`/api/study-assets?courseId=${encodeURIComponent(course.id)}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!cancelled && data?.summaries) setSummaries(data.summaries)
-      })
-      .catch(() => {
-        // A missing summary list only costs the "already generated" hint.
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [course.id])
 
   // Mock announcement data for CSD323
   const csd323Announcements = [
@@ -694,62 +713,48 @@ Please prepare accordingly and bring your student ID.`
 
           <TabsContent value="materials" className="mt-6">
             <div className="space-y-4">
-              {materials.length === 0 ? (
-                <Card>
-                  <CardContent className="flex flex-col items-center justify-center py-12">
-                    <BookOpen className="mb-4 h-12 w-12 text-muted-foreground" />
-                    <h3 className="mb-2 text-lg font-semibold">No materials yet</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Your teacher has not published course materials for this course.
-                    </p>
-                  </CardContent>
-                </Card>
-              ) : (
-                materials.map((material) => (
-                  <MaterialCard
-                    key={material.id}
-                    material={material}
-                    courseId={course.id}
-                    studentId={studentId}
-                    storedSummary={summaries[material.id] ?? null}
-                  />
-                ))
-              )}
+              {materials.length === 0 ? <MaterialsPlaceholder /> : <MaterialsList materials={materials} />}
             </div>
           </TabsContent>
 
           <TabsContent value="ai-assistant" className="mt-6">
-            <Tabs defaultValue="chat" className="w-full">
-              <TabsList className="grid w-full grid-cols-4 bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 shadow-[4px_4px_8px_rgba(0,0,0,0.08),-4px_-4px_8px_rgba(255,255,255,0.8)] dark:shadow-[4px_4px_8px_rgba(0,0,0,0.2),-4px_-4px_8px_rgba(255,255,255,0.05)] rounded-xl p-1">
-                <TabsTrigger 
-                  value="chat"
-                  className="rounded-lg data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-200 data-[state=active]:to-blue-300 dark:data-[state=active]:from-blue-800 dark:data-[state=active]:to-blue-900 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-200 data-[state=active]:font-semibold data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)] dark:data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.05)]"
-                >
-                  <MessageSquare className="mr-2 h-4 w-4" />
-                  AI Chat
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="flashcards"
-                  className="rounded-lg data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-200 data-[state=active]:to-blue-300 dark:data-[state=active]:from-blue-800 dark:data-[state=active]:to-blue-900 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-200 data-[state=active]:font-semibold data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)] dark:data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.05)]"
-                >
-                  <Brain className="mr-2 h-4 w-4" />
-                  Flashcards
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="quizzes"
-                  className="rounded-lg data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-200 data-[state=active]:to-blue-300 dark:data-[state=active]:from-blue-800 dark:data-[state=active]:to-blue-900 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-200 data-[state=active]:font-semibold data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)] dark:data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.05)]"
-                >
-                  <FileText className="mr-2 h-4 w-4" />
-                  Quizzes
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="planner"
-                  className="rounded-lg data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-200 data-[state=active]:to-blue-300 dark:data-[state=active]:from-blue-800 dark:data-[state=active]:to-blue-900 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-200 data-[state=active]:font-semibold data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)] dark:data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.05)]"
-                >
-                  <Calendar className="mr-2 h-4 w-4" />
-                  Planner
-                </TabsTrigger>
-              </TabsList>
+            <Tabs value={aiView} onValueChange={(value) => setAiView(value as AiView)} className="w-full">
+              <div className="flex flex-wrap items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="Choose an AI assistant view"
+                      className="inline-flex h-10 items-center gap-2 rounded-lg border bg-background px-4 text-sm font-medium shadow-sm transition-colors hover:bg-muted"
+                    >
+                      {(() => {
+                        const active = AI_VIEWS.find((view) => view.value === aiView) ?? AI_VIEWS[0]
+                        const Icon = active.icon
+                        return (
+                          <>
+                            <Icon className="h-4 w-4" />
+                            {active.label}
+                          </>
+                        )
+                      })()}
+                      <ChevronDown className="h-4 w-4 opacity-60" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-56">
+                    <DropdownMenuLabel>AI Assistant</DropdownMenuLabel>
+                    {AI_VIEWS.map((view) => {
+                      const Icon = view.icon
+                      return (
+                        <DropdownMenuItem key={view.value} onSelect={() => setAiView(view.value)}>
+                          <Icon className="mr-2 h-4 w-4" />
+                          {view.label}
+                          {aiView === view.value && <Check className="ml-auto h-4 w-4" />}
+                        </DropdownMenuItem>
+                      )
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
 
               <TabsContent value="chat" className="mt-6">
                 <AIChatbot

@@ -25,20 +25,16 @@ export function SectionStudentsBlock({
   sectionNo,
   capacity,
   catalog,
-  sectionNoById,
   onChanged,
   onAssignBySectionNo,
-  onBulkAssignToSection,
 }: {
   courseId: string
   sectionId?: string
   sectionNo: string
   capacity: number
   catalog: EnrollmentCatalog
-  sectionNoById: Map<string, string>
   onChanged: () => void
   onAssignBySectionNo?: (studentId: string, sectionNo: string) => Promise<void>
-  onBulkAssignToSection?: (studentIds: string[], sectionNo: string) => Promise<void>
 }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -48,42 +44,6 @@ export function SectionStudentsBlock({
     if (!sectionId) return []
     return catalog.enrolled.filter((student) => student.section_id === sectionId)
   }, [catalog.enrolled, sectionId])
-
-  const enrolledNotInSection = useMemo(() => {
-    return catalog.enrolled.filter((student) => {
-      if (sectionId) return student.section_id !== sectionId
-      return !student.section_id || !sectionNoById.has(student.section_id)
-    })
-  }, [catalog.enrolled, sectionId, sectionNoById])
-
-  const addAllEnrolledToSection = async () => {
-    const ids = enrolledNotInSection.map((s) => s.id)
-    if (ids.length === 0) return
-    setSaving(true)
-    setError(null)
-    try {
-      if (sectionId) {
-        const res = await fetch("/api/admin/course-enrollment", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ courseId, studentIds: ids, sectionId }),
-        })
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok) throw new Error(data?.error || "Could not add those students")
-      } else if (onBulkAssignToSection) {
-        await onBulkAssignToSection(ids, sectionNo)
-      } else if (onAssignBySectionNo) {
-        await onAssignBySectionNo(ids[0]!, sectionNo)
-      } else {
-        throw new Error("Save this section first, then try again.")
-      }
-      onChanged()
-    } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : "Could not add those students")
-    } finally {
-      setSaving(false)
-    }
-  }
 
   const addToThisSection = async (studentId: string) => {
     setSaving(true)
@@ -229,54 +189,6 @@ export function SectionStudentsBlock({
               <UserPlus className="mr-1 h-3.5 w-3.5" />
               Add
             </Button>
-          </div>
-        </div>
-      ) : null}
-
-      {enrolledNotInSection.length > 0 ? (
-        <div className="space-y-1.5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-[11px] font-medium text-muted-foreground">
-              On course — add to section {sectionNo} ({enrolledNotInSection.length})
-            </p>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              className="h-7 text-xs"
-              disabled={saving || atCapacity}
-              onClick={() => void addAllEnrolledToSection()}
-            >
-              Add all to section {sectionNo}
-            </Button>
-          </div>
-          <div className="space-y-1">
-            {enrolledNotInSection.map((student) => {
-              const otherSection =
-                student.section_id && student.section_id !== sectionId
-                  ? sectionNoById.get(student.section_id)
-                  : null
-              return (
-                <button
-                  key={student.id}
-                  type="button"
-                  disabled={saving || atCapacity}
-                  onClick={() => void addToThisSection(student.id)}
-                  className="flex w-full items-center justify-between gap-2 rounded-lg border border-dashed px-2.5 py-2 text-left text-sm transition-colors hover:bg-muted/40 disabled:opacity-50"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{student.full_name || "—"}</p>
-                    <p className="truncate text-[11px] text-muted-foreground">{student.email}</p>
-                    {otherSection ? (
-                      <p className="text-[10px] text-amber-700 dark:text-amber-400">
-                        Moves from section {otherSection}
-                      </p>
-                    ) : null}
-                  </div>
-                  <UserPlus className="h-4 w-4 shrink-0 text-muted-foreground" />
-                </button>
-              )
-            })}
           </div>
         </div>
       ) : null}

@@ -10,7 +10,7 @@ import {
   type PortalNavItem,
   type PortalRailItem,
 } from "@/components/portal/portal-shell"
-import { Calendar, BarChart3, Bot, Building, Settings, LayoutGrid, FileText, BookOpen } from "lucide-react"
+import { Calendar, BarChart3, Building, Settings, LayoutGrid, BookOpen } from "lucide-react"
 
 interface TeacherPortalLayoutProps {
   profile: Profile
@@ -65,13 +65,6 @@ export function TeacherPortalLayout({ profile, courses, children }: TeacherPorta
       ],
     },
     {
-      label: "Coursework",
-      items: [
-        { href: "/teacherportal/documents", label: "Documents", icon: FileText },
-        { href: "/teacherportal/agentbuilder", label: "Agent Builder", icon: Bot },
-      ],
-    },
-    {
       label: "Campus",
       items: [{ href: "/teacherportal/mfucampusresources", label: "Campus Guide", icon: Building }],
     },
@@ -85,7 +78,6 @@ export function TeacherPortalLayout({ profile, courses, children }: TeacherPorta
     { href: "/teacherportal/mycourses", label: "Courses", icon: LayoutGrid },
     { href: "/teacherportal/calendar", label: "Calendar", icon: Calendar },
     { href: "/teacherportal/analytics", label: "Insights", icon: BarChart3 },
-    { href: "/teacherportal/agentbuilder", label: "Agents", icon: Bot },
     { href: "/teacherportal/settings", label: "Settings", icon: Settings },
   ]
 

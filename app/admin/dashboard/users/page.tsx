@@ -15,12 +15,42 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { AddUserDialog } from "@/components/admin/add-user-dialog"
-import { Users as UsersIcon, Search, GraduationCap, ShieldCheck, BookOpen, Plus } from "lucide-react"
+import { ImportUsersDialog } from "@/components/admin/import-users-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { buttonVariants } from "@/components/ui/button"
+import {
+  Users as UsersIcon,
+  Search,
+  GraduationCap,
+  ShieldCheck,
+  BookOpen,
+  Plus,
+  Download,
+  Upload,
+  Loader2,
+  MoreHorizontal,
+  Trash2,
+} from "lucide-react"
 
 type AdminRole = "student" | "teacher" | "admin"
 
@@ -48,6 +78,10 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [addOpen, setAddOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
+  const [pendingRemoval, setPendingRemoval] = useState<AdminUser | null>(null)
+  const [isRemoving, setIsRemoving] = useState(false)
 
   const activeRole = parseRole(searchParams.get("role"))
 
@@ -68,6 +102,56 @@ export default function UsersPage() {
   useEffect(() => {
     loadUsers()
   }, [loadUsers])
+
+  /**
+   * Export is a fetch rather than a plain link so the browser still sends the
+   * session cookie and a failure can surface as a message instead of a blank
+   * download. Students and teachers come in one file; role tells them apart.
+   */
+  const exportUsers = async () => {
+    setIsExporting(true)
+    setError(null)
+    try {
+      const res = await fetch("/api/admin/users/export")
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data?.error || "Could not export accounts")
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `mfu-users-students-teachers-${new Date().toISOString().slice(0, 10)}.csv`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (err: any) {
+      setError(err?.message || "Could not export accounts")
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  const removeUser = async () => {
+    if (!pendingRemoval) return
+    setIsRemoving(true)
+    setError(null)
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: pendingRemoval.id }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || "Could not remove the account")
+      setUsers((previous) => previous.filter((row) => row.id !== pendingRemoval.id))
+      setPendingRemoval(null)
+    } catch (err: any) {
+      setError(err?.message || "Could not remove the account")
+    } finally {
+      setIsRemoving(false)
+    }
+  }
+
 
   // Group once, then filter the active group. Doing it in one pass keeps the
   // search from rescanning the whole roster on every keystroke.
@@ -92,30 +176,12 @@ export default function UsersPage() {
     )
   }, [byRole, activeRole, query])
 
-  const roleBadge = (role: AdminRole) => {
-    switch (role) {
-      case "admin":
-        return "destructive"
-      case "teacher":
-        return "default"
-      default:
-        return "secondary"
-    }
-  }
-
   const heading =
     activeRole === "student"
       ? "Student accounts"
       : activeRole === "teacher"
         ? "Teacher accounts"
         : "Administrator accounts"
-
-  const description =
-    activeRole === "student"
-      ? "Everyone enrolled in a course. Promote an account to teacher from the dropdown."
-      : activeRole === "teacher"
-        ? "Staff who own courses. Demote to student if a role was assigned by mistake."
-        : "Full-console access. Keep this list short and reviewed."
 
   const RoleIcon = activeRole === "student" ? GraduationCap : activeRole === "teacher" ? BookOpen : ShieldCheck
   const group = byRole[activeRole]
@@ -131,10 +197,24 @@ export default function UsersPage() {
             Switch between students, teachers, and administrators from Members in the sidebar
           </p>
         </div>
-        <Button className="ml-auto shrink-0" onClick={() => setAddOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add account
-        </Button>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <Button variant="outline" onClick={() => void exportUsers()} disabled={isExporting}>
+            {isExporting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-2 h-4 w-4" />
+            )}
+            Export CSV
+          </Button>
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <Upload className="mr-2 h-4 w-4" />
+            Import CSV
+          </Button>
+          <Button onClick={() => setAddOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add account
+          </Button>
+        </div>
       </div>
 
       {error && (
@@ -152,7 +232,6 @@ export default function UsersPage() {
             <UsersIcon className="h-5 w-5" />
             {heading}
           </CardTitle>
-          <CardDescription>{description}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="relative">
@@ -195,20 +274,30 @@ export default function UsersPage() {
                     className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4 transition-colors hover:bg-muted/30"
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="truncate font-medium">{user.full_name || "—"}</p>
-                        <Badge variant={roleBadge(user.role) as any} className="text-[10px]">
-                          {user.role}
-                        </Badge>
-                      </div>
+                      <p className="truncate font-medium">{user.full_name || "—"}</p>
                       <p className="truncate text-xs text-muted-foreground">{user.email}</p>
                       <p className="mt-0.5 text-[10px] text-muted-foreground/70">
                         Joined {new Date(user.created_at).toLocaleDateString()}
                       </p>
                     </div>
-                    {/* Role is shown as a badge only. Changing it per row was an
-                        easy way to demote yourself or promote a student by
-                        accident; role is set when the account is created. */}
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" aria-label={`Remove ${user.email}`}>
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onSelect={() => setPendingRemoval(user)}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Remove account
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 ))}
               </div>
@@ -223,6 +312,45 @@ export default function UsersPage() {
         defaultRole={activeRole}
         onCreated={() => void loadUsers()}
       />
+
+      <ImportUsersDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        defaultRole={activeRole}
+        onImported={() => void loadUsers()}
+      />
+
+      <AlertDialog
+        open={Boolean(pendingRemoval)}
+        onOpenChange={(open) => {
+          if (!open && !isRemoving) setPendingRemoval(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{pendingRemoval?.full_name || pendingRemoval?.email}</strong> (
+              {pendingRemoval?.email}) will lose access immediately. Their enrollments and
+              submissions are deleted with the account. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRemoving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className={buttonVariants({ variant: "destructive" })}
+              disabled={isRemoving}
+              onClick={(event) => {
+                event.preventDefault()
+                void removeUser()
+              }}
+            >
+              {isRemoving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
