@@ -20,6 +20,14 @@ const nextConfig = {
   // file that does not exist ("Setting up fake worker failed"). Keeping it
   // external means Node resolves it from node_modules as the package intends.
   serverExternalPackages: ["pdf-parse", "pdfjs-dist"],
+  async redirects() {
+    const hiddenCourseManagePaths = ["playback", "downloads", "defaults"]
+    return hiddenCourseManagePaths.map((slug) => ({
+      source: `/admin/dashboard/manage/${slug}`,
+      destination: "/admin/dashboard",
+      permanent: false,
+    }))
+  },
   // Vercel's file tracing only follows static imports, so the worker loaded by
   // pdf.js at runtime was missing from the deployed function. Copy it into
   // every route that extracts PDF text.

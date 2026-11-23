@@ -10,13 +10,7 @@ import {
   ShieldCheck,
   Bell,
   Shield,
-  Settings,
   Building2,
-  List,
-  CheckCheck,
-  Send,
-  Play,
-  Download,
   ScrollText,
   Headphones,
   FileText,
@@ -101,23 +95,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       label: "Feature",
       items: [
         {
-          // "Courses" is a disclosure, not a destination: /admin/dashboard *is*
-          // the course list, so the old Home + Courses + Course List trio were
-          // three links to the same route and all three lit up at once.
-          href: "/admin/dashboard/courses",
+          href: "/admin/dashboard",
           label: "Courses",
           icon: LayoutGrid,
-          children: [
-            { href: "/admin/dashboard", label: "All courses", icon: List, exact: true, depth: 1 },
-            // "Course Info Fields" used to live here. It described the fields a
-            // course carries, which is per-course information — so it now opens
-            // from the course name instead of being a standalone settings page.
-            { href: "/admin/dashboard/manage/approval", label: "Course Approval", icon: CheckCheck, depth: 1 },
-            { href: "/admin/dashboard/manage/bulk-post", label: "Bulk Post", icon: Send, depth: 1 },
-            { href: "/admin/dashboard/manage/playback", label: "Simultaneous playback restrictions", icon: Play, depth: 1 },
-            { href: "/admin/dashboard/manage/downloads", label: "File download settings", icon: Download, depth: 1 },
-            { href: "/admin/dashboard/manage/defaults", label: "Course default settings", icon: Settings, depth: 1 },
-          ],
         },
       ],
     },
@@ -144,7 +124,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   ]
 
   const titleMap: Record<string, string> = {
-    "/admin/dashboard": "Manage courses",
+    "/admin/dashboard": "Courses",
     "/admin/dashboard/users": "Members",
     "/admin/dashboard/audit-logs": "Audit Logs",
     "/admin/dashboard/privacy": "Privacy",
@@ -154,9 +134,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     "/admin/dashboard/profile": "My profile",
   }
   const key = pathname.replace(/\/$/, "")
-  const title = key.startsWith("/admin/dashboard/manage")
-    ? "Course settings"
-    : titleMap[key] || "Admin Console"
+  const title = key.startsWith("/admin/dashboard/courses/")
+    ? "Course"
+    : key.startsWith("/admin/dashboard/manage")
+      ? "Course settings"
+      : titleMap[key] || "Admin Console"
 
   return (
     <PortalShell

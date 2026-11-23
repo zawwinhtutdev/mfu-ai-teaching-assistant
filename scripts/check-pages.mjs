@@ -123,9 +123,6 @@ const ROUTES = {
     "/admin/dashboard/privacy",
     "/admin/dashboard/manage/approval",
     "/admin/dashboard/manage/bulk-post",
-    "/admin/dashboard/manage/playback",
-    "/admin/dashboard/manage/downloads",
-    "/admin/dashboard/manage/defaults",
     "/admin/login",
   ],
   public: [

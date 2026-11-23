@@ -39,7 +39,7 @@ export async function GET(req: Request) {
     const [enrolledResult, studentsResult] = await Promise.all([
       supabase
         .from("course_enrollments")
-        .select("student_id, enrolled_at")
+        .select("student_id, enrolled_at, section_id")
         .eq("course_id", courseId),
       supabase
         .from("profiles")
@@ -55,8 +55,10 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: studentsResult.error.message }, { status: 500 })
     }
 
-    const enrolledAt = new Map(
-      (enrolledResult.data ?? []).map((row) => [row.student_id, row.enrolled_at] as const),
+    const enrollmentByStudent = new Map(
+      (enrolledResult.data ?? []).map(
+        (row) => [row.student_id, { enrolled_at: row.enrolled_at, section_id: row.section_id ?? null }] as const,
+      ),
     )
     const students = studentsResult.data ?? []
 
@@ -65,10 +67,17 @@ export async function GET(req: Request) {
     // own row (plus an is_admin() check) — so the roster rendered as an empty
     // list even though the ids were there.
     const enrolled = students
-      .filter((student) => enrolledAt.has(student.id))
-      .map((student) => ({ ...student, enrolled_at: enrolledAt.get(student.id) ?? null }))
+      .filter((student) => enrollmentByStudent.has(student.id))
+      .map((student) => {
+        const placement = enrollmentByStudent.get(student.id)!
+        return {
+          ...student,
+          enrolled_at: placement.enrolled_at ?? null,
+          section_id: placement.section_id,
+        }
+      })
 
-    const available = students.filter((student) => !enrolledAt.has(student.id))
+    const available = students.filter((student) => !enrollmentByStudent.has(student.id))
 
     return NextResponse.json({
       enrolled,
@@ -115,19 +124,6 @@ export async function POST(req: Request) {
 
     const supabase = createServiceRoleClient()
 
-    // A section must belong to this course, or the placement would be nonsense
-    // and the derived per-section count would silently exclude the student.
-    if (sectionId) {
-      const { data: section } = await supabase
-        .from("course_sections")
-        .select("id, course_id, capacity")
-        .eq("id", sectionId)
-        .maybeSingle()
-      if (!section || section.course_id !== courseId) {
-        return NextResponse.json({ error: "That section does not belong to this course" }, { status: 400 })
-      }
-    }
-
     // Verify the target ids really are students. Enrolling a teacher would make
     // them appear in the roster and skew the counts.
     const { data: profiles } = await supabase
@@ -140,8 +136,45 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "None of those accounts are students" }, { status: 400 })
     }
 
-    // `on conflict do nothing` semantics: re-adding an existing student is a
-    // no-op rather than a 409, because the roster is a set.
+    // A section must belong to this course, or the placement would be nonsense
+    // and the derived per-section count would silently exclude the student.
+    if (sectionId) {
+      const { data: section } = await supabase
+        .from("course_sections")
+        .select("id, course_id, capacity")
+        .eq("id", sectionId)
+        .maybeSingle()
+      if (!section || section.course_id !== courseId) {
+        return NextResponse.json({ error: "That section does not belong to this course" }, { status: 400 })
+      }
+
+      const sectionCapacity = section.capacity ?? null
+      const { count: currentInSection } = await supabase
+        .from("course_enrollments")
+        .select("student_id", { count: "exact", head: true })
+        .eq("course_id", courseId)
+        .eq("section_id", sectionId)
+
+      const { data: existingRows } = await supabase
+        .from("course_enrollments")
+        .select("student_id, section_id")
+        .eq("course_id", courseId)
+        .in("student_id", validIds)
+
+      const newToSection = validIds.filter((id) => {
+        const row = (existingRows ?? []).find((r) => r.student_id === id)
+        return !row || row.section_id !== sectionId
+      })
+
+      if (
+        sectionCapacity !== null &&
+        (currentInSection ?? 0) + newToSection.length > sectionCapacity
+      ) {
+        return NextResponse.json({ error: "That section is already at capacity" }, { status: 400 })
+      }
+    }
+
+    // With a section, upsert updates placement so each student belongs to at most one section.
     const { error } = await supabase
       .from("course_enrollments")
       .upsert(
@@ -150,7 +183,10 @@ export async function POST(req: Request) {
           student_id: studentId,
           ...(sectionId ? { section_id: sectionId } : {}),
         })),
-        { onConflict: "course_id,student_id", ignoreDuplicates: true },
+        {
+          onConflict: "course_id,student_id",
+          ignoreDuplicates: sectionId ? false : true,
+        },
       )
 
     if (error) {

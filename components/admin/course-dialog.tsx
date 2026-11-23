@@ -9,7 +9,7 @@
  * course record still has room for them if they are reintroduced later.
  */
 
-import { useEffect, useState } from "react"
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -44,6 +44,11 @@ interface CourseDialogProps {
 
 /** Semesters a course can run in. Stored as a string, like the rest of the form. */
 const SEMESTERS = ["1", "2", "3"] as const
+
+export function normalizeCourseSemester(value: string | null | undefined): string {
+  const trimmed = (value ?? "").trim()
+  return (SEMESTERS as readonly string[]).includes(trimmed) ? trimmed : ""
+}
 
 /**
  * MFU schools, in the order the university lists them.
@@ -172,7 +177,23 @@ function emptyCourse(): CourseFormValues {
   }
 }
 
-export function CourseDialog({ open, onOpenChange, course, onSaved }: CourseDialogProps) {
+export type CourseFormPanelHandle = {
+  save: () => Promise<void>
+}
+
+type CourseFormPanelProps = {
+  course?: CourseFormValues | null
+  onSaved: () => void
+  onCancel?: () => void
+  idPrefix?: string
+  /** When false, hide inline Save/Cancel (used on the full-page course editor). */
+  showActions?: boolean
+}
+
+export const CourseFormPanel = forwardRef<CourseFormPanelHandle, CourseFormPanelProps>(function CourseFormPanel(
+  { course, onSaved, onCancel, idPrefix = "course", showActions = true },
+  ref,
+) {
   const editing = Boolean(course?.id)
   const [form, setForm] = useState<CourseFormValues>(emptyCourse())
   const [error, setError] = useState<string | null>(null)
@@ -181,15 +202,22 @@ export function CourseDialog({ open, onOpenChange, course, onSaved }: CourseDial
   const set = <K extends keyof CourseFormValues>(key: K, value: CourseFormValues[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }))
 
-  // Reset on open so a previous edit never leaks into a create.
   useEffect(() => {
-    if (!open) return
-    setForm(course ? { ...course } : emptyCourse())
+    setForm(
+      course
+        ? { ...course, semester: normalizeCourseSemester(course.semester) }
+        : emptyCourse(),
+    )
     setError(null)
-  }, [open, course])
+  }, [course])
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const persist = useCallback(async () => {
+    if (!form.code.trim() || !form.title.trim()) {
+      const message = "Course code and title are required"
+      setError(message)
+      throw new Error(message)
+    }
+
     setIsSaving(true)
     setError(null)
 
@@ -203,8 +231,6 @@ export function CourseDialog({ open, onOpenChange, course, onSaved }: CourseDial
         academicYear: form.academicYear,
         school: form.school,
         furtherInformation: form.furtherInformation,
-        // The multi-teacher field. Sent even when empty, so clearing every chip
-        // actually unassigns rather than leaving the previous team in place.
         teacherEmails: form.teacherEmails,
       }
 
@@ -216,28 +242,36 @@ export function CourseDialog({ open, onOpenChange, course, onSaved }: CourseDial
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.error || "Could not save the course")
 
-      onOpenChange(false)
       onSaved()
-    } catch (cause: any) {
-      setError(cause?.message || "Could not save the course")
+    } catch (cause: unknown) {
+      const message = cause instanceof Error ? cause.message : "Could not save the course"
+      setError(message)
+      throw cause instanceof Error ? cause : new Error(message)
     } finally {
       setIsSaving(false)
     }
+  }, [course, editing, form, onSaved])
+
+  useImperativeHandle(ref, () => ({ save: persist }), [persist])
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      await persist()
+    } catch {
+      /* surfaced in panel error state */
+    }
   }
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{editing ? "Edit course" : "New course"}</DialogTitle>
-        </DialogHeader>
+  const fieldId = (name: string) => `${idPrefix}-${name}`
 
+  return (
         <form onSubmit={submit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <div className="space-y-2">
-              <Label htmlFor="course-code">Course code</Label>
+              <Label htmlFor={fieldId("code")}>Course code</Label>
               <Input
-                id="course-code"
+                id={fieldId("code")}
                 value={form.code}
                 onChange={(e) => set("code", e.target.value.toUpperCase())}
                 maxLength={16}
@@ -245,15 +279,15 @@ export function CourseDialog({ open, onOpenChange, course, onSaved }: CourseDial
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="academic-year">Academic year</Label>
+              <Label htmlFor={fieldId("academic-year")}>Academic year</Label>
               <Input
-                id="academic-year"
+                id={fieldId("academic-year")}
                 value={form.academicYear}
                 onChange={(e) => set("academicYear", e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="semester">Semester</Label>
+              <Label htmlFor={fieldId("semester")}>Semester</Label>
               {/*
                 `value` is the raw form value, so an empty string means "nothing
                 chosen" and Radix renders the placeholder. A sentinel such as
@@ -264,7 +298,7 @@ export function CourseDialog({ open, onOpenChange, course, onSaved }: CourseDial
                 value={form.semester}
                 onValueChange={(value) => set("semester", value)}
               >
-                <SelectTrigger id="semester" className="w-full">
+                <SelectTrigger id={fieldId("semester")} className="w-full">
                   <SelectValue placeholder="Select semester" />
                 </SelectTrigger>
                 <SelectContent>
@@ -273,20 +307,15 @@ export function CourseDialog({ open, onOpenChange, course, onSaved }: CourseDial
                       {semester}
                     </SelectItem>
                   ))}
-                  {/* An existing course may hold a value outside the list; show it
-                      rather than silently blanking the field on edit. */}
-                  {form.semester && !SEMESTERS.includes(form.semester as any) ? (
-                    <SelectItem value={form.semester}>{form.semester}</SelectItem>
-                  ) : null}
                 </SelectContent>
               </Select>
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="course-title">Course title</Label>
+            <Label htmlFor={fieldId("title")}>Course title</Label>
             <Input
-              id="course-title"
+              id={fieldId("title")}
               value={form.title}
               onChange={(e) => set("title", e.target.value)}
               required
@@ -294,9 +323,9 @@ export function CourseDialog({ open, onOpenChange, course, onSaved }: CourseDial
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="school">School</Label>
+            <Label htmlFor={fieldId("school")}>School</Label>
             <Select value={form.school} onValueChange={(value) => set("school", value)}>
-              <SelectTrigger id="school" className="w-full">
+              <SelectTrigger id={fieldId("school")} className="w-full">
                 <SelectValue placeholder="Select a school" />
               </SelectTrigger>
               <SelectContent>
@@ -315,9 +344,9 @@ export function CourseDialog({ open, onOpenChange, course, onSaved }: CourseDial
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="course-description">Description</Label>
+            <Label htmlFor={fieldId("description")}>Description</Label>
             <Textarea
-              id="course-description"
+              id={fieldId("description")}
               value={form.description}
               onChange={(e) => set("description", e.target.value)}
               rows={3}
@@ -325,7 +354,7 @@ export function CourseDialog({ open, onOpenChange, course, onSaved }: CourseDial
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="course-teacher">Assigned teachers</Label>
+            <Label htmlFor={fieldId("teachers")}>Assigned teachers</Label>
             <TeacherEmailInput
               emails={form.teacherEmails}
               onChange={(emails) => set("teacherEmails", emails)}
@@ -337,9 +366,9 @@ export function CourseDialog({ open, onOpenChange, course, onSaved }: CourseDial
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="further-information">Further information</Label>
+            <Label htmlFor={fieldId("further-information")}>Further information</Label>
             <Textarea
-              id="further-information"
+              id={fieldId("further-information")}
               value={form.furtherInformation}
               onChange={(e) => set("furtherInformation", e.target.value)}
               rows={2}
@@ -352,16 +381,42 @@ export function CourseDialog({ open, onOpenChange, course, onSaved }: CourseDial
             </div>
           )}
 
-          <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSaving}>
-              {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              {editing ? "Save changes" : "Create course"}
-            </Button>
-          </div>
+          {showActions ? (
+            <div className="flex justify-end gap-2 pt-1">
+              {onCancel ? (
+                <Button type="button" variant="outline" onClick={onCancel} disabled={isSaving}>
+                  Cancel
+                </Button>
+              ) : null}
+              <Button type="submit" disabled={isSaving}>
+                {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {editing ? "Save changes" : "Create course"}
+              </Button>
+            </div>
+          ) : null}
         </form>
+  )
+})
+
+export function CourseDialog({ open, onOpenChange, course, onSaved }: CourseDialogProps) {
+  const editing = Boolean(course?.id)
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{editing ? "Edit course" : "New course"}</DialogTitle>
+        </DialogHeader>
+        {open ? (
+          <CourseFormPanel
+            course={course}
+            onSaved={() => {
+              onOpenChange(false)
+              onSaved()
+            }}
+            onCancel={() => onOpenChange(false)}
+          />
+        ) : null}
       </DialogContent>
     </Dialog>
   )
