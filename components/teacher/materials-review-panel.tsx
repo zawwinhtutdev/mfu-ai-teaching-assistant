@@ -13,9 +13,10 @@ import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { CheckCircle2, Eye, EyeOff, FileText, Loader2, Sparkles, Upload } from "lucide-react"
+import { CheckCircle2, Eye, EyeOff, FileText, Sparkles, Upload } from "lucide-react"
 import type { CourseMaterial } from "@/lib/types"
 import { UploadMaterialDialog } from "./upload-material-dialog"
+import { FilePreviewDialog, type PreviewFile } from "@/components/shared/file-preview-dialog"
 
 type ApprovalStatus = "draft" | "approved" | "published"
 
@@ -41,6 +42,7 @@ export function MaterialsReviewPanel({ courseId, materials: initialMaterials }: 
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [preview, setPreview] = useState<PreviewFile | null>(null)
 
   /**
    * Re-read the material list after an upload.
@@ -82,29 +84,6 @@ export function MaterialsReviewPanel({ courseId, materials: initialMaterials }: 
       )
     } catch (cause: any) {
       setError(cause?.message || "Could not update the material")
-    } finally {
-      setBusyId(null)
-    }
-  }
-
-  const generateSummary = async (materialId: string) => {
-    setBusyId(materialId)
-    setError(null)
-    try {
-      const response = await fetch("/api/summarize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ materialId, courseId }),
-      })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data?.error || "Could not generate a summary")
-      setMaterials((current) =>
-        current.map((material) =>
-          material.id === materialId ? { ...material, summary_text: data.summary } : material,
-        ),
-      )
-    } catch (cause: any) {
-      setError(cause?.message || "Could not generate a summary")
     } finally {
       setBusyId(null)
     }
@@ -179,8 +158,6 @@ export function MaterialsReviewPanel({ courseId, materials: initialMaterials }: 
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground line-clamp-3">{material.content}</p>
-
               {material.summary_text && (
                 <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950">
                   <h4 className="mb-1 flex items-center gap-2 text-sm font-semibold">
@@ -193,27 +170,16 @@ export function MaterialsReviewPanel({ courseId, materials: initialMaterials }: 
 
               <div className="flex flex-wrap gap-2">
                 {material.file_url && (
-                  <Button variant="outline" size="sm" asChild>
-                    <a href={material.file_url} target="_blank" rel="noopener noreferrer">
-                      <FileText className="mr-2 h-4 w-4" />
-                      Open file
-                    </a>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    aria-label={`Open ${material.title}`}
+                    onClick={() => setPreview({ name: material.title, url: material.file_url! })}
+                  >
+                    <FileText className="mr-2 h-4 w-4" />
+                    Open file
                   </Button>
                 )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={isBusy}
-                  onClick={() => generateSummary(material.id)}
-                >
-                  {isBusy ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="mr-2 h-4 w-4" />
-                  )}
-                  {material.summary_text ? "Regenerate summary" : "Generate summary"}
-                </Button>
-
                 {status !== "published" ? (
                   <Button
                     size="sm"
@@ -251,6 +217,13 @@ export function MaterialsReviewPanel({ courseId, materials: initialMaterials }: 
           </Card>
         )
       })}
+
+      <FilePreviewDialog
+        file={preview}
+        onOpenChange={(next) => {
+          if (!next) setPreview(null)
+        }}
+      />
 
       <UploadMaterialDialog
         open={uploadOpen}
