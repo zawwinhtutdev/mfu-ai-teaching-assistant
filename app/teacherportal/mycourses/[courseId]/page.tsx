@@ -16,6 +16,7 @@ export default async function TeacherCourseManagePage({ params }: { params: Prom
       materials={data.materials}
       studentsCount={data.studentsCount}
       enrolledStudents={data.enrolledStudents}
+      pendingInvitations={data.pendingInvitations}
       chatbotSettings={data.chatbotSettings}
     />
   )

@@ -504,10 +504,11 @@ export async function getTeacherCourseById(courseId: string) {
       } as ChatbotSettings,
       studentsCount: enrolledStudents.length,
       enrolledStudents,
+      pendingInvitations: [],
     }
   }
 
-  const [materials, chatbotSettings, enrollmentRows] = await Promise.all([
+  const [materials, chatbotSettings, enrollmentRows, invitationRows] = await Promise.all([
     getCourseMaterialsReal(data.supabase!, [course.id]),
     getCourseChatbotSettingReal(data.supabase!, course.id),
     // The full roster, not just a count: the course page renders a student list
@@ -516,6 +517,14 @@ export async function getTeacherCourseById(courseId: string) {
       .from("course_enrollments")
       .select("student_id, enrolled_at, profiles:student_id(id, email, full_name)")
       .eq("course_id", course.id),
+    // Addresses that were invited before they had an account. The table is new,
+    // so a deployment that has not run the migration yet must not break the
+    // whole course page; treat "relation does not exist" as "no invitations".
+    data.supabase!
+      .from("course_invitations")
+      .select("id, email, created_at")
+      .eq("course_id", course.id)
+      .order("created_at", { ascending: true }),
   ])
 
   const enrolledStudents = (enrollmentRows.data ?? [])
@@ -531,6 +540,15 @@ export async function getTeacherCourseById(courseId: string) {
     })
     .filter(Boolean) as Array<{ id: string; email: string; full_name: string | null; enrolled_at: string | null }>
 
+  const pendingInvitations =
+    invitationRows.error
+      ? []
+      : (invitationRows.data ?? []).map((row: any) => ({
+          id: row.id as string,
+          email: row.email as string,
+          created_at: (row.created_at ?? null) as string | null,
+        }))
+
   return {
     ...data,
     course,
@@ -538,6 +556,7 @@ export async function getTeacherCourseById(courseId: string) {
     chatbotSettings,
     studentsCount: enrolledStudents.length,
     enrolledStudents,
+    pendingInvitations,
   }
 }
 
