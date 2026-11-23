@@ -30,7 +30,6 @@ const pageTitles: Record<string, { title: string; crumbs: string[] }> = {
   "/studentportal/mycourses": { title: "My Courses", crumbs: ["Student Portal", "My Courses"] },
   "/studentportal/calendar": { title: "Calendar & Notifications", crumbs: ["Student Portal", "Calendar"] },
   "/studentportal/reminders": { title: "Study Reminders", crumbs: ["Student Portal", "Reminders"] },
-  "/studentportal/aistudytools": { title: "AI Study Tools", crumbs: ["Student Portal", "AI Study Tools"] },
   "/studentportal/documents": { title: "Documents", crumbs: ["Student Portal", "Documents"] },
   "/studentportal/analytics": { title: "Analytics", crumbs: ["Student Portal", "Analytics"] },
   "/studentportal/agentbuilder": { title: "Agent Builder", crumbs: ["Student Portal", "Agent Builder"] },
@@ -50,7 +49,6 @@ export function StudentPortalLayout({ profile, courses, children }: StudentPorta
         { href: "/studentportal/mycourses", label: "My Courses", icon: LayoutGrid },
         { href: "/studentportal/calendar", label: "Calendar", icon: Calendar },
         { href: "/studentportal/reminders", label: "Reminders", icon: Bell },
-        { href: "/studentportal/aistudytools", label: "AI Study Tools", icon: Brain },
       ],
     },
     {
@@ -70,7 +68,6 @@ export function StudentPortalLayout({ profile, courses, children }: StudentPorta
   const railItems: PortalRailItem[] = [
     { href: "/studentportal/mycourses", label: "Courses", icon: LayoutGrid },
     { href: "/studentportal/calendar", label: "Calendar", icon: Calendar },
-    { href: "/studentportal/aistudytools", label: "Study", icon: Brain },
     { href: "/studentportal/mfuclubs", label: "Social", icon: Users },
     { href: "/studentportal/settings", label: "Settings", icon: Settings },
   ]

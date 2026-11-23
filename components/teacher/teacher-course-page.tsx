@@ -7,22 +7,33 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Upload, Settings, FileText, Sparkles, Bell, Bot, Pencil, MoreVertical, FileText as FileTextIcon, Clipboard, MessageSquare, Brain, Plus, Trash2, Users, Copy, HelpCircle, CalendarClock, ClipboardList } from "lucide-react"
+import { Upload, Settings, FileText, Sparkles, Bell, Bot, Pencil, MoreVertical, FileText as FileTextIcon, Clipboard, MessageSquare, Brain, Plus, Trash2, HelpCircle, CalendarClock, ChevronDown, Check } from "lucide-react"
 import type { Course, CourseMaterial, ChatbotSettings } from "@/lib/types"
 import { UploadMaterialDialog } from "./upload-material-dialog"
 import { CreateAnnouncementDialog } from "./create-announcement-dialog"
 import { ChatbotSettingsForm } from "./chatbot-settings-form"
-import { EditCourseDialog } from "./edit-course-dialog"
 import { AssignmentsPanel } from "@/components/shared/assignments-panel"
-import { ManageStudentsDialog } from "./manage-students-dialog"
 import { MaterialsReviewPanel } from "./materials-review-panel"
-import { SurveyPanel } from "./survey-panel"
 import { AIChatbot } from "../student/ai-chatbot"
 import { FlashcardsView } from "../student/flashcards-view"
 import { TeacherQuizzesPanel } from "./teacher-quizzes-panel"
 import { useState, useMemo, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
+
+const TEACHER_AI_VIEWS = [
+  { value: "chat", label: "AI Chat", icon: MessageSquare },
+  { value: "assignments", label: "Assignments", icon: CalendarClock },
+  { value: "flashcards", label: "Flashcards", icon: Brain },
+  { value: "quizzes", label: "Quizzes", icon: FileText },
+  { value: "faqs", label: "FAQs", icon: HelpCircle },
+  { value: "settings", label: "Settings", icon: Settings },
+] as const
+
+type TeacherAiView = (typeof TEACHER_AI_VIEWS)[number]["value"]
+
+// Tabs that no longer exist; old ?tab= bookmarks fall back to Announcements.
+const REMOVED_TABS = new Set(['course-settings', 'evaluation'])
 
 interface TeacherCoursePageProps {
   course: Course
@@ -82,28 +93,43 @@ function formatDateTime(value: string): string {
   return `${pad(date.getUTCDate())}/${pad(date.getUTCMonth() + 1)}/${date.getUTCFullYear()}, ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`
 }
 
-export function TeacherCoursePage({ course, materials, studentsCount, enrolledStudents, pendingInvitations = [], chatbotSettings }: TeacherCoursePageProps) {
+// The Students tab (and its roster) is gone; those props stay on the interface
+// so the server page keeps passing them without breaking other callers.
+export function TeacherCoursePage({ course, materials, chatbotSettings }: TeacherCoursePageProps) {
   const searchParams = useSearchParams()
   const [showUploadDialog, setShowUploadDialog] = useState(false)
   const [showAnnouncementDialog, setShowAnnouncementDialog] = useState(false)
-  const [showEditCourseDialog, setShowEditCourseDialog] = useState(false)
-  const [showManageStudentsDialog, setShowManageStudentsDialog] = useState(false)
   const [liveAnnouncements, setLiveAnnouncements] = useState<AnnouncementFeedItem[]>([])
   const [isAnnouncementsLoading, setIsAnnouncementsLoading] = useState(false)
   const [faqs, setFaqs] = useState<Array<{ id: string; question: string; answer: string; created_at: string }>>([])
   const [isFaqLoading, setIsFaqLoading] = useState(false)
+  const [aiView, setAiView] = useState<TeacherAiView>("chat")
   const [newFaqQuestion, setNewFaqQuestion] = useState("")
   const [newFaqAnswer, setNewFaqAnswer] = useState("")
   const [isSavingFaq, setIsSavingFaq] = useState(false)
+
+  const selectAiView = (value: TeacherAiView) => {
+    setAiView(value)
+    if (value === "faqs" && faqs.length === 0 && !isFaqLoading) {
+      setIsFaqLoading(true)
+      fetch(`/api/courses/${course.id}/faqs`)
+        .then((r) => r.json())
+        .then((data) => setFaqs(data?.faqs || []))
+        .catch(() => {})
+        .finally(() => setIsFaqLoading(false))
+    }
+  }
   
   // Get tab from URL query parameter, default to "materials" (Announcements)
   const tabFromUrl = searchParams.get('tab') || 'materials'
-  const [activeTab, setActiveTab] = useState(tabFromUrl)
+  // The Students tab was removed; an old bookmark must not land on a blank panel.
+  const initialTab = REMOVED_TABS.has(tabFromUrl) ? 'materials' : tabFromUrl
+  const [activeTab, setActiveTab] = useState(initialTab)
   
   // Update activeTab when URL changes
   useEffect(() => {
     const tab = searchParams.get('tab') || 'materials'
-    setActiveTab(tab)
+    setActiveTab(REMOVED_TABS.has(tab) ? 'materials' : tab)
   }, [searchParams])
   
   const { toast } = useToast()
@@ -555,7 +581,7 @@ Please review these materials before the workshop to maximize your learning expe
   return (
     <div className="container mx-auto flex-1 px-4 py-8 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 min-h-screen">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5 bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 shadow-[4px_4px_8px_rgba(0,0,0,0.08),-4px_-4px_8px_rgba(255,255,255,0.8)] dark:shadow-[4px_4px_8px_rgba(0,0,0,0.2),-4px_-4px_8px_rgba(255,255,255,0.05)] rounded-xl p-1">
+          <TabsList className="grid w-full grid-cols-3 bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 shadow-[4px_4px_8px_rgba(0,0,0,0.08),-4px_-4px_8px_rgba(255,255,255,0.8)] dark:shadow-[4px_4px_8px_rgba(0,0,0,0.2),-4px_-4px_8px_rgba(255,255,255,0.05)] rounded-xl p-1">
             <TabsTrigger 
               value="materials"
               className="rounded-lg data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-200 data-[state=active]:to-blue-300 dark:data-[state=active]:from-blue-800 dark:data-[state=active]:to-blue-900 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-200 data-[state=active]:font-semibold data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)] dark:data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.05)]"
@@ -577,25 +603,7 @@ Please review these materials before the workshop to maximize your learning expe
               <FileText className="mr-2 hidden h-4 w-4 sm:block" />
               Content Review
             </TabsTrigger>
-            <TabsTrigger 
-              value="evaluation"
-              className="rounded-lg data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-200 data-[state=active]:to-blue-300 dark:data-[state=active]:from-blue-800 dark:data-[state=active]:to-blue-900 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-200 data-[state=active]:font-semibold data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)] dark:data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.05)]"
-            >
-              <ClipboardList className="mr-2 hidden h-4 w-4 sm:block" />
-              Evaluation
-            </TabsTrigger>
-            <TabsTrigger 
-              value="course-settings"
-              className="rounded-lg data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-200 data-[state=active]:to-blue-300 dark:data-[state=active]:from-blue-800 dark:data-[state=active]:to-blue-900 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-200 data-[state=active]:font-semibold data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)] dark:data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.05)]"
-            >
-              <Users className="mr-2 hidden h-4 w-4 sm:block" />
-              Students
-            </TabsTrigger>
           </TabsList>
-
-          <TabsContent value="evaluation" className="mt-6">
-            <SurveyPanel courseId={course.id} />
-          </TabsContent>
 
           <TabsContent value="content" className="mt-6">
             <MaterialsReviewPanel courseId={course.id} materials={materials} />
@@ -772,61 +780,42 @@ Please review these materials before the workshop to maximize your learning expe
           </TabsContent>
 
           <TabsContent value="settings" className="mt-6">
-            <Tabs defaultValue="chat" className="w-full">
-              <TabsList className="grid w-full grid-cols-6 bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 shadow-[4px_4px_8px_rgba(0,0,0,0.08),-4px_-4px_8px_rgba(255,255,255,0.8)] dark:shadow-[4px_4px_8px_rgba(0,0,0,0.2),-4px_-4px_8px_rgba(255,255,255,0.05)] rounded-xl p-1">
-                <TabsTrigger 
-                  value="chat"
-                  className="rounded-lg data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-200 data-[state=active]:to-blue-300 dark:data-[state=active]:from-blue-800 dark:data-[state=active]:to-blue-900 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-200 data-[state=active]:font-semibold data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)] dark:data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.05)]"
-                >
-                  <MessageSquare className="mr-2 h-4 w-4" />
-                  AI Chat
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="assignments"
-                  className="rounded-lg data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-200 data-[state=active]:to-blue-300 dark:data-[state=active]:from-blue-800 dark:data-[state=active]:to-blue-900 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-200 data-[state=active]:font-semibold data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)] dark:data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.05)]"
-                >
-                  <CalendarClock className="mr-2 h-4 w-4" />
-                  Assignments
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="flashcards"
-                  className="rounded-lg data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-200 data-[state=active]:to-blue-300 dark:data-[state=active]:from-blue-800 dark:data-[state=active]:to-blue-900 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-200 data-[state=active]:font-semibold data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)] dark:data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.05)]"
-                >
-                  <Brain className="mr-2 h-4 w-4" />
-                  Flashcards
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="quizzes"
-                  className="rounded-lg data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-200 data-[state=active]:to-blue-300 dark:data-[state=active]:from-blue-800 dark:data-[state=active]:to-blue-900 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-200 data-[state=active]:font-semibold data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)] dark:data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.05)]"
-                >
-                  <FileText className="mr-2 h-4 w-4" />
-                  Quizzes
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="faqs"
-                  className="rounded-lg data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-200 data-[state=active]:to-blue-300 dark:data-[state=active]:from-blue-800 dark:data-[state=active]:to-blue-900 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-200 data-[state=active]:font-semibold data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)] dark:data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.05)]"
-                  onClick={() => {
-                    if (faqs.length === 0 && !isFaqLoading) {
-                      setIsFaqLoading(true)
-                      fetch(`/api/courses/${course.id}/faqs`)
-                        .then(r => r.json())
-                        .then(data => setFaqs(data?.faqs || []))
-                        .catch(() => {})
-                        .finally(() => setIsFaqLoading(false))
-                    }
-                  }}
-                >
-                  <HelpCircle className="mr-2 h-4 w-4" />
-                  FAQs
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="settings"
-                  className="rounded-lg data-[state=active]:bg-gradient-to-br data-[state=active]:from-blue-200 data-[state=active]:to-blue-300 dark:data-[state=active]:from-blue-800 dark:data-[state=active]:to-blue-900 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-200 data-[state=active]:font-semibold data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.1),inset_-2px_-2px_4px_rgba(255,255,255,0.5)] dark:data-[state=active]:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.3),inset_-2px_-2px_4px_rgba(255,255,255,0.05)]"
-                >
-                  <Settings className="mr-2 h-4 w-4" />
-                  Settings
-                </TabsTrigger>
-              </TabsList>
+            <Tabs value={aiView} onValueChange={(value) => selectAiView(value as TeacherAiView)} className="w-full">
+              <div className="flex flex-wrap items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="Choose an AI assistant view"
+                      className="inline-flex h-10 items-center gap-2 rounded-lg border bg-background px-4 text-sm font-medium shadow-sm transition-colors hover:bg-muted"
+                    >
+                      {(() => {
+                        const active = TEACHER_AI_VIEWS.find((view) => view.value === aiView) ?? TEACHER_AI_VIEWS[0]
+                        const Icon = active.icon
+                        return (
+                          <>
+                            <Icon className="h-4 w-4" />
+                            {active.label}
+                          </>
+                        )
+                      })()}
+                      <ChevronDown className="h-4 w-4 opacity-60" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-56">
+                    {TEACHER_AI_VIEWS.map((view) => {
+                      const Icon = view.icon
+                      return (
+                        <DropdownMenuItem key={view.value} onSelect={() => selectAiView(view.value)}>
+                          <Icon className="mr-2 h-4 w-4" />
+                          {view.label}
+                          {aiView === view.value && <Check className="ml-auto h-4 w-4" />}
+                        </DropdownMenuItem>
+                      )
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
 
               <TabsContent value="chat" className="mt-6">
                 <AIChatbot
@@ -954,138 +943,6 @@ Please review these materials before the workshop to maximize your learning expe
             </Tabs>
           </TabsContent>
 
-          <TabsContent value="course-settings" className="mt-6">
-            <div className="space-y-6">
-              {/* Course Information Card */}
-              <Card className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 shadow-[8px_8px_16px_rgba(0,0,0,0.08),-8px_-8px_16px_rgba(255,255,255,0.9)] dark:shadow-[8px_8px_16px_rgba(0,0,0,0.3),-8px_-8px_16px_rgba(255,255,255,0.05)] border-0 rounded-2xl">
-                <CardHeader>
-                  <CardTitle>Course Information</CardTitle>
-                  <CardDescription>
-                    Manage course details and settings
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-muted-foreground">Course Code</Label>
-                      <p className="font-medium">{(course as any).code || "N/A"}</p>
-                    </div>
-                    <div className="col-span-2">
-                      <Label className="text-muted-foreground">Course Title</Label>
-                      <p className="font-medium">{course.title}</p>
-                    </div>
-                    <div className="col-span-2">
-                      <Label className="text-muted-foreground">Enrolled Students</Label>
-                      <p className="font-medium">{studentsCount} students</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 pt-4 border-t border-gray-300/50 dark:border-gray-700/50">
-                    <Button 
-                      onClick={() => setShowEditCourseDialog(true)}
-                      className="bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-[4px_4px_8px_rgba(0,0,0,0.15),-4px_-4px_8px_rgba(255,255,255,0.3)] hover:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.2),inset_-2px_-2px_4px_rgba(255,255,255,0.3)] dark:shadow-[4px_4px_8px_rgba(0,0,0,0.3),-4px_-4px_8px_rgba(255,255,255,0.05)] rounded-xl transition-all"
-                    >
-                      <Pencil className="mr-2 h-4 w-4" />
-                      Edit Course
-                    </Button>
-                    <Button 
-                      variant="outline"
-                      onClick={async () => {
-                        const shareLink = `${window.location.origin}/studentportal/courses?enroll=${(course as any).code || course.id}`
-                        try {
-                          await navigator.clipboard.writeText(shareLink)
-                          toast({
-                            title: "Share link copied!",
-                            description: "The course enrollment link has been copied to your clipboard.",
-                          })
-                        } catch (err) {
-                          toast({
-                            title: "Failed to copy",
-                            description: "Please try again.",
-                            variant: "destructive",
-                          })
-                        }
-                      }}
-                      className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 shadow-[4px_4px_8px_rgba(0,0,0,0.08),-4px_-4px_8px_rgba(255,255,255,0.8)] dark:shadow-[4px_4px_8px_rgba(0,0,0,0.2),-4px_-4px_8px_rgba(255,255,255,0.05)] hover:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.08),inset_-2px_-2px_4px_rgba(255,255,255,0.8)] dark:hover:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.2),inset_-2px_-2px_4px_rgba(255,255,255,0.05)] border-0 rounded-xl transition-all"
-                    >
-                      <Copy className="mr-2 h-4 w-4" />
-                      Copy Share Link
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Student Management Card */}
-              <Card className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 shadow-[8px_8px_16px_rgba(0,0,0,0.08),-8px_-8px_16px_rgba(255,255,255,0.9)] dark:shadow-[8px_8px_16px_rgba(0,0,0,0.3),-8px_-8px_16px_rgba(255,255,255,0.05)] border-0 rounded-2xl">
-                <CardHeader>
-                  <CardTitle>Student Management</CardTitle>
-                  <CardDescription>
-                    {enrolledStudents.length === 0 && pendingInvitations.length === 0
-                      ? "No students are enrolled in this course yet."
-                      : [
-                          `${enrolledStudents.length} student${enrolledStudents.length === 1 ? "" : "s"} enrolled`,
-                          pendingInvitations.length > 0
-                            ? `${pendingInvitations.length} invitation${pendingInvitations.length === 1 ? "" : "s"} pending`
-                            : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* The roster is shown inline: the point of this tab is to see
-                      who is enrolled, not to open another dialog to find out. */}
-                  {enrolledStudents.length === 0 && pendingInvitations.length === 0 ? (
-                    <p className="rounded-lg border border-dashed py-6 text-center text-sm text-muted-foreground">
-                      Students you add by email, or who enroll themselves, will appear here.
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {enrolledStudents.map((student) => (
-                        <div
-                          key={student.id}
-                          className="flex items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2"
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate font-medium">{student.full_name || "Unnamed student"}</p>
-                            <p className="truncate text-xs text-muted-foreground">{student.email}</p>
-                          </div>
-                          {student.enrolled_at && (
-                            <span className="shrink-0 text-[11px] text-muted-foreground/70">
-                              {formatDateTime(student.enrolled_at).split(",")[0]}
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                      {pendingInvitations.map((invitation) => (
-                        <div
-                          key={invitation.id}
-                          className="flex items-center justify-between gap-3 rounded-lg border border-dashed bg-card px-3 py-2"
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate font-medium">{invitation.email}</p>
-                            <p className="truncate text-xs text-muted-foreground">
-                              Invited · enrolled automatically after first sign-in
-                            </p>
-                          </div>
-                          <span className="shrink-0 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
-                            Pending
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <Button 
-                    onClick={() => setShowManageStudentsDialog(true)} 
-                    className="w-full bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-[4px_4px_8px_rgba(0,0,0,0.15),-4px_-4px_8px_rgba(255,255,255,0.3)] hover:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.2),inset_-2px_-2px_4px_rgba(255,255,255,0.3)] dark:shadow-[4px_4px_8px_rgba(0,0,0,0.3),-4px_-4px_8px_rgba(255,255,255,0.05)] rounded-xl transition-all"
-                  >
-                    <Users className="mr-2 h-4 w-4" />
-                    Manage Students
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
         </Tabs>
 
       <UploadMaterialDialog open={showUploadDialog} onOpenChange={setShowUploadDialog} courseId={course.id} />
@@ -1094,18 +951,6 @@ Please review these materials before the workshop to maximize your learning expe
         onOpenChange={setShowAnnouncementDialog}
         courseId={course.id}
         onCreated={loadAnnouncements}
-      />
-      <EditCourseDialog 
-        open={showEditCourseDialog} 
-        onOpenChange={setShowEditCourseDialog} 
-        course={course as any}
-      />
-      <ManageStudentsDialog
-        open={showManageStudentsDialog}
-        onOpenChange={setShowManageStudentsDialog}
-        courseId={course.id}
-        enrolledStudents={enrolledStudents}
-        pendingInvitations={pendingInvitations}
       />
       
       {/* Floating Action Button - Bottom Right (only show in Announcements tab) */}
