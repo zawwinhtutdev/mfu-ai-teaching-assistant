@@ -1,8 +1,17 @@
 "use client"
 
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { BarChart3, Users, Settings, MoreHorizontal } from "lucide-react"
+import { BarChart3, Check, Copy, MoreHorizontal, Settings, Users } from "lucide-react"
 import type { Course } from "@/lib/types"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 interface TeacherCourseCardProps {
   course: Course & { enrolled_students?: number }
@@ -15,6 +24,32 @@ export function TeacherCourseCard({ course }: TeacherCourseCardProps) {
   const courseDescription = (course as any).description || ""
   const enrolledStudents = (course as any).enrolled_students || 0
   const initial = courseTitle.trim().charAt(0).toUpperCase() || "C"
+  const href = `/teacherportal/mycourses/${course.id}`
+
+  /**
+   * The kebab used to be a bare <button> with no menu behind it, so clicking it
+   * did nothing. Mirror the student card's actions so both portals behave the
+   * same way for the same affordance.
+   */
+  const [copied, setCopied] = useState(false)
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimer.current) clearTimeout(copiedTimer.current)
+    }
+  }, [])
+
+  const copyCourseCode = async () => {
+    try {
+      await navigator.clipboard.writeText(courseCode)
+      setCopied(true)
+      if (copiedTimer.current) clearTimeout(copiedTimer.current)
+      copiedTimer.current = setTimeout(() => setCopied(false), 1600)
+    } catch {
+      // Clipboard access can be denied (insecure context or permission).
+    }
+  }
 
   return (
     <article className="mfp-card flex h-full flex-col p-5">
@@ -39,7 +74,7 @@ export function TeacherCourseCard({ course }: TeacherCourseCardProps) {
 
         <div className="min-w-0 flex-1">
           <Link
-            href={`/teacherportal/mycourses/${course.id}`}
+            href={href}
             style={{ color: "var(--p-fg)", fontSize: 15, fontWeight: 700, lineHeight: 1.35, letterSpacing: "-0.01em" }}
             className="line-clamp-2 hover:underline"
           >
@@ -48,9 +83,44 @@ export function TeacherCourseCard({ course }: TeacherCourseCardProps) {
           <div style={{ marginTop: 2, fontSize: 12, color: "var(--p-tertiary)" }}>{courseCode}</div>
         </div>
 
-        <button type="button" className="mfp-icon-btn" aria-label="Course actions" style={{ width: 32, height: 32 }}>
-          <MoreHorizontal size={16} />
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="mfp-icon-btn"
+              aria-label={`Actions for ${courseTitle}`}
+              style={{ width: 32, height: 32 }}
+            >
+              <MoreHorizontal size={16} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuLabel className="truncate text-xs font-semibold">{courseCode}</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href={href}>
+                <Settings className="mr-2 h-4 w-4" />
+                Manage course
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href={`${href}/analytics`}>
+                <BarChart3 className="mr-2 h-4 w-4" />
+                Analytics
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              // Keep the menu open so the inline "Copied" confirmation is visible.
+              onSelect={(event) => {
+                event.preventDefault()
+                void copyCourseCode()
+              }}
+            >
+              {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+              {copied ? "Copied" : "Copy course code"}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {courseDescription ? (
