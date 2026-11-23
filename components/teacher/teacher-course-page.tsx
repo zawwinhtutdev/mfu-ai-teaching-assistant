@@ -35,6 +35,12 @@ interface TeacherCoursePageProps {
     full_name: string | null
     enrolled_at?: string | null
   }>
+  /** Emails invited before they had an account; claimed automatically at signup. */
+  pendingInvitations?: Array<{
+    id: string
+    email: string
+    created_at?: string | null
+  }>
   chatbotSettings: ChatbotSettings | null
 }
 
@@ -76,7 +82,7 @@ function formatDateTime(value: string): string {
   return `${pad(date.getUTCDate())}/${pad(date.getUTCMonth() + 1)}/${date.getUTCFullYear()}, ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`
 }
 
-export function TeacherCoursePage({ course, materials, studentsCount, enrolledStudents, chatbotSettings }: TeacherCoursePageProps) {
+export function TeacherCoursePage({ course, materials, studentsCount, enrolledStudents, pendingInvitations = [], chatbotSettings }: TeacherCoursePageProps) {
   const searchParams = useSearchParams()
   const [showUploadDialog, setShowUploadDialog] = useState(false)
   const [showAnnouncementDialog, setShowAnnouncementDialog] = useState(false)
@@ -1013,17 +1019,24 @@ Please review these materials before the workshop to maximize your learning expe
                 <CardHeader>
                   <CardTitle>Student Management</CardTitle>
                   <CardDescription>
-                    {enrolledStudents.length === 0
+                    {enrolledStudents.length === 0 && pendingInvitations.length === 0
                       ? "No students are enrolled in this course yet."
-                      : `${enrolledStudents.length} student${enrolledStudents.length === 1 ? "" : "s"} enrolled`}
+                      : [
+                          `${enrolledStudents.length} student${enrolledStudents.length === 1 ? "" : "s"} enrolled`,
+                          pendingInvitations.length > 0
+                            ? `${pendingInvitations.length} invitation${pendingInvitations.length === 1 ? "" : "s"} pending`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {/* The roster is shown inline: the point of this tab is to see
                       who is enrolled, not to open another dialog to find out. */}
-                  {enrolledStudents.length === 0 ? (
+                  {enrolledStudents.length === 0 && pendingInvitations.length === 0 ? (
                     <p className="rounded-lg border border-dashed py-6 text-center text-sm text-muted-foreground">
-                      Students enrolled by an administrator will appear here.
+                      Students you add by email, or who enroll themselves, will appear here.
                     </p>
                   ) : (
                     <div className="space-y-2">
@@ -1041,6 +1054,22 @@ Please review these materials before the workshop to maximize your learning expe
                               {formatDateTime(student.enrolled_at).split(",")[0]}
                             </span>
                           )}
+                        </div>
+                      ))}
+                      {pendingInvitations.map((invitation) => (
+                        <div
+                          key={invitation.id}
+                          className="flex items-center justify-between gap-3 rounded-lg border border-dashed bg-card px-3 py-2"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">{invitation.email}</p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              Invited · enrolled automatically after first sign-in
+                            </p>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                            Pending
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -1076,6 +1105,7 @@ Please review these materials before the workshop to maximize your learning expe
         onOpenChange={setShowManageStudentsDialog}
         courseId={course.id}
         enrolledStudents={enrolledStudents}
+        pendingInvitations={pendingInvitations}
       />
       
       {/* Floating Action Button - Bottom Right (only show in Announcements tab) */}

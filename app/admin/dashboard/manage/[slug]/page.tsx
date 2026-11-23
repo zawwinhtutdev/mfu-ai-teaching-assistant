@@ -10,18 +10,6 @@ const SECTIONS: Record<string, { title: string; description: string }> = {
     title: "Bulk Post",
     description: "Publish an announcement to several courses at once.",
   },
-  playback: {
-    title: "Simultaneous playback restrictions",
-    description: "Limit how many devices can play the same material at the same time.",
-  },
-  downloads: {
-    title: "File download settings",
-    description: "Control whether students may download course files or only view them.",
-  },
-  defaults: {
-    title: "Course default settings",
-    description: "Defaults applied to every new course in the organization.",
-  },
 }
 
 export function generateStaticParams() {

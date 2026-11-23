@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import {
   Dialog,
   DialogContent,
@@ -62,16 +63,31 @@ export function SubmitAssignmentDialog({
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [needsSignIn, setNeedsSignIn] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const router = useRouter()
+
+  /**
+   * A 401 means the session could not be resolved at all, so retrying is
+   * pointless: the raw "Unauthorized" body told a student nothing and made a
+   * dead session look like a broken submit button. Say what happened and offer
+   * the one action that fixes it.
+   */
+  const sessionExpired = useCallback(() => {
+    setNeedsSignIn(true)
+    return new Error("Your session has expired. Sign in again to submit this assignment.")
+  }, [])
 
   const load = useCallback(async () => {
     setIsLoading(true)
     setError(null)
+    setNeedsSignIn(false)
     try {
       const res = await fetch(
         `/api/courses/${courseId}/assignments/${assignmentId}/submissions`,
         { cache: "no-store" },
       )
+      if (res.status === 401) throw sessionExpired()
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error || "Could not load your submission")
       const submission: Submission | null = data?.submission ?? null
@@ -83,7 +99,7 @@ export function SubmitAssignmentDialog({
     } finally {
       setIsLoading(false)
     }
-  }, [courseId, assignmentId])
+  }, [courseId, assignmentId, sessionExpired])
 
   useEffect(() => {
     if (open) void load()
@@ -101,6 +117,7 @@ export function SubmitAssignmentDialog({
         `/api/courses/${courseId}/assignments/${assignmentId}/submissions`,
         { method: "POST", body: form },
       )
+      if (res.status === 401) throw sessionExpired()
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.error || "Could not submit")
 
@@ -201,8 +218,18 @@ export function SubmitAssignmentDialog({
             </div>
 
             {error && (
-              <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-                {error}
+              <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                <p>{error}</p>
+                {needsSignIn && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => router.push("/login")}
+                  >
+                    Sign in again
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -212,7 +239,7 @@ export function SubmitAssignmentDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={isSaving}>
             Cancel
           </Button>
-          <Button onClick={() => void submit()} disabled={isSaving || !canSubmit}>
+          <Button onClick={() => void submit()} disabled={isSaving || !canSubmit || needsSignIn}>
             {isSaving ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (

@@ -196,17 +196,32 @@ function parseSections(input: unknown): { sections: SectionInput[]; error: strin
   return { sections: parsed, error: null }
 }
 
-/** Replace a course's sections with `sections`. */
+/** Sync sections in place when ids are known so enrolment `section_id` rows stay valid. */
 async function replaceSections(
   supabase: ReturnType<typeof createServiceRoleClient>,
   courseId: string,
   sections: SectionInput[],
 ) {
-  await supabase.from("course_sections").delete().eq("course_id", courseId)
+  const { data: existing, error: readError } = await supabase
+    .from("course_sections")
+    .select("id")
+    .eq("course_id", courseId)
+
+  if (readError) return readError
+
+  const existingIds = new Set((existing ?? []).map((row) => row.id))
+  const keptIds = new Set(sections.map((section) => section.id).filter((id): id is string => Boolean(id)))
+
+  const removeIds = [...existingIds].filter((id) => !keptIds.has(id))
+  if (removeIds.length > 0) {
+    const { error: deleteError } = await supabase.from("course_sections").delete().in("id", removeIds)
+    if (deleteError) return deleteError
+  }
+
   if (sections.length === 0) return null
 
-  const { error } = await supabase.from("course_sections").insert(
-    sections.map((section) => ({
+  for (const section of sections) {
+    const row = {
       course_id: courseId,
       section_no: section.section_no,
       section_type: section.section_type,
@@ -214,10 +229,18 @@ async function replaceSections(
       room: section.room,
       capacity: section.capacity,
       requested: section.requested,
-    })),
-  )
+    }
 
-  return error
+    if (section.id && existingIds.has(section.id)) {
+      const { error } = await supabase.from("course_sections").update(row).eq("id", section.id)
+      if (error) return error
+    } else {
+      const { error } = await supabase.from("course_sections").insert(row)
+      if (error) return error
+    }
+  }
+
+  return null
 }
 
 function normaliseCode(value: unknown): string {

@@ -1,0 +1,69 @@
+name: pr-checks
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  commit-messages:
+    name: Commit messages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Validate commit messages
+        run: >
+          npx --yes @commitlint/cli@19
+          --from "${{ github.event.pull_request.base.sha }}"
+          --to "${{ github.event.pull_request.head.sha }}"
+          --verbose
+
+  pr-title:
+    name: PR title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            refactor
+            perf
+            docs
+            test
+            build
+            ci
+            chore
+            revert
+            style
+          scopes: |
+            auth
+            db
+            rls
+            ai
+            rag
+            chat
+            courses
+            portal
+            admin
+            ui
+            docs
+            ci
+            deps
+            demo
+            config
+            deploy
+            repo
+          requireScope: false
+          subjectPattern: ^(?![A-Z]).+$
+          subjectPatternError: |
+            The PR title should be a Conventional Commit with a lowercase subject,
+            e.g. "feat(courses): allow multiple teachers per course".

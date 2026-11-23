@@ -1,0 +1,62 @@
+#!/usr/bin/env node
+/**
+ * Enforce Conventional Commits locally.
+ *
+ * Installed by scripts/install-git-hooks.mjs (run automatically by npm install
+ * through the "prepare" script, or manually with "npm run hooks:install").
+ *
+ * The same rules are enforced in CI for pull requests, but catching a bad
+ * subject before it is pushed is cheaper than rewriting history later.
+ */
+const { readFileSync } = require("node:fs")
+
+const TYPES = new Set([
+  "feat", "fix", "refactor", "perf", "docs", "test",
+  "build", "ci", "chore", "revert", "style",
+])
+const SCOPES = new Set([
+  "auth", "db", "rls", "ai", "rag", "chat", "courses", "portal", "admin",
+  "ui", "docs", "ci", "deps", "demo", "config", "deploy", "repo",
+])
+
+const messageFile = process.argv[2]
+if (!messageFile) process.exit(0)
+
+const raw = readFileSync(messageFile, "utf8")
+const subject = raw.split("\n")[0].trim()
+
+// Allow git-produced messages and fixups used during an interactive rebase.
+if (/^(fixup|squash)! |^Merge |^Revert "/.test(subject)) process.exit(0)
+
+const match = subject.match(/^([a-z]+)(?:\(([^)]+)\))?: (.+)$/)
+if (!match) {
+  console.error("\n✖ Commit message must be a Conventional Commit.")
+  console.error("  Example: feat(courses): allow several teachers per course\n")
+  process.exit(1)
+}
+
+const [, type, scope, summary] = match
+if (!TYPES.has(type)) {
+  console.error(`\n✖ Unknown type "${type}". Allowed: ${[...TYPES].join(", ")}\n`)
+  process.exit(1)
+}
+if (scope && !SCOPES.has(scope)) {
+  console.error(`\n✖ Unknown scope "${scope}". Allowed: ${[...SCOPES].join(", ")}\n`)
+  process.exit(1)
+}
+if (subject.length > 100) {
+  console.error("\n✖ Header is longer than 100 characters.\n")
+  process.exit(1)
+}
+if (summary.length > 72) {
+  console.error("\n✖ Subject is longer than 72 characters — keep it imperative and short.\n")
+  process.exit(1)
+}
+if (summary.endsWith(".")) {
+  console.error("\n✖ Subject must not end with a period.\n")
+  process.exit(1)
+}
+if (!/^[a-z0-9]/.test(summary)) {
+  console.error("\n✖ Subject should start with a lowercase letter or number.\n")
+  process.exit(1)
+}

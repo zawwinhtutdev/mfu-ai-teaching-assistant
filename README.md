@@ -22,6 +22,7 @@ source or refused.
 <p>
   <img src="https://img.shields.io/badge/AI-Gemini%20%7C%20OpenAI-8E75B2?style=flat-square&logo=openai&logoColor=white" alt="AI providers">
   <img src="https://img.shields.io/badge/Deployed_on-Vercel-000000?style=flat-square&logo=vercel&logoColor=white" alt="Vercel">
+  <img src="https://img.shields.io/github/v/release/zawwinhtutdev/mfu-ai-teaching-assistant?style=flat-square&color=8E75B2" alt="Latest release">
   <img src="https://img.shields.io/badge/License-MIT-yellow?style=flat-square" alt="MIT license">
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square" alt="PRs welcome">
 </p>

@@ -1,10 +1,8 @@
 "use client"
 
+import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { CourseDialog, type CourseFormValues } from "@/components/admin/course-dialog"
-import { CourseInfoDialog } from "@/components/admin/course-info-dialog"
-import { CourseScheduleDialog } from "@/components/admin/course-schedule-dialog"
-import { EnrollStudentsDialog } from "@/components/admin/enroll-students-dialog"
+import { CourseDialog } from "@/components/admin/course-dialog"
 
 const LINE = "#eff1f6"
 const TEXT = "#232334"
@@ -19,8 +17,7 @@ const TERT = "#8d92a6"
  * 566px, so the grid needs a floor or the `1.6fr` course-name column collapses
  * to nothing and the name renders with zero width.
  */
-const COURSE_GRID = "minmax(190px, 1.5fr) 96px minmax(120px, 1fr) 80px 96px 112px 250px"
-const COURSE_TABLE_MIN_WIDTH = 1000
+const COURSE_GRID = "minmax(200px, 1fr) 100px 88px"
 
 /** Shape returned by GET /api/admin/courses. */
 interface ApiCourse {
@@ -49,59 +46,18 @@ interface ApiCourse {
   created_at: string
 }
 
-/** Map an API row to the dialog's string-based form values. */
-function toFormValues(course: ApiCourse): CourseFormValues {
-  return {
-    id: course.id,
-    code: course.code,
-    title: course.title,
-    description: course.description ?? "",
-    semester: course.semester ?? "",
-    academicYear: course.academic_year ?? "",
-    school: course.school ?? "",
-    furtherInformation: course.further_information ?? "",
-    teacherId: course.teacher_id,
-    // Prefer the full team; fall back to the legacy single owner so a course
-    // created before multiple teachers existed still opens with its teacher.
-    teacherEmails:
-      course.teachers && course.teachers.length > 0
-        ? course.teachers.map((teacher) => teacher.email)
-        : course.teacher_email
-          ? [course.teacher_email]
-          : [],
-  }
-}
-
-/**
- * Format an ISO timestamp as DD/MM/YYYY.
- *
- * Built from UTC parts rather than `toLocaleDateString`: the server and the
- * browser can resolve different default locales/timezones, which produced
- * different strings and a React hydration mismatch on this page.
- */
-function fmtDate(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return "—"
-  const day = String(date.getUTCDate()).padStart(2, "0")
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0")
-  return `${day}/${month}/${date.getUTCFullYear()}`
-}
-
 function SkeletonTile() {
   return <div style={{ width: 76, height: 38, borderRadius: 10, background: "#eef0f6" }} />
 }
 
 export default function ManageCoursesPage() {
+  const router = useRouter()
   const [courses, setCourses] = useState<ApiCourse[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState("")
   const [status, setStatus] = useState<"All" | "Active">("All")
   const [statusOpen, setStatusOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
-  const [editingCourse, setEditingCourse] = useState<CourseFormValues | null>(null)
-  const [enrollCourse, setEnrollCourse] = useState<{ id: string; label: string } | null>(null)
-  const [infoCourseId, setInfoCourseId] = useState<string | null>(null)
-  const [scheduleCourse, setScheduleCourse] = useState<{ id: string; label: string } | null>(null)
   const load = useCallback(async () => {
     setLoading(true)
     try {
@@ -256,11 +212,6 @@ export default function ManageCoursesPage() {
 
         {/* table */}
         <div style={{ border: `1px solid ${LINE}`, borderRadius: 12, background: "#fff", overflowX: "auto" }}>
-          {/* The grid must be at least as wide as its fixed columns or the
-              `1fr` course-name column collapses to zero and the name becomes
-              invisible. minWidth guarantees the columns fit; the parent scrolls
-              horizontally on narrow viewports instead of crushing the name. */}
-          <div style={{ minWidth: COURSE_TABLE_MIN_WIDTH }}>
           <div
             style={{
               display: "grid",
@@ -277,11 +228,7 @@ export default function ManageCoursesPage() {
           >
             <span>Course name ⇅</span>
             <span>Status ⇅</span>
-            <span>Teacher ⇅</span>
-            <span>Students ⇅</span>
-            <span>Documents ⇅</span>
-            <span>Created ⇅</span>
-            <span />
+            <span style={{ textAlign: "right" }} aria-hidden />
           </div>
 
           {loading ? (
@@ -336,33 +283,12 @@ export default function ManageCoursesPage() {
                     >
                       {course.code.slice(0, 1)}
                     </span>
-                    {/* The name is the entry point to the course's information.
-                        Styled as a link so it reads as interactive: the code is
-                        accent-coloured and always underlined, and the title
-                        darkens on hover. A button, not an anchor, because it
-                        opens a dialog rather than navigating. */}
-                    <button
-                      type="button"
-                      onClick={() => setInfoCourseId(course.id)}
-                      title={`Course information for ${course.code}`}
-                      className="mfp-course-link"
-                      style={{
-                        minWidth: 0,
-                        padding: 0,
-                        border: 0,
-                        background: "transparent",
-                        textAlign: "left",
-                        cursor: "pointer",
-                        font: "inherit",
-                      }}
-                    >
+                    <div style={{ minWidth: 0 }}>
                       <span
                         style={{
                           display: "block",
                           fontWeight: 600,
-                          color: "#1f56b8",
-                          textDecoration: "underline",
-                          textUnderlineOffset: 2,
+                          color: TEXT,
                           whiteSpace: "nowrap",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
@@ -371,7 +297,6 @@ export default function ManageCoursesPage() {
                         {course.code}
                       </span>
                       <span
-                        className="mfp-course-link-title"
                         style={{
                           display: "block",
                           color: TERT,
@@ -383,7 +308,7 @@ export default function ManageCoursesPage() {
                       >
                         {course.title}
                       </span>
-                    </button>
+                    </div>
                   </div>
                   <span>
                     <span
@@ -400,70 +325,20 @@ export default function ManageCoursesPage() {
                       Active
                     </span>
                   </span>
-                  <span style={{ color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {course.teacher_name ?? <span style={{ color: TERT }}>Unassigned</span>}
-                  </span>
-                  <span style={{ color: MUTED }}>{course.enrolled_students}</span>
-                  <span style={{ color: MUTED }}>
-                    {course.documents ?? 0}
-                    {(course.documents ?? 0) > 0 && (
-                      <span style={{ color: TERT, fontSize: 11 }}> ({course.documents_ready ?? 0} ready)</span>
-                    )}
-                  </span>
-                  <span style={{ color: MUTED }}>{fmtDate(course.created_at)}</span>
-                  <span style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
+                  <span style={{ display: "flex", justifyContent: "flex-end" }}>
                     <button
                       type="button"
-                      title={`Manage students in ${course.code}`}
-                      onClick={() => {
-                        setEnrollCourse({ id: course.id, label: `${course.code} — ${course.title}` })
-                      }}
+                      title={`Open ${course.code}`}
+                      onClick={() => router.push(`/admin/dashboard/courses/${course.id}`)}
                       style={{
                         height: 28,
-                        padding: "0 10px",
+                        padding: "0 12px",
                         borderRadius: 8,
                         border: `1px solid ${LINE}`,
                         background: "#fff",
-                        color: MUTED,
+                        color: TEXT,
                         fontSize: 12,
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      Students ({course.enrolled_students})
-                    </button>
-                    <button
-                      type="button"
-                      title={`Weekly schedule for ${course.code}`}
-                      onClick={() =>
-                        setScheduleCourse({ id: course.id, label: `${course.code} — ${course.title}` })
-                      }
-                      style={{
-                        height: 28,
-                        padding: "0 10px",
-                        borderRadius: 8,
-                        border: `1px solid ${LINE}`,
-                        background: "#fff",
-                        color: MUTED,
-                        fontSize: 12,
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      Schedule{course.sections > 0 ? ` (${course.sections})` : ""}
-                    </button>
-                    <button
-                      type="button"
-                      title={`Edit ${course.code}`}
-                      onClick={() => setEditingCourse(toFormValues(course))}
-                      style={{
-                        height: 28,
-                        padding: "0 10px",
-                        borderRadius: 8,
-                        border: `1px solid ${LINE}`,
-                        background: "#fff",
-                        color: MUTED,
-                        fontSize: 12,
+                        fontWeight: 600,
                         cursor: "pointer",
                       }}
                     >
@@ -474,7 +349,6 @@ export default function ManageCoursesPage() {
               )
             })
           )}
-          </div>
         </div>
 
         {/* footer */}
@@ -579,42 +453,6 @@ export default function ManageCoursesPage() {
         onSaved={() => void load()}
       />
 
-      <CourseDialog
-        open={Boolean(editingCourse)}
-        onOpenChange={(open) => {
-          if (!open) setEditingCourse(null)
-        }}
-        course={editingCourse}
-        onSaved={() => void load()}
-      />
-
-      <EnrollStudentsDialog
-        open={Boolean(enrollCourse)}
-        onOpenChange={(open) => {
-          if (!open) setEnrollCourse(null)
-        }}
-        courseId={enrollCourse?.id ?? null}
-        courseLabel={enrollCourse?.label ?? ""}
-        onChanged={() => void load()}
-      />
-
-      <CourseInfoDialog
-        open={Boolean(infoCourseId)}
-        onOpenChange={(open) => {
-          if (!open) setInfoCourseId(null)
-        }}
-        courseId={infoCourseId}
-      />
-
-      <CourseScheduleDialog
-        open={Boolean(scheduleCourse)}
-        onOpenChange={(open) => {
-          if (!open) setScheduleCourse(null)
-        }}
-        courseId={scheduleCourse?.id ?? null}
-        courseLabel={scheduleCourse?.label ?? ""}
-        onSaved={() => void load()}
-      />
     </div>
   )
 }
