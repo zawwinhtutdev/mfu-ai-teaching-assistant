@@ -38,18 +38,6 @@ export const FooterOne = ({ initialAuthState }) => {
                   <i className="fa-solid fa-envelope"></i>
                   <a href="/contact">Contact the MFU AI team</a>
                 </li>
-                <li>
-                  <i
-                    className={`fa-solid ${
-                      isAuthenticated ? "fa-table-columns" : "fa-user-plus"
-                    }`}
-                  ></i>
-                  <a href={isAuthenticated ? portalHref : "/signup"}>
-                    {isAuthenticated
-                      ? "Open your portal"
-                      : "Create an account"}
-                  </a>
-                </li>
               </ul>
             </div>
           </div>
@@ -105,19 +93,31 @@ export const FooterOne = ({ initialAuthState }) => {
                   Get MFU AI product updates.
                 </p>
                 <form action="#" className="td_newsletter_form">
-                  <input
-                    type="email"
-                    className="td_newsletter_input"
-                    placeholder="University email address"
-                  />
-                  <button
-                    type="submit"
-                    className="td_btn td_style_1 td_radius_30 td_medium"
+                  <label
+                    htmlFor="footer-newsletter-email"
+                    className="td_newsletter_field_label"
                   >
-                    <span className="td_btn_in td_white_color td_accent_bg">
-                      <span>Get Updates</span>
-                    </span>
-                  </button>
+                    Email address
+                  </label>
+                  <div className="td_newsletter_field">
+                    <input
+                      id="footer-newsletter-email"
+                      name="email"
+                      type="email"
+                      autoComplete="email"
+                      className="td_newsletter_input"
+                      placeholder="you@student.mfu.ac.th"
+                      aria-label="University email address for product updates"
+                    />
+                    <button
+                      type="submit"
+                      className="td_btn td_style_1 td_radius_30 td_medium"
+                    >
+                      <span className="td_btn_in td_white_color td_accent_bg">
+                        <span>Get Updates</span>
+                      </span>
+                    </button>
+                  </div>
                 </form>
               </div>
             </div>
