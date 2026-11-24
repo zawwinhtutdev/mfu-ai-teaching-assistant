@@ -2,6 +2,8 @@
 
 import type React from "react"
 
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import { useChat } from "@ai-sdk/react"
 import { DefaultChatTransport } from "ai"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -33,6 +35,37 @@ const EMOJIS = [
   "😅", "😢", "😮", "😴", "😎", "🙌", "👍", "👏",
   "🙏", "🎉", "🔥", "✅", "❓", "💡", "📚", "📝",
 ]
+
+const MARKDOWN_COMPONENTS = {
+  p: ({ children }: any) => (
+    <p className="mb-2 whitespace-pre-wrap text-sm leading-relaxed last:mb-0">{children}</p>
+  ),
+  ul: ({ children }: any) => (
+    <ul className="mb-2 list-disc space-y-1 pl-5 text-sm leading-relaxed last:mb-0">{children}</ul>
+  ),
+  ol: ({ children }: any) => (
+    <ol className="mb-2 list-decimal space-y-1 pl-5 text-sm leading-relaxed last:mb-0">{children}</ol>
+  ),
+  li: ({ children }: any) => <li className="leading-relaxed">{children}</li>,
+  strong: ({ children }: any) => <strong className="font-semibold">{children}</strong>,
+  em: ({ children }: any) => <em className="italic">{children}</em>,
+  code: ({ children }: any) => (
+    <code className="rounded bg-black/10 px-1 py-0.5 text-[0.85em] dark:bg-white/15">{children}</code>
+  ),
+  pre: ({ children }: any) => (
+    <pre className="mb-2 overflow-x-auto rounded-lg bg-black/10 p-3 text-xs leading-relaxed dark:bg-white/10">
+      {children}
+    </pre>
+  ),
+  a: ({ href, children }: any) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="underline">
+      {children}
+    </a>
+  ),
+  h1: ({ children }: any) => <h3 className="mb-2 text-base font-semibold">{children}</h3>,
+  h2: ({ children }: any) => <h3 className="mb-2 text-base font-semibold">{children}</h3>,
+  h3: ({ children }: any) => <h4 className="mb-1 text-sm font-semibold">{children}</h4>,
+} as const
 
 const MAX_ATTACHMENTS = 5
 
@@ -264,7 +297,7 @@ export function AIChatbot({ courseId, studentId, materials, chatbotSettings }: A
   }
 
   return (
-    <Card className="mx-auto h-[calc(100vh-16rem)] max-w-4xl">
+    <Card className="mx-auto mb-10 h-[calc(100vh-16rem)] max-w-4xl">
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className="flex items-center gap-2">
@@ -343,6 +376,17 @@ export function AIChatbot({ courseId, studentId, materials, chatbotSettings }: A
                 >
                   {message.parts.map((part, index) => {
                     if (part.type === "text") {
+                      // Assistant replies are Markdown; rendering them as plain
+                      // text left literal ** markers from the model.
+                      if (message.role === "assistant") {
+                        return (
+                          <div key={index} className="text-sm leading-relaxed">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
+                              {part.text}
+                            </ReactMarkdown>
+                          </div>
+                        )
+                      }
                       return (
                         <p key={index} className="whitespace-pre-wrap text-sm leading-relaxed">
                           {part.text}

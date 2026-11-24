@@ -396,7 +396,6 @@ export function PortalShell(props: PortalShellProps) {
             <Menu size={20} />
             <span className="mfp-rail-label">More</span>
           </button>
-          <span className="mfp-rail-label mfp-rail-caption">{variant}</span>
         </aside>
 
         <div className="mfp-main">

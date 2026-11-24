@@ -5,16 +5,14 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import type { Profile, Course } from "@/lib/types"
 import { UserNav } from "@/components/user-nav"
+import { StudentNotifications } from "./student-notifications"
 import { PortalShell, type PortalNavGroup, type PortalRailItem } from "@/components/portal/portal-shell"
 import {
   Calendar,
   Bell,
-  Brain,
   Settings,
   LayoutGrid,
   Users,
-  FileText,
-  Search,
   ChevronDown,
   House,
 } from "lucide-react"
@@ -49,14 +47,6 @@ export function StudentPortalLayout({ profile, courses, children }: StudentPorta
         { href: "/studentportal/mycourses", label: "My Courses", icon: LayoutGrid },
         { href: "/studentportal/calendar", label: "Calendar", icon: Calendar },
         { href: "/studentportal/reminders", label: "Reminders", icon: Bell },
-      ],
-    },
-    {
-      label: "Study",
-      items: [
-        { href: "/studentportal/documents", label: "Documents", icon: FileText },
-        { href: "/studentportal/analytics", label: "Analytics", icon: Search },
-        { href: "/studentportal/agentbuilder", label: "Agent Builder", icon: Brain },
       ],
     },
     {
@@ -136,7 +126,12 @@ export function StudentPortalLayout({ profile, courses, children }: StudentPorta
       nav={nav}
       railItems={railItems}
       extraTop={coursePicker}
-      actions={<UserNav profile={profile} />}
+      actions={
+        <div className="flex items-center gap-1">
+          <StudentNotifications />
+          <UserNav profile={profile} />
+        </div>
+      }
     >
       {children}
     </PortalShell>
