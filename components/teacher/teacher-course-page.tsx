@@ -9,7 +9,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Upload, Settings, FileText, Sparkles, Bell, Bot, Pencil, MoreVertical, FileText as FileTextIcon, Clipboard, MessageSquare, Brain, Plus, Trash2, HelpCircle, CalendarClock, ChevronDown, Check } from "lucide-react"
 import type { Course, CourseMaterial, ChatbotSettings } from "@/lib/types"
-import { UploadMaterialDialog } from "./upload-material-dialog"
 import { CreateAnnouncementDialog } from "./create-announcement-dialog"
 import { ChatbotSettingsForm } from "./chatbot-settings-form"
 import { AssignmentsPanel } from "@/components/shared/assignments-panel"
@@ -97,7 +96,6 @@ function formatDateTime(value: string): string {
 // so the server page keeps passing them without breaking other callers.
 export function TeacherCoursePage({ course, materials, chatbotSettings }: TeacherCoursePageProps) {
   const searchParams = useSearchParams()
-  const [showUploadDialog, setShowUploadDialog] = useState(false)
   const [showAnnouncementDialog, setShowAnnouncementDialog] = useState(false)
   const [liveAnnouncements, setLiveAnnouncements] = useState<AnnouncementFeedItem[]>([])
   const [isAnnouncementsLoading, setIsAnnouncementsLoading] = useState(false)
@@ -945,7 +943,6 @@ Please review these materials before the workshop to maximize your learning expe
 
         </Tabs>
 
-      <UploadMaterialDialog open={showUploadDialog} onOpenChange={setShowUploadDialog} courseId={course.id} />
       <CreateAnnouncementDialog
         open={showAnnouncementDialog}
         onOpenChange={setShowAnnouncementDialog}
@@ -972,13 +969,6 @@ Please review these materials before the workshop to maximize your learning expe
             >
               <Bell className="mr-2 h-4 w-4" />
               New announcement
-            </DropdownMenuItem>
-            <DropdownMenuItem 
-              onClick={() => setShowUploadDialog(true)}
-              className="cursor-pointer"
-            >
-              <FileText className="mr-2 h-4 w-4" />
-              New material
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
