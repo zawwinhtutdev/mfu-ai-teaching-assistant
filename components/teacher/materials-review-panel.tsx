@@ -51,6 +51,17 @@ export function MaterialsReviewPanel({ courseId, materials: initialMaterials }: 
    * list it was rendered with, so a teacher would upload and see nothing —
    * the exact complaint this panel exists to prevent.
    */
+  /** PDFs open in a new tab; other formats use the in-app preview dialog. */
+  const openFile = (material: CourseMaterial) => {
+    const url = material.file_url
+    if (!url) return
+    if (/\.pdf($|[?#])/i.test(url)) {
+      window.open(url, "_blank", "noopener,noreferrer")
+      return
+    }
+    setPreview({ name: material.title, url })
+  }
+
   const reload = async () => {
     try {
       const res = await fetch(`/api/courses/${courseId}/materials`, { cache: "no-store" })
@@ -144,7 +155,17 @@ export function MaterialsReviewPanel({ courseId, materials: initialMaterials }: 
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <CardTitle className="flex items-center gap-2">
-                    {material.title}
+                    {material.file_url ? (
+                      <button
+                        type="button"
+                        onClick={() => openFile(material)}
+                        className="truncate text-left hover:underline"
+                      >
+                        {material.title}
+                      </button>
+                    ) : (
+                      material.title
+                    )}
                     <Badge className={STATUS_STYLE[status]} variant="secondary">
                       {STATUS_LABEL[status]}
                     </Badge>
@@ -174,7 +195,7 @@ export function MaterialsReviewPanel({ courseId, materials: initialMaterials }: 
                     variant="outline"
                     size="sm"
                     aria-label={`Open ${material.title}`}
-                    onClick={() => setPreview({ name: material.title, url: material.file_url! })}
+                    onClick={() => openFile(material)}
                   >
                     <FileText className="mr-2 h-4 w-4" />
                     Open file
