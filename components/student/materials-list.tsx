@@ -39,6 +39,24 @@ export function MaterialsList({ materials }: { materials: CourseMaterial[] }) {
 
   const visible = showAll ? materials : materials.slice(0, INITIAL_VISIBLE)
 
+  /**
+   * Opening a material should show the document, not a wrapper. PDFs go straight
+   * to a new browser tab; other formats keep the in-app preview because a tab
+   * would just download them.
+   */
+  const openMaterialFile = (material: CourseMaterial) => {
+    const url = material.file_url
+    if (!url) {
+      setSelected(material)
+      return
+    }
+    if (/\.pdf($|[?#])/i.test(url)) {
+      window.open(url, "_blank", "noopener,noreferrer")
+      return
+    }
+    setPreview({ name: material.title, url })
+  }
+
   return (
     <>
       <div className="overflow-hidden rounded-xl border bg-card">
@@ -57,7 +75,7 @@ export function MaterialsList({ materials }: { materials: CourseMaterial[] }) {
 
               <button
                 type="button"
-                onClick={() => setSelected(material)}
+                onClick={() => openMaterialFile(material)}
                 className="min-w-0 flex-1 text-left"
                 title={material.title}
               >
@@ -79,11 +97,7 @@ export function MaterialsList({ materials }: { materials: CourseMaterial[] }) {
                   {material.file_url && (
                     <>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onSelect={() =>
-                          setPreview({ name: material.title, url: material.file_url as string })
-                        }
-                      >
+                      <DropdownMenuItem onSelect={() => openMaterialFile(material)}>
                         <FileText className="mr-2 h-4 w-4" />
                         Open file
                       </DropdownMenuItem>
@@ -132,7 +146,13 @@ export function MaterialsList({ materials }: { materials: CourseMaterial[] }) {
                 variant="outline"
                 size="sm"
                 aria-label={`Open ${selected.title}`}
-                onClick={() => setPreview({ name: selected.title, url: selected.file_url as string })}
+                onClick={() => {
+                  if (selected.file_url && /\.pdf($|[?#])/i.test(selected.file_url)) {
+                    window.open(selected.file_url, "_blank", "noopener,noreferrer")
+                  } else if (selected.file_url) {
+                    setPreview({ name: selected.title, url: selected.file_url })
+                  }
+                }}
               >
                 <FileText className="mr-2 h-4 w-4" />
                 Open file
