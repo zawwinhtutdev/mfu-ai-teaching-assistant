@@ -148,6 +148,24 @@ export async function POST(req: Request, { params }: RouteParams) {
       if (fileError) {
         return NextResponse.json({ error: fileError.message }, { status: 500 })
       }
+
+      // An announcement attachment is also course material: mirror it so the
+      // Materials tab lists the same file without a second upload. Created only
+      // when files exist, so text-only announcements leave Materials untouched.
+      const { error: materialError } = await supabase.from("course_materials").insert(
+        files.map((file) => ({
+          course_id: course.id,
+          title: file.file_name,
+          content: `Attached to announcement: ${title}`,
+          material_type: "document",
+          file_url: file.file_url,
+          approval_status: "published",
+        })),
+      )
+      if (materialError) {
+        // The announcement still stands; surface the miss without failing it.
+        console.error("[announcements] could not mirror attachments into materials:", materialError.message)
+      }
     }
 
     const result = await buildAnnouncementResponse(supabase, course.id)
