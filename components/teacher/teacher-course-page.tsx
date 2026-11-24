@@ -829,7 +829,7 @@ Please review these materials before the workshop to maximize your learning expe
               </TabsContent>
 
               <TabsContent value="flashcards" className="mt-6">
-                <FlashcardsView courseId={course.id} studentId={course.teacher_id || "mock-teacher-1"} />
+                <FlashcardsView courseId={course.id} studentId={course.teacher_id || "mock-teacher-1"} canManage />
               </TabsContent>
 
               <TabsContent value="quizzes" className="mt-6">
