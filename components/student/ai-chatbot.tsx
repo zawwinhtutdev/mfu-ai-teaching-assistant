@@ -297,7 +297,7 @@ export function AIChatbot({ courseId, studentId, materials, chatbotSettings }: A
   }
 
   return (
-    <Card className="mx-auto h-[calc(100vh-16rem)] max-w-4xl">
+    <Card className="mx-auto mb-10 h-[calc(100vh-16rem)] max-w-4xl">
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className="flex items-center gap-2">
