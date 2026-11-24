@@ -274,6 +274,63 @@ async function getCourseMaterialsReal(supabase: SupabaseClient, courseIds: strin
   return (data || []) as CourseMaterial[]
 }
 
+/**
+ * Files attached to announcements also count as course materials for students.
+ *
+ * Teachers post a PDF with an announcement and reasonably expect it in the
+ * Materials tab too; before this the same file existed in two places with only
+ * one of them visible. These rows are derived at read time, so an announcement
+ * attachment never needs a second upload or a backfill.
+ */
+async function getAnnouncementAttachmentMaterials(
+  supabase: SupabaseClient,
+  courseId: string,
+): Promise<CourseMaterial[]> {
+  const { data: announcements } = await supabase
+    .from("announcements")
+    .select("id, title, created_at")
+    .eq("course_id", courseId)
+
+  const announcementRows = (announcements || []) as Array<{ id: string; title: string; created_at: string }>
+  if (announcementRows.length === 0) return []
+
+  const byId = new Map(announcementRows.map((row) => [row.id, row]))
+  const { data: files } = await supabase
+    .from("announcement_files")
+    .select("id, announcement_id, file_name, file_url, created_at")
+    .in("announcement_id", announcementRows.map((row) => row.id))
+
+  return ((files || []) as Array<{
+    id: string
+    announcement_id: string
+    file_name: string | null
+    file_url: string
+    created_at: string | null
+  }>)
+    .filter((file) => Boolean(file.file_url))
+    .map((file) => {
+      const announcement = byId.get(file.announcement_id)
+      return {
+        id: `announcement-file-${file.id}`,
+        course_id: courseId,
+        title: file.file_name || announcement?.title || "Announcement attachment",
+        content: `Attached to announcement: ${announcement?.title ?? ""}`,
+        material_type: "document",
+        file_url: file.file_url,
+        created_at: file.created_at || announcement?.created_at || new Date().toISOString(),
+        approval_status: "published",
+      } as unknown as CourseMaterial
+    })
+}
+
+function mergeMaterials(primary: CourseMaterial[], extra: CourseMaterial[]): CourseMaterial[] {
+  const seenUrls = new Set(primary.map((material) => material.file_url).filter(Boolean))
+  const additions = extra.filter((material) => material.file_url && !seenUrls.has(material.file_url))
+  return [...primary, ...additions].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  )
+}
+
 async function getCourseChatbotSettingReal(supabase: SupabaseClient, courseId: string): Promise<ChatbotSettings | null> {
   const { data } = await supabase.from("chatbot_settings").select("*").eq("course_id", courseId).single()
   return (data || null) as ChatbotSettings | null
@@ -429,15 +486,16 @@ export async function getStudentCourseById(courseId: string) {
     }
   }
 
-  const [materials, chatbotSettings] = await Promise.all([
+  const [materials, chatbotSettings, announcementMaterials] = await Promise.all([
     getCourseMaterialsReal(data.supabase!, [course.id]),
     getCourseChatbotSettingReal(data.supabase!, course.id),
+    getAnnouncementAttachmentMaterials(data.supabase!, course.id),
   ])
 
   return {
     ...data,
     course,
-    materials,
+    materials: mergeMaterials(materials, announcementMaterials),
     chatbotSettings,
   }
 }
