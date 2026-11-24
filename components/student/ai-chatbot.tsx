@@ -87,6 +87,14 @@ export function AIChatbot({ courseId, studentId, materials, chatbotSettings }: A
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [historyOpen, setHistoryOpen] = useState(false)
   const [isLoadingSessions, setIsLoadingSessions] = useState(true)
+  // The send path reads the id from a ref so pressing Enter never waits on a
+  // state render, and a creation started while typing can be reused.
+  const conversationIdRef = useRef<string | null>(null)
+  const creatingConversationRef = useRef<Promise<string | null> | null>(null)
+
+  useEffect(() => {
+    conversationIdRef.current = conversationId
+  }, [conversationId])
 
   const transport = useMemo(
     () =>
@@ -105,9 +113,17 @@ export function AIChatbot({ courseId, studentId, materials, chatbotSettings }: A
 
   const { messages, sendMessage, status, setMessages } = useChat({ transport })
 
+  const lastUserMessageCountRef = useRef(0)
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    const element = scrollRef.current
+    if (!element) return
+    const userMessageCount = messages.filter((message) => message.role === "user").length
+    // Follow the conversation when the user sends (or a session loads), but do
+    // not chase every streamed token to the bottom — long answers should be read
+    // from where they start.
+    if (userMessageCount > lastUserMessageCountRef.current) {
+      lastUserMessageCountRef.current = userMessageCount
+      element.scrollTop = element.scrollHeight
     }
   }, [messages])
 
@@ -243,34 +259,54 @@ export function AIChatbot({ courseId, studentId, materials, chatbotSettings }: A
     setAttachments([])
   }
 
+  /**
+   * Create the session before the first message. Kicked off on the first
+   * keystroke so by the time Enter is pressed the id is usually ready; the
+   * in-flight promise is reused when it is not.
+   */
+  const createConversation = (title: string): Promise<string | null> => {
+    if (conversationIdRef.current) return Promise.resolve(conversationIdRef.current)
+    if (creatingConversationRef.current) return creatingConversationRef.current
+
+    const promise = (async () => {
+      try {
+        const res = await fetch("/api/conversations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: (title || "New chat").slice(0, 60), courseId }),
+        })
+        if (!res.ok) return null
+        const data = await res.json()
+        const id = data?.conversation?.id ?? null
+        if (id) {
+          conversationIdRef.current = id
+          setConversationId(id)
+        }
+        return id
+      } catch {
+        // The chat still works without persistence.
+        return null
+      } finally {
+        creatingConversationRef.current = null
+      }
+    })()
+
+    creatingConversationRef.current = promise
+    return promise
+  }
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (isBusy || !canSend) return
 
     const text = input.trim()
-    let activeConversationId = conversationId
-
-    // Create the session before the first message so the history list has an id
-    // immediately and the API can attach the course scope.
-    if (!activeConversationId) {
-      try {
-        const res = await fetch("/api/conversations", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: (text || "Attachment review").slice(0, 60), courseId }),
-        })
-        if (res.ok) {
-          const data = await res.json()
-          activeConversationId = data?.conversation?.id ?? null
-          if (activeConversationId) setConversationId(activeConversationId)
-        }
-      } catch {
-        // The chat still works without persistence.
-      }
-    }
+    const activeConversationId =
+      conversationIdRef.current ?? (await createConversation(text)) ?? undefined
     // Attachments ride on the request body; the API analyses images and notes
     // the document links in the prompt.
-    await (sendMessage as any)(
+    // Do not await the stream: sendMessage resolves only after the answer
+    // finishes, and the composer should clear the moment the question is sent.
+    const sendPromise = (sendMessage as any)(
       {
         text: text || "Please review the attached file(s) and summarise what matters for this course.",
         // Kept on the message so the user can see which files went with it after
@@ -291,13 +327,16 @@ export function AIChatbot({ courseId, studentId, materials, chatbotSettings }: A
     setAttachments([])
     setUploadError(null)
 
-    void loadSessions().then((list) => {
-      if (list.length > 0) setSessions(list)
-    })
+    void Promise.resolve(sendPromise)
+      .then(() => loadSessions())
+      .then((list) => {
+        if (list.length > 0) setSessions(list)
+      })
+      .catch(() => {})
   }
 
   return (
-    <Card className="mx-auto mb-10 h-[calc(100vh-16rem)] max-w-4xl">
+    <Card className="mx-auto mb-16 h-[calc(100vh-16rem)] max-w-4xl">
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className="flex items-center gap-2">
@@ -355,7 +394,7 @@ export function AIChatbot({ courseId, studentId, materials, chatbotSettings }: A
       </CardHeader>
       <CardContent className="flex h-[calc(100%-5rem)] flex-col">
         <ScrollArea className="flex-1 pr-4" ref={scrollRef}>
-          <div className="space-y-4">
+          <div className="space-y-4 pb-6">
             {messages.length === 0 && (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <Bot className="mb-4 h-16 w-16 text-gray-500 dark:text-gray-400" />
@@ -522,7 +561,13 @@ export function AIChatbot({ courseId, studentId, materials, chatbotSettings }: A
 
           <Input
             value={input}
-            onChange={(event) => setInput(event.target.value)}
+            onChange={(event) => {
+              const value = event.target.value
+              setInput(value)
+              if (value.trim() && !conversationIdRef.current && !creatingConversationRef.current) {
+                void createConversation(value)
+              }
+            }}
             placeholder="Ask about this course, or attach a file…"
             disabled={isBusy}
             className="flex-1"
