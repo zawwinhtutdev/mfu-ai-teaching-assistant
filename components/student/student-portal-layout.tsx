@@ -10,12 +10,9 @@ import { PortalShell, type PortalNavGroup, type PortalRailItem } from "@/compone
 import {
   Calendar,
   Bell,
-  Brain,
   Settings,
   LayoutGrid,
   Users,
-  FileText,
-  Search,
   ChevronDown,
   House,
 } from "lucide-react"
@@ -50,14 +47,6 @@ export function StudentPortalLayout({ profile, courses, children }: StudentPorta
         { href: "/studentportal/mycourses", label: "My Courses", icon: LayoutGrid },
         { href: "/studentportal/calendar", label: "Calendar", icon: Calendar },
         { href: "/studentportal/reminders", label: "Reminders", icon: Bell },
-      ],
-    },
-    {
-      label: "Study",
-      items: [
-        { href: "/studentportal/documents", label: "Documents", icon: FileText },
-        { href: "/studentportal/analytics", label: "Analytics", icon: Search },
-        { href: "/studentportal/agentbuilder", label: "Agent Builder", icon: Brain },
       ],
     },
     {
