@@ -29,6 +29,7 @@ source or refused.
 
 <p>
   <a href="https://aiassistant-mfu.vercel.app">🔗 <b>Live demo</b></a> &nbsp;·&nbsp;
+  <a href="#-demo-video">🎬 <b>Demo video</b></a> &nbsp;·&nbsp;
   <a href="docs/TEST_ACCOUNTS.md">🔑 <b>Demo accounts</b></a> &nbsp;·&nbsp;
   <a href="docs/DEPLOY.md">🚀 <b>Deploy</b></a> &nbsp;·&nbsp;
   <a href="https://aiassistant-mfu.vercel.app/docs">📖 <b>Docs</b></a> &nbsp;·&nbsp;
@@ -54,6 +55,17 @@ does not survive contact with a university:
 Those properties are structural here, not prompt suggestions: access is checked
 server-side on every request, retrieval is scoped to a single course, and
 citations are verified and repaired after generation.
+
+## 🎬 Demo video
+
+[![MFU AI Teaching Assistant demo video (4:47)](docs/demo/poster.jpg)](https://zawwinhtutdev.github.io/mfu-ai-teaching-assistant/demo/)
+
+A 4:47 narrated tour recorded from the running app: the admin console, the teacher
+portal (announcements with attached files, FAQs, AI-generated quizzes, analytics) and the
+student portal, where the course assistant answers with a citation from the course
+material. Click the image to **[watch it in your browser](https://zawwinhtutdev.github.io/mfu-ai-teaching-assistant/demo/)**, or download
+[AI-Teaching-Assistant-Demo.mp4](docs/demo/AI-Teaching-Assistant-Demo.mp4) (1920×1080, 44 MB) with
+[English subtitles](docs/demo/AI-Teaching-Assistant-Demo.srt).
 
 ## 🖼️ Product tour
 
